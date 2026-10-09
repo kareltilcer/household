@@ -1,12 +1,12 @@
-// What billing's screens share that draws nothing: who pays, what a plan costs, the form's look
-// as the page's tokens give it, and two rules its sources are held to as they are written: every
-// write is asked at once, and a control drawn as one word holds that word in its name.
-import { catalogs, locales } from '@household/i18n'
+// What billing's screens share that draws nothing: who pays, what a plan costs, and the form's
+// look as the page's tokens give it. That every write of theirs is asked at once is held beside
+// the query client (api/api.test.ts), and that a control drawn as one word holds that word in
+// its name by the catalogs' own test (packages/i18n).
 import { resolve, type ColorName, type Theme } from '@household/tokens'
 import { describe, expect, it } from 'vitest'
 import { ApiProblemError } from '../api/problem.ts'
 import { appearanceAt, isLightInk } from './appearance.ts'
-import { isMoved, isPayer, monthOf, priceOf, same } from './data.ts'
+import { isMoved, isPayer, monthOf, priceOf } from './data.ts'
 import { eur, janaPays, subscription } from './testing.tsx'
 
 describe('who pays', () => {
@@ -17,8 +17,6 @@ describe('who pays', () => {
     expect(isPayer(subscription(), '0190a000-0000-7000-8000-000000000005')).toBe(false)
     // Nobody, once the payer's account is gone.
     expect(isPayer(subscription({ payer: null }), jana)).toBe(false)
-    expect(same(undefined, undefined)).toBe(false)
-    expect(same(null, jana)).toBe(false)
   })
 })
 
@@ -114,55 +112,5 @@ describe('the payment form’s look', () => {
     expect(isLightInk(computed('rgb', '44, 46, 56'))).toBe(false)
     expect(isLightInk('')).toBe(false)
     expect(isLightInk('canvastext')).toBe(false)
-  })
-})
-
-/** Billing's screens and what they share, each file as it is written. */
-const sources = import.meta.glob<string>(['./*.{ts,tsx}', '!./*.test.{ts,tsx}'], {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-})
-
-// Billing is no part of a replica: nothing of it waits on the device to be sent later. The
-// test beside the query client holds the screens before sign-in, the account's and the
-// household's to this (api/api.test.ts); this holds billing's.
-describe('a write of billing’s', () => {
-  it('is asked at once, every one', () => {
-    const writes = Object.entries(sources).flatMap(([path, source]) =>
-      [...source.matchAll(/useMutation(?:<[^(]*>)?\(\{\s*(\S+)/g)].map(([, first = '']) => ({
-        path,
-        first,
-      })),
-    )
-    // The sources were read at all: every screen of billing's that writes is among them.
-    expect(writes.length).toBeGreaterThanOrEqual(12)
-    expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
-    // And no mutation is written any other way than the one that is read here.
-    const named = Object.values(sources).flatMap((source) => [...source.matchAll(/useMutation\b/g)])
-    const imported = Object.values(sources).filter((source) =>
-      /import \{[^}]*\buseMutation\b/.test(source),
-    )
-    expect(named.length - imported.length).toBe(writes.length)
-  })
-})
-
-// A row's own control is drawn as a word and named in full for what it acts on. What is drawn is
-// what somebody who speaks to their device says to press it, so the name holds the drawn words
-// together and in their order (WCAG 2.1, 2.5.3), in every language. The catalogs' own test holds
-// the pairs of the screens before this item (packages/i18n, catalogs.test.ts).
-describe('a control drawn as a word and named in full', () => {
-  const drawnInNamed: readonly (readonly [string, string])[] = [
-    ['billing.invoices.download.word', 'billing.invoices.download.named'],
-    ['billing.invoices.download.word', 'billing.invoices.download.named_day'],
-  ]
-
-  it.each(locales)('holds the word it is drawn as in its name, in %s', (locale) => {
-    const catalog: Readonly<Record<string, string>> = catalogs[locale]
-    const apart = drawnInNamed.filter(([drawn, named]) => {
-      const word = (catalog[drawn] ?? '').toLocaleLowerCase(locale)
-      return word === '' || !(catalog[named] ?? '').toLocaleLowerCase(locale).includes(word)
-    })
-    expect(apart).toEqual([])
   })
 })

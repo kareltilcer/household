@@ -15,6 +15,7 @@
 // `redacted_fields` lists those names.
 import type { components } from '@household/api'
 import type { RecordedOutcome, Replica } from '@household/sync'
+import { sameId } from '../account/common.ts'
 import type { Browser, System } from '../account/userAgent.ts'
 import type { Report } from './data.ts'
 
@@ -186,7 +187,7 @@ export function compose(known: Known): Bundle {
   const reported =
     replica.id === null
       ? undefined
-      : known.reports?.find((each) => each.replica_id?.toLowerCase() === replica.id?.toLowerCase())
+      : known.reports?.find((each) => sameId(each.replica_id, replica.id))
   return {
     screen: Array.from(known.screen).slice(0, screenLimit).join(''),
     household: known.household,

@@ -10,14 +10,12 @@
 // job without its link and with whether one was given, and the link is read at the press that
 // downloads (ExportList.tsx).
 import type { components } from '@household/api'
-import { pseudoLocale, pseudolocalize } from '@household/i18n/lazy'
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
-import { useCallback, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { useReread } from '../household/data.ts'
 import { householdKey, moduleKeys, type ModuleKey } from '../household/households.ts'
-import { useFormat, useI18n } from '../i18n/I18nProvider.tsx'
 
 export type ExportJob = components['schemas']['ExportJob']
 export type ExportStatus = NonNullable<ExportJob['status']>
@@ -150,34 +148,4 @@ export function entryOf(name: string): Entry | undefined {
   if (known !== undefined) return known
   const module = moduleKeys.find((key) => name === `${key}.json`)
   return module === undefined ? undefined : { kind: 'module', module }
-}
-
-/** The units a size is said in, the largest first, each with the bytes it holds (a GB is 10⁹). */
-const units = [
-  ['gigabyte', 1_000_000_000],
-  ['megabyte', 1_000_000],
-  ['kilobyte', 1_000],
-] as const
-
-/** A count of bytes as a size, in the largest unit it fills: `Intl`'s words, never this file's. */
-export function useSize(): (bytes: number) => string {
-  const format = useFormat()
-  return useCallback(
-    (bytes) => {
-      const [unit, per] = units.find(([, each]) => bytes >= each) ?? (['byte', 1] as const)
-      return format.number(bytes / per, { style: 'unit', unit, maximumFractionDigits: 1 })
-    },
-    [format],
-  )
-}
-
-/**
- * A name that is no catalog's, as the page draws it: an archive's own entry. In a language of
- * the app's it is drawn as it is written. The pseudo-locale accents it as it accents every word
- * of the catalogs, so that its pass tells what the server gave from a word nobody translated
- * (as `useGiven` does for the household's profile, household/settings/profile.ts).
- */
-export function useAsWritten(): (text: string) => string {
-  const { locale } = useI18n()
-  return useCallback((text) => (locale === pseudoLocale ? pseudolocalize(text) : text), [locale])
 }

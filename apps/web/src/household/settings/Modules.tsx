@@ -32,7 +32,7 @@
 import { ModuleIcon } from '@household/icons/web'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { readState } from '../../account/common.ts'
+import { readState, useFocusKept, useSaid } from '../../account/common.ts'
 import styles from '../../account/Settings.module.css'
 import { useApi } from '../../api/ApiProvider.tsx'
 import { unwrap } from '../../api/problem.ts'
@@ -54,13 +54,7 @@ import { useHousehold } from '../HouseholdContext.tsx'
 import { moduleStatesKey, type ModuleKey } from '../households.ts'
 import { useTimeZone } from '../timezone.ts'
 import { HouseholdSettingsPage, useStanding } from './Page.tsx'
-import {
-  isStandingRefusal,
-  useFocusKept,
-  useSaid,
-  useStandingRefusal,
-  type AskedProps,
-} from './profile.ts'
+import { isStandingRefusal, useStandingRefusal, type AskedProps } from './profile.ts'
 
 /** The modules a household turns on and off, in the matrix's order: every one but its settings. */
 const switched = matrixOrder.filter((module) => module !== 'admin')
@@ -294,7 +288,7 @@ export function Modules() {
           {said.text}
         </Banner>
       )}
-      {/* Where the focus goes when the controls that held it have left (profile.ts). */}
+      {/* Where the focus goes when the controls that held it have left (account/common.ts). */}
       <div ref={view} tabIndex={-1} className={styles.view}>
         <StateFrame
           state={readState(read, online)}

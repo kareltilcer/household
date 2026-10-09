@@ -29,7 +29,7 @@ export interface BannerProps {
   /** What answers it: one action for an error, retry, edit and discard for a rejected write. */
   readonly actions?: ReactNode
   /** Lets the member put it away. A banner that must stay has none. */
-  readonly onDismiss?: () => void
+  readonly onDismiss?: (() => void) | undefined
   /**
    * Whether it is announced when it appears: a state that arrived while the member was here.
    * One that was there when the screen opened is read in its place and is not announced. A

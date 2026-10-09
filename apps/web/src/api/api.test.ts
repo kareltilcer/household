@@ -349,14 +349,19 @@ describe('the cache kept in this browser', () => {
 })
 
 /**
- * The screens before sign-in, those of a member's own account and a household's own, each file
- * as it is written.
+ * The screens before sign-in, those of a member's own account and a household's own, its
+ * billing, its storage, its data with the privacy centre, and its sync health among them, each
+ * file as it is written.
  */
 const screens = import.meta.glob<string>(
   [
     '../auth/*.{ts,tsx}',
     '../account/*.{ts,tsx}',
     '../household/**/*.{ts,tsx}',
+    '../billing/*.{ts,tsx}',
+    '../storage/*.{ts,tsx}',
+    '../privacy/*.{ts,tsx}',
+    '../health/*.{ts,tsx}',
     '!../**/*.test.{ts,tsx}',
   ],
   { query: '?raw', import: 'default', eager: true },
@@ -382,14 +387,32 @@ describe('a write that must not wait', () => {
   // A sign-in completed, a password set or an account deleted when a connection returns,
   // minutes after the press and with nobody at the screen, is not what was asked for (D-164).
   // Nor is a household made or left, a member removed, a level changed, an invitation sent or a
-  // module turned off: household settings is changed on the server or not at all (D-170).
+  // module turned off: household settings is changed on the server or not at all (D-170). Nor
+  // a subscription begun, changed or handed over, an export asked for, changes stopped, a
+  // household's deletion scheduled, a consent given, a copy asked to download itself again or a
+  // diagnostic bundle sent: none of them is a part of a replica, and none waits on the device.
   it('is every write of the screens before sign-in, of a member’s own account and of a household’s own screens', () => {
     const writes = Object.entries(screens).flatMap(([path, source]) =>
       [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
     )
-    // The sources were read at all: every screen of the three that writes is among them.
-    expect(writes.length).toBeGreaterThan(40)
+    // The sources were read at all: every directory that writes is among them.
+    const directories = new Set(writes.map(({ path }) => path.split('/')[1]))
+    expect([...directories].sort()).toEqual([
+      'account',
+      'auth',
+      'billing',
+      'health',
+      'household',
+      'privacy',
+    ])
+    expect(writes.length).toBeGreaterThan(60)
     expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
+    // And no mutation is written any other way than the one that is read here: each naming of
+    // `useMutation` is its import or a write that was read.
+    const sources = Object.values(screens)
+    const named = sources.flatMap((source) => [...source.matchAll(/useMutation\b/g)])
+    const imported = sources.filter((source) => /import \{[^}]*\buseMutation\b/.test(source))
+    expect(named.length - imported.length).toBe(writes.length)
   })
 })
 

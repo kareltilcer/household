@@ -35,6 +35,7 @@
 import { matchLocale } from '@household/i18n/lazy'
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { useData, useFocusKept, useSaid } from '../../account/common.ts'
 import styles from '../../account/Settings.module.css'
 import { inHousehold, paths } from '../../app/paths.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
@@ -46,7 +47,6 @@ import { KeyValue } from '../../ui/KeyValue.tsx'
 import { useCountries, useLocalized, useReread } from '../data.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
 import { HouseholdSettingsPage, Section, useStanding } from './Page.tsx'
-import { useFocusKept, useGiven, useSaid } from './profile.ts'
 import { HouseholdCode, RenewCode } from './ProfileCode.tsx'
 import { EditHousehold, MoveCountry } from './ProfileEdit.tsx'
 
@@ -56,7 +56,7 @@ type Open = 'edit' | 'country' | 'code' | null
 export function Profile() {
   const t = useTranslate()
   const format = useFormat()
-  const given = useGiven()
+  const given = useData()
   const localized = useLocalized()
   const household = useHousehold()
   const { changes } = useStanding()
@@ -99,7 +99,7 @@ export function Profile() {
       {/* A deletion that is scheduled is said on the screen every member opens first (D-138),
           with the control that keeps the household for an owner. */}
       <DeletionNotice after={view} />
-      {/* Where the focus goes when the controls that held it have left (profile.ts). */}
+      {/* Where the focus goes when the controls that held it have left (account/common.ts). */}
       <div ref={view} tabIndex={-1} className={styles.view}>
         <Section title={t('household.profile.household.title')}>
           <KeyValue

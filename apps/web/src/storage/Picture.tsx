@@ -21,7 +21,6 @@ import { List } from '../ui/ListRow.tsx'
 import { MoneyValue } from '../ui/MoneyValue.tsx'
 import type { StorageReport } from './data.ts'
 import { derivedBytes, hasUnlisted, moduleBytes, standingOf, unattributedBytes } from './picture.ts'
-import { useSize } from './sizes.ts'
 import styles from './Storage.module.css'
 import { Trend } from './Trend.tsx'
 
@@ -75,7 +74,7 @@ function Threshold({
   readonly month: Month
 }) {
   const t = useTranslate()
-  const size = useSize()
+  const format = useFormat()
   const household = useHousehold()
   if (household.entitlement?.can_upload === false) return null
   switch (standingOf(report, usage)) {
@@ -98,7 +97,7 @@ function Threshold({
     case 'ceiling':
       return (
         <Banner tone="warning" title={t('storage.ceiling.title')}>
-          {t('storage.ceiling.body', { ceiling: size(usage.hard_ceiling_bytes) })}
+          {t('storage.ceiling.body', { ceiling: format.bytes(usage.hard_ceiling_bytes) })}
         </Banner>
       )
   }
@@ -108,15 +107,14 @@ function Threshold({
 function Now({ report, month }: PictureProps) {
   const t = useTranslate()
   const format = useFormat()
-  const size = useSize()
   const household = useHousehold()
   // An owner reads the blocks with the month they are worked out from, below. Anybody else
   // reads the ones in effect off the household as they read it.
   const blocks = month === undefined ? household.entitlement?.storage_blocks : undefined
   const share = report.included_bytes > 0 ? report.total_bytes / report.included_bytes : 0
   const pairs: Pair[] = [
-    { key: t('storage.now.stored'), value: size(report.total_bytes), numeric: true },
-    { key: t('storage.now.allowance'), value: size(report.included_bytes), numeric: true },
+    { key: t('storage.now.stored'), value: format.bytes(report.total_bytes), numeric: true },
+    { key: t('storage.now.allowance'), value: format.bytes(report.included_bytes), numeric: true },
     ...(blocks === undefined
       ? []
       : [{ key: t('storage.now.blocks'), value: t('storage.blocks', { count: blocks }) }]),
@@ -139,13 +137,16 @@ function Now({ report, month }: PictureProps) {
 export function ThisMonth({ month: { usage, plan } }: { readonly month: Month }) {
   const t = useTranslate()
   const format = useFormat()
-  const size = useSize()
   const pairs: Pair[] = [
-    { key: t('storage.month.average'), value: size(usage.mtd_average_bytes), numeric: true },
+    {
+      key: t('storage.month.average'),
+      value: format.bytes(usage.mtd_average_bytes),
+      numeric: true,
+    },
     { key: t('storage.month.blocks_now'), value: t('storage.blocks', { count: usage.blocks_now }) },
     {
       key: t('storage.month.projected'),
-      value: size(usage.projected_average_bytes),
+      value: format.bytes(usage.projected_average_bytes),
       numeric: true,
     },
     {
@@ -157,7 +158,7 @@ export function ThisMonth({ month: { usage, plan } }: { readonly month: Month })
       key: t('storage.month.price'),
       value: t('storage.month.price_value', {
         price: format.money(plan.price_per_storage_block),
-        size: size(plan.storage_block_bytes),
+        size: format.bytes(plan.storage_block_bytes),
       }),
     },
   ]
@@ -182,12 +183,12 @@ export function ThisMonth({ month: { usage, plan } }: { readonly month: Month })
         <p className={account.text}>{t('storage.month.all_blocks')}</p>
       ) : usage.bytes_to_next_block > 0 ? (
         <p className={account.text}>
-          {t('storage.month.next', { size: size(usage.bytes_to_next_block) })}
+          {t('storage.month.next', { size: format.bytes(usage.bytes_to_next_block) })}
         </p>
       ) : null}
       {usage.bytes_to_drop_a_block == null || usage.bytes_to_drop_a_block <= 0 ? null : (
         <p className={account.text}>
-          {t('storage.month.drop', { size: size(usage.bytes_to_drop_a_block) })}
+          {t('storage.month.drop', { size: format.bytes(usage.bytes_to_drop_a_block) })}
         </p>
       )}
     </Section>
@@ -202,7 +203,7 @@ export function ThisMonth({ month: { usage, plan } }: { readonly month: Month })
  */
 function ByModule({ report }: { readonly report: StorageReport }) {
   const t = useTranslate()
-  const size = useSize()
+  const format = useFormat()
   const derived = derivedBytes(report)
   return (
     <Section title={t('storage.modules.title')}>
@@ -219,14 +220,14 @@ function ByModule({ report }: { readonly report: StorageReport }) {
                 <div className={styles.about}>
                   <div className={styles.line}>
                     <span className={styles.name}>{t(`module.${line.module}.name`)}</span>
-                    <span className={styles.figure}>{size(moduleBytes(line))}</span>
+                    <span className={styles.figure}>{format.bytes(moduleBytes(line))}</span>
                   </div>
                   <Share share={moduleBytes(line) / report.total_bytes} />
                   {line.derived_bytes > 0 ? (
                     <p className={styles.detail}>
                       {t('storage.modules.split', {
-                        files: size(line.bytes),
-                        derived: size(line.derived_bytes),
+                        files: format.bytes(line.bytes),
+                        derived: format.bytes(line.derived_bytes),
                       })}
                     </p>
                   ) : null}
@@ -235,7 +236,9 @@ function ByModule({ report }: { readonly report: StorageReport }) {
             ))}
           </List>
           {derived > 0 ? (
-            <p className={account.text}>{t('storage.modules.derived', { size: size(derived) })}</p>
+            <p className={account.text}>
+              {t('storage.modules.derived', { size: format.bytes(derived) })}
+            </p>
           ) : null}
           {hasUnlisted(report) ? <p className={account.note}>{t('storage.modules.rest')}</p> : null}
         </>
@@ -251,7 +254,7 @@ function ByModule({ report }: { readonly report: StorageReport }) {
  */
 function ByMember({ report }: { readonly report: StorageReport }) {
   const t = useTranslate()
-  const size = useSize()
+  const format = useFormat()
   const rest = unattributedBytes(report)
   return (
     <Section title={t('storage.members.title')} note={t('storage.members.note')}>
@@ -271,7 +274,7 @@ function ByMember({ report }: { readonly report: StorageReport }) {
                         <span className={account.badge}>{t('storage.members.left')}</span>
                       ) : null}
                     </span>
-                    <span className={styles.figure}>{size(line.bytes)}</span>
+                    <span className={styles.figure}>{format.bytes(line.bytes)}</span>
                   </div>
                   <Share share={line.bytes / report.total_bytes} />
                 </div>
@@ -281,7 +284,7 @@ function ByMember({ report }: { readonly report: StorageReport }) {
         </List>
       )}
       {rest > 0 ? (
-        <p className={account.note}>{t('storage.members.rest', { size: size(rest) })}</p>
+        <p className={account.note}>{t('storage.members.rest', { size: format.bytes(rest) })}</p>
       ) : null}
     </Section>
   )
@@ -294,7 +297,7 @@ function ByMember({ report }: { readonly report: StorageReport }) {
  */
 function Largest({ report }: { readonly report: StorageReport }) {
   const t = useTranslate()
-  const size = useSize()
+  const format = useFormat()
   return (
     <Section title={t('storage.largest.title')} note={t('storage.largest.note')}>
       {report.largest.length === 0 ? (
@@ -308,11 +311,13 @@ function Largest({ report }: { readonly report: StorageReport }) {
                 <span className={styles.name}>
                   {item.label === '' ? t('storage.largest.unnamed') : item.label}
                 </span>
-                <span>{t('storage.largest.frees', { size: size(item.recoverable_bytes) })}</span>
+                <span>
+                  {t('storage.largest.frees', { size: format.bytes(item.recoverable_bytes) })}
+                </span>
                 <span className={styles.detail}>
                   {t('storage.largest.file', {
                     module: t(`module.${item.module}.name`),
-                    size: size(item.bytes),
+                    size: format.bytes(item.bytes),
                   })}
                 </span>
               </div>
@@ -332,14 +337,13 @@ function Largest({ report }: { readonly report: StorageReport }) {
 export function Counted({ report, month }: PictureProps) {
   const t = useTranslate()
   const format = useFormat()
-  const size = useSize()
   return (
     <Section title={t('storage.counted.title')}>
       <p className={account.text}>{t('storage.counted.what')}</p>
       {month === undefined ? (
         <>
           <p className={account.text}>
-            {t('storage.counted.blocks', { allowance: size(report.included_bytes) })}
+            {t('storage.counted.blocks', { allowance: format.bytes(report.included_bytes) })}
           </p>
           {/* An owner reads it with the month it is about. */}
           <p className={account.text}>{t('storage.rule')}</p>
@@ -347,11 +351,11 @@ export function Counted({ report, month }: PictureProps) {
       ) : (
         <p className={account.text}>
           {t('storage.counted.plan', {
-            base: size(month.plan.included_storage_bytes),
-            block: size(month.plan.storage_block_bytes),
+            base: format.bytes(month.plan.included_storage_bytes),
+            block: format.bytes(month.plan.storage_block_bytes),
             price: format.money(month.plan.price_per_storage_block),
             count: month.plan.max_storage_blocks,
-            ceiling: size(month.usage.hard_ceiling_bytes),
+            ceiling: format.bytes(month.usage.hard_ceiling_bytes),
           })}
         </p>
       )}

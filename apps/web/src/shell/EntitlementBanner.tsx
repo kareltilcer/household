@@ -13,7 +13,7 @@
 // has none to manage and is led to subscribing; one whose payment failed is led to billing,
 // which reads the subscription and says which of the two it needs. Who pays is the member's own
 // row among the household's members, which every member may read; until it is read an owner is
-// led to billing, which is right for either.
+// led to billing, which is right for either (`useReader`, household/data.ts).
 //
 // What the prototype drew and this does not, and why:
 // - No price: the plans are an owner's to read, and billing's to show (FR-BI5).
@@ -33,8 +33,9 @@
 // drawings, and with the household unread there is no shell to draw it in.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
+import { refocus } from '../account/common.ts'
 import { inHousehold, paths } from '../app/paths.ts'
-import { useMembers, useOwnerNames } from '../household/data.ts'
+import { useOwnerNames, useReader, type Reader } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import type { Household } from '../household/households.ts'
 import { useTimeZone } from '../household/timezone.ts'
@@ -42,6 +43,7 @@ import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import { Banner, type BannerTone } from '../ui/Banner.tsx'
 import styles from './Entitlement.module.css'
+import { contentId } from './Frame.tsx'
 import {
   bannerId,
   bannerOf,
@@ -51,12 +53,6 @@ import {
   type Restriction,
   type Shown,
 } from './entitlement.ts'
-
-/**
- * Who reads the banner: whoever pays for the household, another of its owners, or a member who
- * is neither, a child profile among them.
- */
-export type Reader = 'payer' | 'owner' | 'member'
 
 const tones: Readonly<Record<Shown['kind'], BannerTone>> = {
   trial: 'warning',
@@ -193,7 +189,7 @@ export function EntitlementBannerView({
       tone={tone}
       title={title}
       announce={announce}
-      {...(onDismiss === undefined ? {} : { onDismiss })}
+      onDismiss={onDismiss}
       actions={
         ways.length === 0
           ? undefined
@@ -220,11 +216,8 @@ function Drawn({ shown, announce }: { readonly shown: Shown; readonly announce: 
   const household = useHousehold()
   const me = useMe()
   const zone = useTimeZone()
-  const members = useMembers(household.id)
   const owners = useOwnerNames(household.id)
-  const own = members.data?.find((each) => each.user_id?.toLowerCase() === me.id.toLowerCase())
-  const reader: Reader =
-    household.my_role !== 'owner' ? 'member' : own?.is_billing_payer === true ? 'payer' : 'owner'
+  const reader = useReader(household)
 
   // The trial's end as it was when its first notice was put away, here or on an earlier visit.
   const [away, setAway] = useState(() => putAway(me.id, household.id))
@@ -234,9 +227,7 @@ function Drawn({ shown, announce }: { readonly shown: Shown; readonly announce: 
   // which is what stands under the place the notice was.
   const [dismissed, setDismissed] = useState(false)
   useEffect(() => {
-    if (!dismissed) return
-    const focused = document.activeElement
-    if (focused === null || focused === document.body) document.querySelector('main')?.focus()
+    if (dismissed) refocus(document.getElementById(contentId))
   }, [dismissed])
 
   if (hidden) return null

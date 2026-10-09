@@ -22,7 +22,7 @@ import {
   readBy,
   tilcerovi,
 } from '../household/testing.tsx'
-import { together, type StorageReport } from './data.ts'
+import type { StorageReport } from './data.ts'
 import {
   columnsOf,
   fullestDay,
@@ -1147,27 +1147,5 @@ describe('the columns of the trend', () => {
       '2026-09-02',
     )
     expect(fullestDay([])).toBeUndefined()
-  })
-})
-
-describe('several reads drawn as one body', () => {
-  const read = { data: {}, isError: false, fetchStatus: 'idle' } as const
-  const unread = { data: undefined, isError: false, fetchStatus: 'fetching' } as const
-
-  it('are read once every one of them is', () => {
-    expect(together([read, read]).data).toBeDefined()
-    expect(together([read, unread]).data).toBeUndefined()
-  })
-
-  it('have failed, or wait for a connection, where one still unread has or does', () => {
-    expect(together([read, { ...unread, isError: true }]).isError).toBe(true)
-    expect(together([read, { ...unread, fetchStatus: 'paused' }]).fetchStatus).toBe('paused')
-    expect(together([read, unread])).toMatchObject({ isError: false, fetchStatus: 'idle' })
-  })
-
-  it('say nothing of one that was read and could not be read again', () => {
-    const stale = { ...read, isError: true, fetchStatus: 'paused' } as const
-    expect(together([stale, read])).toMatchObject({ isError: false, fetchStatus: 'idle' })
-    expect(together([stale, read]).data).toBeDefined()
   })
 })

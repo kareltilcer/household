@@ -38,8 +38,11 @@ export interface FrameProps {
   readonly children: ReactNode
 }
 
-/** The id of the page's landmark, which the skip link names. */
-const contentId = 'content'
+/**
+ * The id of the page's landmark, which the skip link names, and where the focus is put when what
+ * held it above a screen has left (EntitlementBanner.tsx).
+ */
+export const contentId = 'content'
 
 export function Frame({ heading, navigationLabel, navigation, above, children }: FrameProps) {
   const t = useTranslate()

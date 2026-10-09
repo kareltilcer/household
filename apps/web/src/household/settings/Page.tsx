@@ -15,7 +15,7 @@
 // sync health are every member's (plan item 27). Every change is an owner's, in a household
 // that takes writes, and is made on the server or not at all (data.ts): a control that changes
 // something is drawn for a member who may use it, and for nobody else.
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { NavLink } from 'react-router'
 import { Section, SettingsPage } from '../../account/Page.tsx'
 import { inHousehold } from '../../app/paths.ts'
@@ -55,6 +55,19 @@ export function useStanding(): Standing {
     invitations: sees,
     storage: sees,
   }
+}
+
+/**
+ * Whether something has been this member's to read at any time while its screen was open,
+ * `holds` being whether it is now: the invitations, the storage picture (`useStanding()`). One
+ * who never held it is drawn the neutral *not available*, and nothing is asked for them; one who
+ * held it and no longer does was here when their access changed, and is told that it did
+ * (03-patterns §2).
+ */
+export function useEverHeld(holds: boolean): boolean {
+  const [held, setHeld] = useState(holds)
+  if (holds && !held) setHeld(true)
+  return held || holds
 }
 
 /** The way between the settings' screens: each a link, the open one said to be. */

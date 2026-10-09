@@ -2,27 +2,13 @@
 // (household/testing.tsx), Tilcerovi with its five members, a server that answers the picture,
 // the month and the plan as the prototype's worked fixture has them (design/v1 household.js), and
 // the screen drawn at its own address, in the household the address names, behind the guard that
-// draws it for a member alone. Imported by tests alone.
+// draws it for a member alone (`routed`). Imported by tests alone.
 //
 // The figures agree with each other as the server's would: 19.4 GB stored against 25 GB, the base
 // and the two blocks an average of 18.2 GB needs; the modules' lines and the members' each come
 // to the total; and a block is a thousand million bytes times ten.
-import { render } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import {
-  Outlet,
-  RouterProvider,
-  createMemoryRouter,
-  useParams,
-  type RouteObject,
-} from 'react-router'
-import { createWebClient } from '../api/client.ts'
-import { Providers } from '../app/App.tsx'
-import { Signed } from '../app/guards.tsx'
 import { paths } from '../app/paths.ts'
 import type { Subscription, UsageSummary } from '../household/data.ts'
-import { HouseholdContext } from '../household/HouseholdContext.tsx'
-import { useHouseholdQuery } from '../household/households.ts'
 import {
   adam,
   createServer as createHouseholdServer,
@@ -30,8 +16,10 @@ import {
   jana,
   klara,
   milos,
-  origin,
+  openOver,
   petr,
+  problem,
+  routed,
   type HouseholdServer,
 } from '../household/testing.tsx'
 import type { Me } from '../session/SessionProvider.tsx'
@@ -203,71 +191,16 @@ export function createServer(me: Me = jana): StorageServer {
   const server: StorageServer = Object.assign(createHouseholdServer(me), { report, usage, plan })
   const holds = () => (server.household.my_grants?.admin ?? 'none') !== 'none'
   const owns = () => server.household.my_role === 'owner'
-  const gone = () =>
-    Response.json(
-      { type: 'about:blank', title: 'not_found', status: 404, code: 'not_found' },
-      { status: 404, headers: { 'Content-Type': 'application/problem+json' } },
-    )
+  const gone = () => problem(404, 'not_found')
   server.on(routes.picture, () => (holds() ? Response.json(server.report) : gone()))
   server.on(routes.usage, () => (owns() ? Response.json(server.usage) : gone()))
   server.on(routes.plan, () => (owns() ? Response.json(server.plan) : gone()))
   return server
 }
 
-/** The household the address names, as its member reads it, around its screens. */
-function InHousehold() {
-  const { householdId = '' } = useParams()
-  const household = useHouseholdQuery(householdId)
-  if (household.data === undefined) return <main />
-  return (
-    <HouseholdContext value={household.data}>
-      <main>
-        <Outlet />
-      </main>
-    </HouseholdContext>
-  )
-}
-
-/** What stands at an address the screen links to: a test reads where a link leads. */
-function Elsewhere() {
-  return <main />
-}
-
-const table: RouteObject[] = [
-  {
-    Component: Signed,
-    children: [
-      {
-        path: paths.household.path,
-        Component: InHousehold,
-        children: [
-          { index: true, Component: Elsewhere },
-          {
-            path: paths.settingsStorage.path.slice(paths.household.path.length + 1),
-            Component: Storage,
-          },
-        ],
-      },
-    ],
-  },
-  { path: paths.signIn.path, Component: Elsewhere },
-]
+const table = routed({ household: [[paths.settingsStorage, Storage]] })
 
 /** Opens `address` in a browser `server`'s member is signed in to. */
 export function open(address: string, server: StorageServer = createServer()) {
-  const router = createMemoryRouter(table, { initialEntries: [address] })
-  const cookies = () => '__Host-hh_csrf=t'
-  const client = createWebClient({
-    origin,
-    fetch: server.fetch,
-    cookies,
-    // A request that got no answer is said to have got none at once: no test waits out a resend.
-    retry: { delays: [] },
-  })
-  const drawn = render(
-    <Providers persist={false} client={client} cookies={cookies}>
-      <RouterProvider router={router} />
-    </Providers>,
-  )
-  return { ...drawn, router, server, user: userEvent.setup() }
+  return openOver(table, address, server)
 }

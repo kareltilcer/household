@@ -12,7 +12,6 @@ import { Section } from '../household/settings/Page.tsx'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import type { StorageReport } from './data.ts'
 import { columnsOf, fullestDay, plotHeight } from './picture.ts'
-import { useSize } from './sizes.ts'
 import styles from './Storage.module.css'
 
 /** The room left at each side of a column, of the day's width it stands in. */
@@ -21,7 +20,6 @@ const gap = 0.1
 export function Trend({ trend }: { readonly trend: StorageReport['trend'] }) {
   const t = useTranslate()
   const format = useFormat()
-  const size = useSize()
   const first = trend[0]
   const last = trend.at(-1)
   const fullest = fullestDay(trend)
@@ -32,21 +30,24 @@ export function Trend({ trend }: { readonly trend: StorageReport['trend'] }) {
       <p className={account.text}>{t('storage.trend.none')}</p>
     ) : trend.length === 1 ? (
       <p className={account.text}>
-        {t('storage.trend.one', { size: size(first.bytes), day: format.day(first.date) })}
+        {t('storage.trend.one', { size: format.bytes(first.bytes), day: format.day(first.date) })}
       </p>
     ) : (
       <>
         <p className={account.text}>
           {t('storage.trend.span', {
-            first_size: size(first.bytes),
+            first_size: format.bytes(first.bytes),
             first_day: format.day(first.date),
-            last_size: size(last.bytes),
+            last_size: format.bytes(last.bytes),
             last_day: format.day(last.date),
             count: trend.length,
           })}
         </p>
         <p className={account.text}>
-          {t('storage.trend.peak', { size: size(fullest.bytes), day: format.day(fullest.date) })}
+          {t('storage.trend.peak', {
+            size: format.bytes(fullest.bytes),
+            day: format.day(fullest.date),
+          })}
         </p>
       </>
     )

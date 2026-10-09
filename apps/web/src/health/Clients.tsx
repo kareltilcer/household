@@ -8,9 +8,9 @@
 // A row is a replica that has reported (`getClients`), and never a device or a session of an
 // account's, which span households: a client that is signed in and has not synced this
 // household is not here. What it is comes from what its report named. A browser is named for
-// what its header tells and never by the header (names.ts); the app on a phone by its label, or
-// its platform where it named nothing; and a client that last reported before the server kept
-// its type by whichever of the two what is left tells, or as neither.
+// what its header tells and never by the header (account/userAgent.ts); the app on a phone by
+// its label, or its platform where it named nothing; and a client that last reported before the
+// server kept its type by whichever of the two what is left tells, or as neither.
 //
 // Two things are said of a version and no third (versions.ts). A browser's is the same build as
 // this page or another build: nothing knows which version is the newest, so the prototype's
@@ -36,8 +36,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { Link } from 'react-router'
 import account from '../account/Settings.module.css'
-import { readState, useNoWithdrawal } from '../account/common.ts'
-import { agentOf } from '../account/userAgent.ts'
+import { readState, sameId, useData, useNoWithdrawal } from '../account/common.ts'
+import { agentOf, useClientNames, type ClientNames } from '../account/userAgent.ts'
 import { clientName } from '../api/client.ts'
 import { problemIn } from '../api/problem.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
@@ -57,9 +57,8 @@ import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import type { DataState } from '../ui/states.ts'
 import { Standing } from './common.tsx'
-import { sameId, useClients, useOwn, type Client, type ClientList } from './data.ts'
+import { useClients, useOwn, type Client, type ClientList } from './data.ts'
 import styles from './Health.module.css'
-import { useClientNames, useData, type ClientNames } from './names.ts'
 import { isUnder, ownVersion } from './versions.ts'
 
 /** What a client is, as far as its report says: this app in a browser, the app on a device, or neither told. */

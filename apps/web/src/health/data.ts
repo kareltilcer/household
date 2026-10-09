@@ -124,13 +124,6 @@ export function useOwnReplicaId(): string | null | undefined {
   return read !== undefined && read.replica === replica ? read.id : undefined
 }
 
-/** Whether two ids are one: a UUID is written in either case. */
-export function sameId(one: string | null | undefined, other: string | null | undefined): boolean {
-  return typeof one === 'string' && typeof other === 'string'
-    ? one.toLowerCase() === other.toLowerCase()
-    : false
-}
-
 /**
  * Where this tab stands towards the household's replica, for a screen that marks this browser's
  * own row: `here` with its id, once the replica is open in this tab and has said it; `opening`

@@ -38,7 +38,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import account from '../../account/Settings.module.css'
-import { readState, refocus } from '../../account/common.ts'
+import { readState, refocus, useFocusKept, useSaid } from '../../account/common.ts'
 import { useApi } from '../../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../../api/problem.ts'
 import { useProblemText } from '../../api/problemText.ts'
@@ -70,13 +70,12 @@ import {
   declinedNotices,
   settledAddresses,
   statusAt,
-  useEverHeld,
   useRefusal,
   type InvitationStatus,
 } from './invitations.ts'
 import styles from './Invitations.module.css'
-import { HouseholdSettingsPage, useStanding } from './Page.tsx'
-import { isStandingRefusal, useFocusKept, useSaid } from './profile.ts'
+import { HouseholdSettingsPage, useEverHeld, useStanding } from './Page.tsx'
+import { isStandingRefusal } from './profile.ts'
 
 /** What an owner can do to an invitation as it stands. */
 interface Offered {
@@ -286,7 +285,8 @@ function Sent() {
   // withdrawn offers no *Withdraw*, one that somebody joined by offers nothing, and a member who
   // is an owner no longer is offered none of them. The focus the control held went with it: it
   // is put on the list's own place, the element around the notices and the rows. So is the
-  // focus of a control nobody pressed, which left when the household was read again (profile.ts).
+  // focus of a control nobody pressed, which left when the household was read again
+  // (account/common.ts).
   const view = useFocusKept(standing.changes, target)
   const pressed = useRef<{ readonly id: string; readonly control: keyof Offered } | null>(null)
   useEffect(() => {

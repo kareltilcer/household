@@ -40,8 +40,9 @@ describe.each(locales)('catalogs/%s.json', (locale) => {
 })
 
 // A row's own control is drawn as a word and named in full for what it acts on (the web's
-// `RowAction` and `RowLink`, and the two buttons written the same way by hand: the one that
-// disconnects a provider and the one that shows a module again). What is drawn is what somebody
+// `RowAction` and `RowLink`, and the buttons written the same way by hand: the one that
+// disconnects a provider, the one that shows a module again, and the one that downloads an
+// export, which takes no press while another row's is asked for). What is drawn is what somebody
 // who speaks to their device says to press it, so the name holds the drawn words together and in
 // their order (WCAG 2.1, 2.5.3):
 // *Send again* is in *Send again to {email}*, and not in *Send the invitation to {email} again*.
@@ -53,6 +54,10 @@ describe('a control drawn as a word and named in full', () => {
     ['account.households.open', 'account.households.open_named'],
     ['account.households.waiting.open', 'account.households.waiting.open_named'],
     ['account.security.providers.disconnect', 'account.security.providers.disconnect_named'],
+    ['billing.invoices.download.word', 'billing.invoices.download.named'],
+    ['billing.invoices.download.word', 'billing.invoices.download.named_day'],
+    ['data.exports.download.word', 'data.exports.download.named'],
+    ['health.sync.again.word', 'health.sync.again.named'],
     ['household.invitations.resend.word', 'household.invitations.resend.named'],
     ['household.invitations.withdraw.word', 'household.invitations.withdraw.named'],
     ['household.invitations.withdraw.word', 'household.invitations.withdraw.named_link'],

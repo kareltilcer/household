@@ -6,7 +6,7 @@
 // never made a float on its way to the screen: its digits are placed as a decimal string, which
 // `Intl.NumberFormat` reads exactly. And a timezone is never assumed: an instant is formatted in
 // the zone its caller names, and a calendar day has none.
-import { exponent, type Money } from '@household/domain'
+import { exponent, gigabyte, type Money } from '@household/domain'
 
 /** A piece of a formatted amount, so that a screen can set the number in mono and the code beside it. */
 export interface MoneyPart {
@@ -28,6 +28,13 @@ export interface Formatters {
   readonly decimal: (value: string, options?: Intl.NumberFormatOptions) => string
   /** `fraction` as a percentage: 0.44 is 44 %. */
   readonly percent: (fraction: number) => string
+  /**
+   * A count of bytes as a size, in the decimal units storage is sold in, a gigabyte being a
+   * thousand million bytes (PRD 04 §4): in the largest unit it fills one of and to one decimal
+   * place, *19.4 GB*, *412 MB*. Nothing at all is said in the unit a plan is sold in, *0 GB*,
+   * and nothing in bytes: `Intl` writes that unit as an English word in whichever language.
+   */
+  readonly bytes: (bytes: number) => string
   readonly money: (amount: Money) => string
   /** The amount in the locale's own order, piece by piece. */
   readonly moneyParts: (amount: Money) => readonly MoneyPart[]
@@ -56,6 +63,13 @@ function decimal(amountMinor: number, digits: number): Intl.StringNumericLiteral
   const fraction = digits === 0 ? '' : `.${magnitude.slice(-digits)}`
   return `${sign}${whole}${fraction}` as Intl.StringNumericLiteral
 }
+
+/** The units a size is said in, the largest first, each with the bytes it holds. */
+const sizeUnits = [
+  ['gigabyte', gigabyte],
+  ['megabyte', gigabyte / 1000],
+  ['kilobyte', gigabyte / 1_000_000],
+] as const
 
 const calendarDay = /^(\d{4})-(\d{2})-(\d{2})$/
 const plainDecimal = /^-?\d+(?:\.(\d+))?$/
@@ -129,6 +143,11 @@ export function createFormatters(locale: string): Formatters {
       )
     },
     percent: (fraction) => percent.format(fraction),
+    bytes: (bytes) => {
+      const [unit, size] =
+        bytes === 0 ? sizeUnits[0] : (sizeUnits.find(([, each]) => bytes >= each) ?? sizeUnits[2])
+      return numbers({ style: 'unit', unit, maximumFractionDigits: 1 }).format(bytes / size)
+    },
     money: (amount) =>
       partsOf(amount)
         .map((part) => part.value)

@@ -6,7 +6,6 @@
 // (household/data.ts), and the three are drawn as one body.
 import type { ApiClient, components } from '@household/api'
 import { queryOptions, useQuery, type UseQueryResult } from '@tanstack/react-query'
-import type { Read } from '../account/common.ts'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { householdKey } from '../household/households.ts'
@@ -42,19 +41,4 @@ export function usePicture(
   { enabled = true }: { readonly enabled?: boolean } = {},
 ): UseQueryResult<StorageReport> {
   return useQuery({ ...pictureQuery(useApi(), household), enabled })
-}
-
-/**
- * Several reads that one body is drawn from, as the one read the body's state is told by
- * (`readState`, account/common.ts): read once every one of them is, and until then failed or
- * waiting for a connection where any of those still unread is. One that was read and could not
- * be read again says nothing here: what this browser kept of it is drawn.
- */
-export function together(reads: readonly Read[]): Read {
-  const unread = reads.filter((read) => read.data === undefined)
-  return {
-    data: unread.length === 0 ? reads : undefined,
-    isError: unread.some((read) => read.isError),
-    fetchStatus: unread.some((read) => read.fetchStatus === 'paused') ? 'paused' : 'idle',
-  }
 }

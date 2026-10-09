@@ -22,12 +22,10 @@ import { MoneyValue } from '../ui/MoneyValue.tsx'
 import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
-import { useSize } from './data.ts'
 
 export function Usage({ subscription }: { readonly subscription: Subscription }) {
   const t = useTranslate()
   const format = useFormat()
-  const size = useSize()
   const online = useOnline()
   const household = useHousehold()
   const read = useUsage(household.id)
@@ -76,20 +74,24 @@ export function Usage({ subscription }: { readonly subscription: Subscription })
                       to: format.day(usage.period_to),
                     }),
                   },
-                  { key: t('billing.usage.now'), value: size(usage.current_bytes), numeric: true },
+                  {
+                    key: t('billing.usage.now'),
+                    value: format.bytes(usage.current_bytes),
+                    numeric: true,
+                  },
                   {
                     key: t('billing.usage.average'),
-                    value: size(usage.mtd_average_bytes),
+                    value: format.bytes(usage.mtd_average_bytes),
                     numeric: true,
                   },
                   {
                     key: t('billing.usage.projected'),
-                    value: size(usage.projected_average_bytes),
+                    value: format.bytes(usage.projected_average_bytes),
                     numeric: true,
                   },
                   {
                     key: t('billing.usage.included'),
-                    value: size(usage.included_bytes_base),
+                    value: format.bytes(usage.included_bytes_base),
                     numeric: true,
                   },
                   {
@@ -99,7 +101,7 @@ export function Usage({ subscription }: { readonly subscription: Subscription })
                         ? t('billing.usage.blocks_none')
                         : t('billing.usage.blocks_count', {
                             count: usage.blocks_projected,
-                            size: size(subscription.storage_block_bytes),
+                            size: format.bytes(subscription.storage_block_bytes),
                           }),
                   },
                   {

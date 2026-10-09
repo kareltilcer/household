@@ -142,7 +142,7 @@ describe('sync health', () => {
 
   it('draws this browser’s figures as they are now, with the way to what waits for the member', async () => {
     // The report said nothing was waiting: the replica says what is so now.
-    const stand = standIn({ queued: 2, held: 1, inbox: [outcome()] })
+    const stand = standIn({ queued: 2, held: 1, entries: [outcome()] })
     await health(listing([report()]), { sync: syncOver(stand) })
     const row = await rowOf('Chrome on Windows')
     expect(await within(row).findByText('Needs your attention')).toBeInTheDocument()
@@ -160,7 +160,7 @@ describe('sync health', () => {
     const row = await rowOf('Chrome on Windows')
     expect(within(row).getByText('In sync')).toBeInTheDocument()
     act(() => {
-      stand.move({ queued: 1 })
+      stand.become({ queued: 1 })
     })
     expect(
       await within(row).findByText('1 change is waiting to be sent from this browser.'),
@@ -291,7 +291,7 @@ describe('the report this browser sends as the screen opens', () => {
     expect(stand.reports()).toBe(1)
     // Its status moving again sends no second one.
     act(() => {
-      stand.move({ queued: 0 })
+      stand.become({ queued: 0 })
     })
     expect(stand.reports()).toBe(1)
   })
@@ -303,7 +303,7 @@ describe('the report this browser sends as the screen opens', () => {
     await rowOf('Chrome on Windows')
     expect(stand.reports()).toBe(0)
     act(() => {
-      stand.move({ caughtUp: true })
+      stand.become({ caughtUp: true })
     })
     expect(stand.reports()).toBe(1)
   })

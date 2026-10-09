@@ -1,6 +1,6 @@
 // What billing's screens share that draws nothing (PRD 04 §6, FR-BI4 to FR-BI6; 17 §6): the
-// invoices their reader paid, who pays, what a plan costs, how a size and a refusal are said,
-// and how the processor's word on a confirmation is waited for.
+// invoices their reader paid, who pays, what a plan costs, how a refusal is said, and how the
+// processor's word on a confirmation is waited for.
 //
 // The subscription and the month's usage are read through the household's own data
 // (household/data.ts), and everything here is filed under the household's key beside them. Every
@@ -12,6 +12,7 @@
 import type { components } from '@household/api'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
+import { sameId } from '../account/common.ts'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
@@ -19,7 +20,7 @@ import { inHousehold } from '../app/paths.ts'
 import type { Subscription } from '../household/data.ts'
 import { householdKey, subscriptionKey } from '../household/households.ts'
 import { useTimeZone } from '../household/timezone.ts'
-import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
+import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { confirmationReads } from './cadence.ts'
 
 export type Invoice = components['schemas']['Invoice']
@@ -35,14 +36,14 @@ export type Method = NonNullable<Subscription['payment_method']>
 /** The intervals a plan is paid at, in the order they are offered: the year first. */
 export const intervals: readonly Interval[] = ['year', 'month']
 
-/** Whether two ids name one account: the contract's ids are compared without their case. */
-export function same(one: string | null | undefined, other: string | null | undefined): boolean {
-  return one != null && other != null && one.toLowerCase() === other.toLowerCase()
-}
-
-/** Whether `user` pays for the household, as its subscription names its payer. */
+/**
+ * Whether `user` pays for the household, as its subscription names its payer. Billing reads who
+ * pays off the subscription it draws, which it reads again by itself while it waits for the
+ * processor's word, and not off the household's members (`useReader`, household/data.ts): the
+ * two are read at different moments, and the page would say two things of one payer.
+ */
 export function isPayer(subscription: Pick<Subscription, 'payer'>, user: string): boolean {
-  return same(subscription.payer?.user_id, user)
+  return sameId(subscription.payer?.user_id, user)
 }
 
 /** What paying at `interval` costs, as the subscription's own `plans` say it (D-132). */
@@ -66,20 +67,6 @@ export function monthOf(year: Money): Money | undefined {
 /** The billing screen's own address in full: where the processor sends a member back to. */
 export function returnAddress(household: string): string {
   return new URL(inHousehold.billing(household), window.location.origin).href
-}
-
-/** How a size in bytes is said: in gigabytes of a thousand million bytes, as storage is sold. */
-export function useSize(): (bytes: number) => string {
-  const format = useFormat()
-  return useCallback(
-    (bytes) =>
-      format.number(bytes / 1_000_000_000, {
-        style: 'unit',
-        unit: 'gigabyte',
-        maximumFractionDigits: 1,
-      }),
-    [format],
-  )
 }
 
 /** The invoices a household's reader paid (`getBillingInvoices`), under the household's own key. */

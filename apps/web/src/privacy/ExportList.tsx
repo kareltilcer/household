@@ -30,8 +30,8 @@
 import type { BaseId } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { readState, refocus, useNoWithdrawal } from '../account/common.ts'
+import { useEffect, useRef, type ReactNode } from 'react'
+import { readState, refocus, useData, useNoWithdrawal, useSaid } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { problemIn } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
@@ -54,8 +54,6 @@ import {
   listed,
   statusOf,
   underWay,
-  useAsWritten,
-  useSize,
   type ExportSource,
   type ExportStatus,
   type Listed,
@@ -129,8 +127,7 @@ function Row({
 }) {
   const t = useTranslate()
   const format = useFormat()
-  const size = useSize()
-  const asWritten = useAsWritten()
+  const asWritten = useData()
   const line = useEntryLine()
   const status = statusOf(job)
   const when = job.requested_at === undefined ? '' : format.instant(job.requested_at, zone)
@@ -185,7 +182,9 @@ function Row({
         </p>
         {detail === undefined ? null : <p className={styles.detail}>{detail}</p>}
         {made && typeof job.size_bytes === 'number' ? (
-          <p className={styles.detail}>{t('data.exports.size', { size: size(job.size_bytes) })}</p>
+          <p className={styles.detail}>
+            {t('data.exports.size', { size: format.bytes(job.size_bytes) })}
+          </p>
         ) : null}
         {status === 'ready' && contents.length > 0 ? (
           <details className={styles.contents}>
@@ -277,14 +276,7 @@ export function ExportList({
 
   // What the last press was refused with: a banner of its own for each, so that a second
   // refusal is said as the first was.
-  const refusals = useRef(0)
-  const [refused, setRefused] = useState<{ readonly id: number; readonly text: string } | null>(
-    null,
-  )
-  const refuse = (text: string | null) => {
-    refusals.current += 1
-    setRefused(text === null ? null : { id: refusals.current, text })
-  }
+  const [refused, refuse] = useSaid()
 
   // The exports this visit saw on their way: what each then came to arrived with nobody
   // pressing anything, and is said.

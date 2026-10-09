@@ -36,8 +36,8 @@ import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import account from '../account/Settings.module.css'
-import { refocus, useNoWithdrawal } from '../account/common.ts'
-import { agentOf } from '../account/userAgent.ts'
+import { refocus, useData, useNoWithdrawal } from '../account/common.ts'
+import { agentOf, useClientNames } from '../account/userAgent.ts'
 import { useApi } from '../api/ApiProvider.tsx'
 import { clientName } from '../api/client.ts'
 import { problemIn, unwrap } from '../api/problem.ts'
@@ -73,7 +73,6 @@ import {
 } from './bundle.ts'
 import { useSyncState } from './data.ts'
 import styles from './Health.module.css'
-import { useClientNames, useData } from './names.ts'
 
 /** The address a bundle is about: the one its member came from, where the link that led here said. */
 function cameFrom(state: unknown): string | undefined {

@@ -30,7 +30,7 @@
 // said where it was asked.
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { readState } from '../../account/common.ts'
+import { readState, useFocusKept } from '../../account/common.ts'
 import settings from '../../account/Settings.module.css'
 import { inHousehold } from '../../app/paths.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
@@ -54,7 +54,6 @@ import { ChildCreate } from './ChildCreate.tsx'
 import { statusAt } from './invitations.ts'
 import styles from './Members.module.css'
 import { HouseholdSettingsPage, useStanding } from './Page.tsx'
-import { useFocusKept } from './profile.ts'
 
 const tones: readonly MemberTone[] = [1, 2, 3, 4, 5, 6, 7, 8]
 
@@ -148,7 +147,8 @@ export function Members() {
   // Where the focus is once the sheet has closed: on the control that opened it, and, where
   // that control went while the sheet was open, with the owner's standing or the household's
   // writes, on the list's own place. It is not left to drop to the page: nor is the focus of a
-  // control that left with no sheet open, when the household was read again (profile.ts).
+  // control that left with no sheet open, when the household was read again
+  // (account/common.ts).
   const [adding, setAdding] = useState(false)
   const opener = useRef<HTMLButtonElement>(null)
   const view = useFocusKept(standing.changes, adding)

@@ -1,29 +1,27 @@
 // What a test of the screens of a household's sync stands on: the household of
 // household/testing.tsx and its server, the three screens drawn in it as the router draws them
-// for a member, and a replica that is none: what the screens ask of this browser's replica
-// (data.ts, bundle.ts), answered from memory. A test moves it as a real one moves: it catches
-// up, something is queued, it reports, and tells whoever listens to its status. Imported by
-// tests alone.
-import type { Held, RecordedOutcome, Replica, ReplicaDigestVerdict } from '@household/sync'
-import { render } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+// for a member, and a replica that is none, the one the sync UI's own tests stand on
+// (dev/sync/standIn.ts). A test moves it as a real one moves: it catches up, something is
+// queued, it reports, and tells whoever listens to its status. Imported by tests alone.
+import type { RecordedOutcome, Registry } from '@household/sync'
 import { useSyncExternalStore } from 'react'
-import { Outlet, RouterProvider, createMemoryRouter, useParams } from 'react-router'
-import { createWebClient } from '../api/client.ts'
-import { Providers } from '../app/App.tsx'
-import { Signed } from '../app/guards.tsx'
 import { paths } from '../app/paths.ts'
-import { HouseholdContext } from '../household/HouseholdContext.tsx'
-import { useHouseholdQuery } from '../household/households.ts'
+import {
+  standIn as replicaStandIn,
+  type StandIn,
+  type StandInOptions,
+} from '../dev/sync/standIn.ts'
 import {
   createServer,
+  Elsewhere,
   home,
+  InHousehold,
   jana,
-  origin,
+  openOver,
+  routed,
   tilcerovi,
   type HouseholdServer,
 } from '../household/testing.tsx'
-import type { Opened } from '../sync/open.ts'
 import { SyncFixture, type Sync } from '../sync/ReplicaProvider.tsx'
 import { Clients } from './Clients.tsx'
 import type { Client, Report } from './data.ts'
@@ -125,115 +123,15 @@ export function outcome(more: Partial<RecordedOutcome> = {}): RecordedOutcome {
   }
 }
 
-/** What the screens ask of a replica: the part of it they use, typed as that part. */
-type Asked = Pick<Replica, 'id' | 'queued' | 'held' | 'outcomes' | 'report' | 'caughtUp'> & {
-  readonly db: Pick<Replica['db'], 'registerListener'>
-}
+/** A registry that names nothing: the screens of a household's sync ask a replica for no row. */
+const nothing: Registry = { description: '', streams: [], entities: {}, tables: {} }
 
-type Listener = Parameters<Replica['db']['registerListener']>[0]
-type Status = Replica['db']['currentStatus']
-
-export interface StandInOptions {
-  readonly id?: string
-  /** Whether it has caught up to begin with: it has, unless a test says it is still connecting. */
-  readonly caughtUp?: boolean
-  readonly queued?: number
-  /** How many mutations it holds to send again. */
-  readonly held?: number
-  readonly outcomes?: readonly RecordedOutcome[]
-  /** What needs the member's attention: its inbox. */
-  readonly inbox?: readonly RecordedOutcome[]
-  /**
-   * What the server answers its report: told once for each, it answers the verdict, null for a
-   * report the server did not take, or throws for one that got no answer.
-   */
-  readonly onReport?: () => ReplicaDigestVerdict | null
-  /** Whether its database fails under every question. */
-  readonly broken?: boolean
-}
-
-export interface StandIn {
-  /** It, as the app holds an open replica. */
-  readonly opened: Opened
-  /** How many times it was asked to report. */
-  readonly reports: () => number
-  /** Moves it, and tells whoever listens to its status, as PowerSync does. */
-  readonly move: (to: { caughtUp?: boolean; queued?: number }) => void
-}
-
-const matched: ReplicaDigestVerdict = { matched: true, resnapshot_required: false, entries: [] }
-
-export function standIn({
-  id = here,
-  caughtUp = true,
-  queued = 0,
-  held = 0,
-  outcomes = [],
-  inbox = [],
-  onReport = () => matched,
-  broken = false,
-}: StandInOptions = {}): StandIn {
-  const state = { caughtUp, queued, reports: 0 }
-  const listeners = new Set<Listener>()
-  const asked = <T,>(answer: () => T): Promise<T> =>
-    broken ? Promise.reject(new Error('the database is closed')) : Promise.resolve(answer())
-  const replica: Asked = {
-    id: () => asked(() => id),
-    queued: () => asked(() => state.queued),
-    held: () => asked(() => Array.from({ length: held }, (): Held => heldMutation)),
-    outcomes: () => asked(() => [...outcomes]),
-    report: () => {
-      state.reports += 1
-      // As the library: a replica with a write queued reports nothing.
-      if (state.queued > 0) return Promise.resolve(null)
-      try {
-        return Promise.resolve(onReport())
-      } catch (error) {
-        return Promise.reject(error instanceof Error ? error : new Error(String(error)))
-      }
-    },
-    get caughtUp() {
-      return state.caughtUp
-    },
-    db: {
-      registerListener: (listener) => {
-        listeners.add(listener)
-        return () => {
-          listeners.delete(listener)
-        }
-      },
-    },
-  }
-  return {
-    opened: {
-      // The part the screens use is all there is of it.
-      replica: replica as Replica,
-      needsConnection: () => false,
-      watchInbox: (listener) => {
-        listener(inbox)
-        return () => undefined
-      },
-    },
-    reports: () => state.reports,
-    move: (to) => {
-      Object.assign(state, to)
-      // What the screens do on a status is ask the replica again: the status itself is not read.
-      for (const listener of listeners) listener.statusChanged?.({} as Status)
-    },
-  }
-}
-
-/** A mutation held to send again, with what the member wrote in it. */
-const heldMutation: Held = {
-  reason: 'entitlement',
-  mutation: {
-    mutation_id: '0190a000-0000-7000-8000-0000000000f8',
-    entity_type: 'shopping.item',
-    entity_id: '0190a000-0000-7000-8000-0000000000f9',
-    op: 'create',
-    client_time: '2026-09-08T16:20:00Z',
-    fields: { name: 'Kvasnice' },
-  },
+/**
+ * A replica that is none (dev/sync/standIn.ts), which reports as this browser's: what the
+ * screens ask of this browser's replica (data.ts, bundle.ts), answered from memory.
+ */
+export function standIn(options: Omit<StandInOptions, 'registry'> = {}): StandIn {
+  return replicaStandIn({ registry: nothing, id: here, ...options })
 }
 
 /** How sync stands in a test, which the test may change while its screen is drawn. */
@@ -276,13 +174,6 @@ function syncOf(initial: Sync): SyncStore {
   }
 }
 
-/** What stands at an address a screen leads on to: a test reads where it went. */
-function Elsewhere() {
-  return <main />
-}
-
-const rest = (path: string) => path.slice(paths.household.path.length + 1)
-
 export interface OpenOptions {
   /** How sync stands: a tab that holds an in-sync replica, unless a test says otherwise. */
   readonly sync?: SyncStore
@@ -299,59 +190,25 @@ export function open(
   server: HouseholdServer = createServer(),
   { sync = syncOver(), state }: OpenOptions = {},
 ) {
-  /** The household the address names, as its member reads it, around its screens. */
-  function InHousehold() {
-    const { householdId = '' } = useParams()
-    const household = useHouseholdQuery(householdId)
+  /** The household around its screens, and how sync stands in it. */
+  function InSync() {
     const value = useSyncExternalStore(sync.subscribe, sync.get)
-    if (household.data === undefined) return <main />
     return (
-      <HouseholdContext value={household.data}>
-        <SyncFixture value={value}>
-          <main>
-            <Outlet />
-          </main>
-        </SyncFixture>
-      </HouseholdContext>
+      <SyncFixture value={value}>
+        <InHousehold />
+      </SyncFixture>
     )
   }
-  const router = createMemoryRouter(
-    [
-      {
-        Component: Signed,
-        children: [
-          {
-            path: paths.household.path,
-            Component: InHousehold,
-            children: [
-              { index: true, Component: Elsewhere },
-              { path: rest(paths.sync.path), Component: Elsewhere },
-              { path: rest(paths.settingsSync.path), Component: SyncHealth },
-              { path: rest(paths.settingsDiagnostics.path), Component: Diagnostics },
-              { path: rest(paths.settingsClients.path), Component: Clients },
-            ],
-          },
-        ],
-      },
-      { path: paths.home.path, Component: Elsewhere },
-      { path: paths.signIn.path, Component: Elsewhere },
+  const table = routed({
+    household: [
+      [paths.sync, Elsewhere],
+      [paths.settingsSync, SyncHealth],
+      [paths.settingsDiagnostics, Diagnostics],
+      [paths.settingsClients, Clients],
     ],
-    { initialEntries: [{ pathname: address, state }] },
-  )
-  const cookies = () => '__Host-hh_csrf=t'
-  const client = createWebClient({
-    origin,
-    fetch: server.fetch,
-    cookies,
-    // A request that got no answer is said to have got none at once: no test waits out a resend.
-    retry: { delays: [] },
+    around: InSync,
   })
-  const drawn = render(
-    <Providers persist={false} client={client} cookies={cookies}>
-      <RouterProvider router={router} />
-    </Providers>,
-  )
-  return { ...drawn, router, server, sync, user: userEvent.setup() }
+  return { ...openOver(table, address, server, { state }), sync }
 }
 
 /** The path of the household's sync state, its reset and its clients on the server. */

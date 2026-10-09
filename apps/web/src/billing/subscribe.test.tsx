@@ -5,7 +5,7 @@ import { focusManager, onlineManager } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { inHousehold } from '../app/paths.ts'
-import { accountOf, adam, home, jana, milos, petr, problem } from '../household/testing.tsx'
+import { accountOf, adam, home, jana, milos, money, petr, problem } from '../household/testing.tsx'
 import { loadProcessor } from './stripe.ts'
 import {
   asOwner,
@@ -13,7 +13,6 @@ import {
   createServer,
   createStandIn,
   intent,
-  money,
   open,
   subscription,
   trial,

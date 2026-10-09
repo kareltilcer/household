@@ -1,8 +1,8 @@
 // The households a member is in, and the one an address names, as the API answers them. Every
 // household-scoped screen reads the household through here, by the id in its address (D-4): there
 // is no current household kept anywhere but there.
-import type { components } from '@household/api'
-import { useQuery, type UseQueryResult } from '@tanstack/react-query'
+import type { ApiClient, components } from '@household/api'
+import { queryOptions, useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
@@ -116,9 +116,8 @@ export function useHouseholds(): UseQueryResult<HouseholdSummary[]> {
  * The household `household` names, as its member reads it. A household the member is not in, one
  * that is `suspended`, and an id that is none answer `404` alike, and read the same here.
  */
-export function useHouseholdQuery(household: string): UseQueryResult<Household> {
-  const api = useApi()
-  return useQuery({
+export function householdQuery(api: ApiClient, household: string) {
+  return queryOptions({
     queryKey: householdKey(household),
     queryFn: async ({ signal }) =>
       unwrap(
@@ -128,6 +127,10 @@ export function useHouseholdQuery(household: string): UseQueryResult<Household> 
         }),
       ),
   })
+}
+
+export function useHouseholdQuery(household: string): UseQueryResult<Household> {
+  return useQuery(householdQuery(useApi(), household))
 }
 
 /** Where the household a member was last in is kept, in this browser, for each member. */

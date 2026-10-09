@@ -10,12 +10,11 @@
 import type { BaseId } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import { refocus } from '../account/common.ts'
+import { refocus, useSaid, type Said } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { problemIn } from '../api/problem.ts'
 import { useReread, type Subscription } from '../household/data.ts'
 import type { EntitlementState } from '../household/households.ts'
-import { useSaid, type Said } from '../household/settings/profile.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -26,7 +25,6 @@ import {
   isPayer,
   monthOf,
   useBillingRefusal,
-  useSize,
   type Interval,
   type Method,
   type Money,
@@ -118,12 +116,11 @@ export function useMonthOfYear(): (year: Money) => string | undefined {
 export function StorageTerms({ subscription }: { readonly subscription: Subscription }) {
   const t = useTranslate()
   const format = useFormat()
-  const size = useSize()
   return (
     <p className={account.text}>
       {t('billing.storage.terms', {
-        included: size(subscription.included_storage_bytes),
-        block: size(subscription.storage_block_bytes),
+        included: format.bytes(subscription.included_storage_bytes),
+        block: format.bytes(subscription.storage_block_bytes),
         price: format.money(subscription.price_per_storage_block),
         most: subscription.max_storage_blocks,
       })}
@@ -203,6 +200,11 @@ export function useMethodWords(): (method: Method) => string {
  * is one that was never here: what changes under a member who is reading moves nothing. The
  * look is taken after every drawing of the part, since a control may leave under a question
  * that is still open and be missed only when the question closes.
+ *
+ * It is one part that is watched, of a screen that has several, each with a place of its own. A
+ * screen with one place for its whole page, whose controls leave together, keeps the focus by
+ * whether they are drawn (account/common.ts, `useFocusKept`): the two are not one hook, since
+ * that one watches the whole page and would move the focus to the wrong part here.
  */
 export function useFocusKept(): RefObject<HTMLDivElement | null> {
   const place = useRef<HTMLDivElement>(null)

@@ -1,33 +1,27 @@
-// What a billing screen's test stands on: the household Tilcerovi as the server knows it
-// (household/testing.tsx), with a subscription, a month's usage and its payer's invoices; the
-// three billing screens at their addresses, in the household the address names; and a stand-in
-// for the payment processor's script, which no test fetches. Imported by tests alone.
+// What a billing screen's test stands on: the household Tilcerovi as the server knows it, with a
+// subscription, a month's usage and its payer's invoices; the three billing screens at their
+// addresses, in the household the address names (household/testing.tsx, `routed`); and a
+// stand-in for the payment processor's script, which no test fetches. Imported by tests alone.
 //
 // The stand-in is a `Processor` as stripe.ts hands one to the app: a test replaces
 // `loadProcessor` with one that answers it, says when a frame is ready and what a confirmation
 // resolves with, and reads what the app asked of it. What stripe.ts itself asks of Stripe.js is
 // its own test's (stripe.test.ts).
-import { render } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { Outlet, RouterProvider, createMemoryRouter, useParams } from 'react-router'
-import { createWebClient } from '../api/client.ts'
-import { Providers } from '../app/App.tsx'
-import { Signed } from '../app/guards.tsx'
 import { paths } from '../app/paths.ts'
 import type { Subscription, UsageSummary } from '../household/data.ts'
-import { HouseholdContext } from '../household/HouseholdContext.tsx'
 import { defaultsFor } from '../household/grants.ts'
-import { useHouseholdQuery } from '../household/households.ts'
 import {
   accountOf,
   createServer as createHouseholdServer,
+  Elsewhere,
   home,
   jana,
   memberOf,
   milos,
-  origin,
+  openOver,
   problem,
   readBy,
+  routed,
   type HouseholdServer,
 } from '../household/testing.tsx'
 import type { Me } from '../session/SessionProvider.tsx'
@@ -38,12 +32,6 @@ import { Subscribe } from './Subscribe.tsx'
 import { Takeover } from './Takeover.tsx'
 
 export const eur = (amount: number) => ({ amount_minor: amount, currency: 'EUR' })
-
-/**
- * `text` as the page writes an amount in it: `Intl` sets a space that does not break between a
- * currency's code and its figure. A query by a control's name matches its name as it is written.
- */
-export const money = (text: string) => text.replace(/\b([A-Z]{3}) (?=\d)/g, '$1 ')
 
 /** Jana, who pays, as a subscription names its payer. */
 export const janaPays = { user_id: jana.id, label: jana.display_name, is_former_member: false }
@@ -253,65 +241,18 @@ export function createStandIn(): StandIn {
   return standIn
 }
 
-/** The household the address names, as its member reads it, around its screens. */
-function InHousehold() {
-  const { householdId = '' } = useParams()
-  const household = useHouseholdQuery(householdId)
-  if (household.data === undefined) return <main />
-  return (
-    <HouseholdContext value={household.data}>
-      <main>
-        <Outlet />
-      </main>
-    </HouseholdContext>
-  )
-}
-
-/** What stands at an address a screen sends its member on to: a test reads where it went. */
-function Elsewhere() {
-  return <main />
-}
-
-const rest = (path: string) => path.slice(paths.household.path.length + 1)
-
-const table = [
-  {
-    Component: Signed,
-    children: [
-      {
-        path: paths.household.path,
-        Component: InHousehold,
-        children: [
-          { index: true, Component: Elsewhere },
-          { path: rest(paths.settingsBilling.path), Component: Billing },
-          { path: rest(paths.settingsSubscribe.path), Component: Subscribe },
-          { path: rest(paths.settingsTakeover.path), Component: Takeover },
-          { path: rest(paths.settingsMembers.path), Component: Elsewhere },
-          { path: rest(paths.settingsStorage.path), Component: Elsewhere },
-          { path: rest(paths.settingsData.path), Component: Elsewhere },
-        ],
-      },
-    ],
-  },
-  { path: paths.home.path, Component: Elsewhere },
-  { path: paths.signIn.path, Component: Elsewhere },
-]
+const table = routed({
+  household: [
+    [paths.settingsBilling, Billing],
+    [paths.settingsSubscribe, Subscribe],
+    [paths.settingsTakeover, Takeover],
+    [paths.settingsMembers, Elsewhere],
+    [paths.settingsStorage, Elsewhere],
+    [paths.settingsData, Elsewhere],
+  ],
+})
 
 /** Opens `address` in a browser `server`'s member is signed in to. */
 export function open(address: string, server: BillingServer = createServer()) {
-  const router = createMemoryRouter(table, { initialEntries: [address] })
-  const cookies = () => '__Host-hh_csrf=t'
-  const client = createWebClient({
-    origin,
-    fetch: server.fetch,
-    cookies,
-    // A request that got no answer is said to have got none at once: no test waits out a resend.
-    retry: { delays: [] },
-  })
-  const drawn = render(
-    <Providers persist={false} client={client} cookies={cookies}>
-      <RouterProvider router={router} />
-    </Providers>,
-  )
-  return { ...drawn, router, server, user: userEvent.setup() }
+  return openOver(table, address, server)
 }

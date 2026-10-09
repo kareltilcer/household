@@ -139,6 +139,28 @@ describe('dates and numbers', () => {
     expect(en.percent(0.44)).toBe('44%')
   })
 
+  it('says a size in the largest unit it fills one of, as storage is sold, to one decimal place', () => {
+    expect(en.bytes(19_400_000_000)).toBe('19.4 GB')
+    expect(en.bytes(1_000_000_000)).toBe('1 GB')
+    expect(en.bytes(412_000_000)).toBe('412 MB')
+    expect(en.bytes(2_300)).toBe('2.3 kB')
+    // In the member's locale: its decimal sign, and the space it sets before a unit.
+    expect(createFormatters('de').bytes(19_400_000_000)).toMatch(/^19,4\sGB$/)
+  })
+
+  // `Intl` writes a count of bytes as the English word in whichever language, which a page in
+  // another language, and the pseudo-locale's pass, would show as a word nobody translated.
+  it('says nothing in bytes: nothing at all in the unit a plan is sold in, and less than a thousand in thousands', () => {
+    expect(en.bytes(0)).toBe('0 GB')
+    expect(en.bytes(512)).toBe('0.5 kB')
+    expect(en.bytes(40)).toBe('0 kB')
+    for (const locale of ['en', 'cs', 'sk', 'de', 'pl']) {
+      for (const bytes of [0, 1, 999, 1_000, 1_000_000, 1_000_000_000]) {
+        expect(createFormatters(locale).bytes(bytes)).not.toMatch(/[A-Za-z]{4,}/)
+      }
+    }
+  })
+
   it('makes a formatter once for each way it is asked to format, however many rows ask', () => {
     const dates = vi.spyOn(Intl, 'DateTimeFormat')
     const numbers = vi.spyOn(Intl, 'NumberFormat')

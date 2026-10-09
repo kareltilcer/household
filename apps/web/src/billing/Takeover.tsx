@@ -36,7 +36,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { readState, useNoWithdrawal } from '../account/common.ts'
+import { readState, sameId, useNoWithdrawal } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
@@ -57,14 +57,7 @@ import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import { useToast } from '../ui/Toast.tsx'
-import {
-  isMoved,
-  isPayer,
-  same,
-  useProcessorsWord,
-  type BillingIntent,
-  type Offer,
-} from './data.ts'
+import { isMoved, isPayer, useProcessorsWord, type BillingIntent, type Offer } from './data.ts'
 import {
   Refused,
   StorageTerms,
@@ -350,7 +343,7 @@ function Read() {
                 </Section>
               )
             }
-            if (offer !== null && same(offer.offered_to.user_id, me.id)) {
+            if (offer !== null && sameId(offer.offered_to.user_id, me.id)) {
               return (
                 <Offered
                   subscription={subscription}

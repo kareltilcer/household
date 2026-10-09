@@ -41,7 +41,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { readState, refocus, useNoWithdrawal } from '../account/common.ts'
+import { readState, refocus, sameId, useNoWithdrawal } from '../account/common.ts'
 import { Section, SettingsPage } from '../account/Page.tsx'
 import styles from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
@@ -68,10 +68,6 @@ export type Blocker = 'last_owner' | 'billing_payer'
 
 function isBlocker(value: unknown): value is Blocker {
   return value === 'last_owner' || value === 'billing_payer'
-}
-
-function same(one: string | undefined, other: string): boolean {
-  return one?.toLowerCase() === other.toLowerCase()
 }
 
 /**
@@ -134,7 +130,7 @@ function Leaving({ me }: { readonly me: Me }) {
       // The list this browser kept names the household still, and where the app opens would
       // lead straight back to it: it is taken out of the list at once, and the list read again.
       queries.setQueryData<HouseholdSummary[]>(householdsKey, (list) =>
-        list?.filter((each) => !same(each.id, id)),
+        list?.filter((each) => !sameId(each.id, id)),
       )
       void queries.invalidateQueries({ queryKey: householdsKey, exact: true })
       toast({ message: t('household.leave.done', { household: name }) })
@@ -155,7 +151,7 @@ function Leaving({ me }: { readonly me: Me }) {
 
   // What stands in the way, as the members read here say it.
   const list = members.data ?? []
-  const own = list.find((each) => same(each.user_id, me.id))
+  const own = list.find((each) => sameId(each.user_id, me.id))
   const others = list.filter((each) => each !== own)
   const anotherOwner = others.some((each) => each.role === 'owner')
   const alone = own !== undefined && others.length === 0

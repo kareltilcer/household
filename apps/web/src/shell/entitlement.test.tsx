@@ -11,6 +11,7 @@ import { createWebClient } from '../api/client.ts'
 import { Providers } from '../app/App.tsx'
 import { Signed } from '../app/guards.tsx'
 import { inHousehold, paths } from '../app/paths.ts'
+import type { Reader } from '../household/data.ts'
 import { HouseholdContext } from '../household/HouseholdContext.tsx'
 import { useHouseholdQuery } from '../household/households.ts'
 import {
@@ -37,7 +38,8 @@ import {
   trialNoticeKey,
   type Entitlement,
 } from './entitlement.ts'
-import { EntitlementBannerView, type Reader } from './EntitlementBanner.tsx'
+import { EntitlementBannerView } from './EntitlementBanner.tsx'
+import { contentId } from './Frame.tsx'
 import { HouseholdBars } from './HouseholdBars.tsx'
 
 // A test that says the page is looked at again leaves the next one a page nobody has looked at.
@@ -492,7 +494,7 @@ function Above({ sync }: { readonly sync: Sync }) {
     <HouseholdContext value={household.data}>
       <SyncFixture value={sync}>
         <HouseholdBars />
-        <main tabIndex={-1} />
+        <main id={contentId} tabIndex={-1} />
       </SyncFixture>
     </HouseholdContext>
   )

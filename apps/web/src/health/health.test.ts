@@ -1,13 +1,8 @@
 // What the screens of a household's sync stand on that draws nothing: what a diagnostic bundle
-// carries and what it never does, what is said of a version, how data is drawn under the
-// pseudo-locale, and two things every screen of the directory is held to: a write that is asked
-// at once, and a control whose drawn word is in its name.
-import { catalogs, locales } from '@household/i18n'
-import { pseudoLocale } from '@household/i18n/lazy'
-import { renderHook } from '@testing-library/react'
-import { createElement, type ReactNode } from 'react'
+// carries and what it never does, and what is said of a version. That every write of theirs is
+// asked at once is held beside the query client (api/api.test.ts), and that a control drawn as
+// one word holds that word in its name by the catalogs' own test (packages/i18n).
 import { describe, expect, it } from 'vitest'
-import { I18nProvider } from '../i18n/I18nProvider.tsx'
 import {
   bodyOf,
   compose,
@@ -21,8 +16,6 @@ import {
   type Known,
   type ReplicaFacts,
 } from './bundle.ts'
-import { sameId } from './data.ts'
-import { useData } from './names.ts'
 import { here, home, jana, laptop, outcome, report, standIn } from './testing.tsx'
 import { isUnder, numbersOf, ownVersion } from './versions.ts'
 
@@ -224,72 +217,5 @@ describe('a client’s version', () => {
   it('is this page’s own as a report of it names it', () => {
     expect(ownVersion('web/0.1.0+008f0f94379a5b41')).toBe('0.1.0+008f0f94379a5b41')
     expect(ownVersion('web/0.1.0')).toBe('0.1.0')
-  })
-})
-
-describe('two ids', () => {
-  it('are one in either case, and never where one is missing', () => {
-    expect(sameId(here, here.toUpperCase())).toBe(true)
-    expect(sameId(here, laptop)).toBe(false)
-    expect(sameId(undefined, undefined)).toBe(false)
-    expect(sameId(null, here)).toBe(false)
-  })
-})
-
-describe('what is data and no word', () => {
-  const drawnIn = (locale: 'en' | typeof pseudoLocale) =>
-    renderHook(() => useData(), {
-      wrapper: ({ children }: { readonly children: ReactNode }) =>
-        createElement(I18nProvider, { locale, children }),
-    }).result.current
-
-  it('is drawn as it is in a language of the app’s', () => {
-    const data = drawnIn('en')
-    expect(data('0.1.0+008f0f94379a5b41')).toBe('0.1.0+008f0f94379a5b41')
-    expect(data('{"entity_type": "shopping.item"}')).toBe('{"entity_type": "shopping.item"}')
-  })
-
-  // The pseudo-locale's pass takes a run of four plain letters for a word nobody translated: an
-  // id's `beef`, a zone's name, a bundle's own names.
-  it('has every letter accented under the pseudo-locale, and nothing else of it touched', () => {
-    const data = drawnIn(pseudoLocale)
-    const text = '{\n  "entity_type": "shopping.item",\n  "id": "0190beef-cafe", "it’s": \'x\'\n}'
-    const drawn = data(text)
-    expect(drawn).not.toMatch(/[A-Za-z]/)
-    expect(drawn).toHaveLength(text.length)
-    expect(drawn.replace(/\p{L}/gu, '')).toBe(text.replace(/\p{L}/gu, ''))
-    expect(data('Europe/Prague')).toBe('Éúŕóþé/Þŕáĝúé')
-  })
-})
-
-/** The screens of this directory, each file as it is written. */
-const screens = import.meta.glob<string>(['./*.{ts,tsx}', '!./*.test.{ts,tsx}'], {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-})
-
-// Nothing of a household's sync health is written offline: a copy asked to download itself
-// again, or a bundle sent, when a connection returns and with nobody at the screen, is not what
-// was asked for (D-170). The same test holds household/ to it (api/api.test.ts).
-describe('a write of these screens', () => {
-  it('is asked at once, every one of them', () => {
-    const writes = Object.entries(screens).flatMap(([path, source]) =>
-      [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
-    )
-    // The sources were read at all: the two screens that write are among them.
-    expect(writes.map(({ path }) => path).sort()).toEqual(['./Diagnostics.tsx', './SyncHealth.tsx'])
-    expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
-  })
-})
-
-// The catalogs' own test holds each such pair of the app's (packages/i18n, WCAG 2.5.3): this
-// directory's is held here until it is listed there.
-describe('a control drawn as a word and named in full', () => {
-  it.each(locales)('holds the word it is drawn as in its name, in %s', (locale) => {
-    const catalog: Readonly<Record<string, string>> = catalogs[locale]
-    const word = (catalog['health.sync.again.word'] ?? '').toLocaleLowerCase(locale)
-    expect(word).not.toBe('')
-    expect((catalog['health.sync.again.named'] ?? '').toLocaleLowerCase(locale)).toContain(word)
   })
 })

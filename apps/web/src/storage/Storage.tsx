@@ -37,7 +37,7 @@
 // samples, and nothing is written from here.
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
-import { readState } from '../account/common.ts'
+import { readState, together, useFocusKept } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { problemIn } from '../api/problem.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
@@ -45,9 +45,7 @@ import { inHousehold } from '../app/paths.ts'
 import { useSubscription, useUsage } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { householdKey } from '../household/households.ts'
-import { useEverHeld } from '../household/settings/invitations.ts'
-import { HouseholdSettingsPage, useStanding } from '../household/settings/Page.tsx'
-import { useFocusKept } from '../household/settings/profile.ts'
+import { HouseholdSettingsPage, useEverHeld, useStanding } from '../household/settings/Page.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
@@ -56,7 +54,7 @@ import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import type { DataState } from '../ui/states.ts'
-import { together, usePicture } from './data.ts'
+import { usePicture } from './data.ts'
 import { Counted, Picture, ThisMonth, type Month } from './Picture.tsx'
 import { named, storesNothing } from './picture.ts'
 import styles from './Storage.module.css'
@@ -124,7 +122,7 @@ function Stored() {
       : base
   // The screen's one control, *Try again*, leaves with the sentence it stands in as soon as the
   // picture is asked for again, and the focus it held would drop to the page: it is put on the
-  // picture's own place (profile.ts), where the skeleton and then the picture are drawn.
+  // picture's own place, where the skeleton and then the picture are drawn.
   const view = useFocusKept(state === 'error', state)
 
   return (

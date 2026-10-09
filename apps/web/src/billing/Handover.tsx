@@ -19,6 +19,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useId, useState } from 'react'
 import { Link } from 'react-router'
+import { sameId } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
@@ -43,7 +44,7 @@ import { Sheet } from '../ui/Dialog.tsx'
 import { Select } from '../ui/Field.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { useToast } from '../ui/Toast.tsx'
-import { isMoved, isPayer, same, useBillingRefusal } from './data.ts'
+import { isMoved, isPayer, useBillingRefusal } from './data.ts'
 import styles from './Billing.module.css'
 import { Refused, useFocusKept, usePayerName, useRefusals } from './parts.tsx'
 
@@ -56,7 +57,7 @@ interface Owner {
 /** The household's owners but `user`: whom its payer could offer billing to. */
 function otherOwners(members: readonly Membership[], user: string): Owner[] {
   return members.flatMap((member) =>
-    member.role === 'owner' && member.user_id !== undefined && !same(member.user_id, user)
+    member.role === 'owner' && member.user_id !== undefined && !sameId(member.user_id, user)
       ? [{ id: member.user_id, name: member.display_name ?? '' }]
       : [],
   )
@@ -226,7 +227,7 @@ export function Handover({ subscription }: HandoverProps) {
   if (!payer) {
     // Somebody else pays: who, what is theirs alone, and an offer while one is open.
     if (payerName === null) return null
-    const mine = offer !== null && same(offer.offered_to.user_id, me.id)
+    const mine = offer !== null && sameId(offer.offered_to.user_id, me.id)
     return (
       <Section title={t('billing.payer.title')}>
         <p className={account.text}>{t('billing.payer.other', { name: payerName })}</p>

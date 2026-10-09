@@ -1,11 +1,12 @@
 {
-  "description": "Storage blocks: the daily average of a month's samples, the whole 10 GB blocks it needs above the 5 GB included, capped at 20, the charge they come to, and the average a month is projected to end on. Run by @household/domain (storage.test.ts) and by the server's twin (internal/platform/storage).",
+  "description": "Storage blocks: the daily average of a month's samples, the whole 10 GB blocks it needs above the 5 GB included, capped at 20, the charge they come to, the average a month is projected to end on, and the four fifths of an allowance at which a household's owners are first told. Run by @household/domain (storage.test.ts) and by the server's twin (internal/platform/storage, with internal/platform/fairuse's Warns).",
   "sources": [
     "PRD 04-billing-and-entitlements §4, FR-BI3: blocks = ceil(max(0, avg_bytes - 5 GB) / 10 GB), charge = blocks x the block price",
     "PRD 04 §4's worked examples: an average of 18 GB is 2 blocks and €2.00; 4 GB is none; 40 GB uploaded and deleted the same day moves a monthly average by about 1.3 GB",
     "PRD 09-decisions D-31 (the daily average, never the peak), D-33 (20 blocks at most, 205 GB) and D-34 (5 GB included, 10 GB blocks)",
     "PRD 04 FR-BI4: the projected month-end average and charge, shown before they are billed",
-    "design/v1 household.js blocksFor and its check: a month-to-date average of 18.2 GB and a projected 18.9 GB are 2 blocks each"
+    "design/v1 household.js blocksFor and its check: a month-to-date average of 18.2 GB and a projected 18.9 GB are 2 blocks each",
+    "PRD 04 §4, FR-BI3: the owners are notified at 80 % and at 100 % of what is included; the server's fairuse.Warns counts it in whole numbers, count x 5 >= ceiling x 4, with nothing rounded"
   ],
   "groups": {
     "average": [
@@ -98,6 +99,53 @@
         "name": "the 40 GB day falls out of the projection once it is deleted",
         "input": { "samples": [0, 40000000000], "current": 0, "remaining": 28 },
         "output": 1333333333
+      }
+    ],
+    "warns": [
+      {
+        "name": "nothing stored is far from the allowance",
+        "input": { "count": 0, "ceiling": 5000000000 },
+        "output": false
+      },
+      {
+        "name": "a byte under four fifths of the 5 GB included",
+        "input": { "count": 3999999999, "ceiling": 5000000000 },
+        "output": false
+      },
+      {
+        "name": "four fifths of the 5 GB included, to the byte",
+        "input": { "count": 4000000000, "ceiling": 5000000000 },
+        "output": true
+      },
+      {
+        "name": "design/v1's 19.4 GB of the 25 GB that two blocks make is under it",
+        "input": { "count": 19400000000, "ceiling": 25000000000 },
+        "output": false
+      },
+      {
+        "name": "20 GB of 25 GB is at it",
+        "input": { "count": 20000000000, "ceiling": 25000000000 },
+        "output": true
+      },
+      {
+        "name": "an allowance four fifths of which is no whole number: 9 of 12 is under",
+        "input": { "count": 9, "ceiling": 12 },
+        "output": false
+      },
+      {
+        "name": "and 10 of 12 is over, with nothing rounded",
+        "input": { "count": 10, "ceiling": 12 },
+        "output": true
+      },
+      {
+        "name": "the whole allowance",
+        "input": { "count": 25000000000, "ceiling": 25000000000 },
+        "output": true
+      },
+      {
+        "name": "the ceiling, 205 GB, against itself",
+        "input": { "count": 205000000000, "ceiling": 205000000000 },
+        "output": true
       }
     ]
   }

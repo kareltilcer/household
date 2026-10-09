@@ -19,11 +19,12 @@
 // Its states are the list's (ExportList.tsx). *Absent* is the asking, for a member who is no
 // owner; *read-only* is the household that takes no other write, where this one is still taken.
 import { Link } from 'react-router'
+import { useFocusKept } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { paths } from '../app/paths.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { HouseholdSettingsPage, useStanding } from '../household/settings/Page.tsx'
-import { useFocusKept, useStandingRefusal } from '../household/settings/profile.ts'
+import { useStandingRefusal } from '../household/settings/profile.ts'
 import { useTimeZone } from '../household/timezone.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -53,7 +54,7 @@ export function Exports() {
         <Banner tone="neutral">{t('data.exports.read_only')}</Banner>
       ) : null}
       {/* Where the focus goes when the control that asks has left with its reader's being an
-          owner (household/settings/profile.ts). */}
+          owner (account/common.ts). */}
       <div ref={view} tabIndex={-1} className={account.view}>
         <ExportList
           source={source}

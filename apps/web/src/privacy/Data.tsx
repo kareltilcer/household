@@ -32,13 +32,12 @@
 // one deletion and one restriction; nor *rejected*, a refusal being said where it was pressed.
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { refocus } from '../account/common.ts'
+import { refocus, useFocusKept, useSaid } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { inHousehold, paths } from '../app/paths.ts'
 import { useOwnerNames, useReread } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { HouseholdSettingsPage, Section, useStanding } from '../household/settings/Page.tsx'
-import { useFocusKept, useSaid } from '../household/settings/profile.ts'
 import { useTimeZone } from '../household/timezone.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -147,7 +146,7 @@ export function Data() {
           {said.text}
         </Banner>
       )}
-      {/* Where the focus goes when the control that held it has left (profile.ts). */}
+      {/* Where the focus goes when the control that held it has left (account/common.ts). */}
       <div ref={view} tabIndex={-1} className={cx(account.view, styles.sections)}>
         <DeletionNotice after={view} />
         <RestrictionNotice />

@@ -17,10 +17,9 @@ import { useId, useState } from 'react'
 import { useNoWithdrawal } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
-import { unwrap } from '../api/problem.ts'
 import { useCountries, useCountryChoices, useLocalized, type Country } from '../household/data.ts'
 import { deviceCountry } from '../household/device.ts'
-import { householdKey, useHouseholds } from '../household/households.ts'
+import { householdQuery, useHouseholds } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Button } from '../ui/Button.tsx'
 import { Select } from '../ui/Field.tsx'
@@ -113,17 +112,8 @@ export function Authority() {
     (household) => household.entitlement?.state !== 'suspended',
   )
   const read = useQueries({
-    queries: open.map((household) => ({
-      // The household as every screen of it reads it (household/households.ts), kept as that.
-      queryKey: householdKey(household.id),
-      queryFn: async ({ signal }: { readonly signal: AbortSignal }) =>
-        unwrap(
-          await api.GET('/households/{household_id}', {
-            params: { path: { household_id: household.id } },
-            signal,
-          }),
-        ),
-    })),
+    // The household as every screen of it reads it, kept as that.
+    queries: open.map((household) => householdQuery(api, household.id)),
   })
 
   const waited: readonly Asked[] = [households, profiles, ...read]

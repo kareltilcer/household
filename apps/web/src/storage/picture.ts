@@ -2,6 +2,7 @@
 // whether a household stores anything, where what it stores stands against its allowance, what
 // its lines leave out of the total, and where the columns of its trend stand. Every figure here
 // is arithmetic on what the server answered: no allowance, block or price is this file's own.
+import { storageWarns } from '@household/domain'
 import type { UsageSummary } from '../household/data.ts'
 import { moduleKeys } from '../household/households.ts'
 import type { StorageReport } from './data.ts'
@@ -38,8 +39,8 @@ export type Standing = 'under' | 'near' | 'reached' | 'ceiling'
  * stop; at the whole of its allowance, the base and the blocks in effect, where the next block
  * follows the month's average; or at four fifths of it, where its owners are first told. They
  * are the marks the server's own notices go out at (storage.Sampler, `fairuse.Warns`). No answer
- * carries the four fifths, so it is written here as it is there: in whole numbers, with nothing
- * rounded.
+ * carries the four fifths, so it is computed here as it is there, by the rule both sides are
+ * held to (`storageWarns`, @household/domain; vectors/storage.json).
  *
  * What is stored and the allowance are the picture's own, the two figures the screen draws
  * beside what this comes to, and the month's answer says the same of both. Of that answer only
@@ -53,7 +54,7 @@ export function standingOf(
 ): Standing {
   if (report.total_bytes >= usage.hard_ceiling_bytes) return 'ceiling'
   if (report.total_bytes >= report.included_bytes) return 'reached'
-  if (report.total_bytes * 5 >= report.included_bytes * 4) return 'near'
+  if (storageWarns(report.total_bytes, report.included_bytes)) return 'near'
   return 'under'
 }
 

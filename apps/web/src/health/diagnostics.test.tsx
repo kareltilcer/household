@@ -548,7 +548,7 @@ describe('what a bundle holds of this browser’s copy', () => {
     const stand = standIn({ queued: 2 })
     await bundle(taking(), { sync: syncOver(stand) })
     expect((await drawn()).payload).toMatchObject({ sync: { queued: 2 } })
-    stand.move({ queued: 5 })
+    stand.become({ queued: 5 })
     await waitFor(async () => {
       expect((await drawn()).payload).toMatchObject({ sync: { queued: 2 } })
     })

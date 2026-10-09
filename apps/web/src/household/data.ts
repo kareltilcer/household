@@ -12,9 +12,11 @@ import type { ApiClient, components } from '@household/api'
 import { queryOptions, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
 import { catalogLocale, pseudoLocale, pseudolocalize } from '@household/i18n/lazy'
+import { sameId } from '../account/common.ts'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { useFormat, useI18n } from '../i18n/I18nProvider.tsx'
+import { useMe } from '../session/SessionProvider.tsx'
 import {
   householdKey,
   householdsKey,
@@ -63,6 +65,26 @@ export function useOwnerNames(household: string): string[] {
     .filter((member) => member.role === 'owner')
     .map((member) => member.display_name ?? '')
     .filter((name) => name !== '')
+}
+
+/**
+ * Who a member is in a household: whoever pays for it, another of its owners, or a member who is
+ * neither, a child profile among them.
+ */
+export type Reader = 'payer' | 'owner' | 'member'
+
+/**
+ * Who the member who is signed in is in `household`. Whether they own it is the household's own
+ * answer, and whether they pay for it is their own row among its members, which every member
+ * may read: until that is read, an owner is taken for one who does not pay. A screen that reads
+ * the subscription asks it instead, which names its payer (billing/data.ts, `isPayer`).
+ */
+export function useReader(household: Pick<Household, 'id' | 'my_role'>): Reader {
+  const me = useMe()
+  const members = useMembers(household.id)
+  if (household.my_role !== 'owner') return 'member'
+  const own = members.data?.find((each) => sameId(each.user_id, me.id))
+  return own?.is_billing_payer === true ? 'payer' : 'owner'
 }
 
 /**

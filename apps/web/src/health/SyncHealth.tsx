@@ -11,8 +11,9 @@
 // marked, and its figures are the replica's own as they are now: what waits to be sent, what
 // waits for the member with the way to it, and whether changes are arriving. Only the tab that
 // holds the household's replica can say those, or which row is its own; another tab says that.
-// A browser is named for what its header tells and never by the header (names.ts), and a
-// device by its label, with its kind from the account's own list where the label does not say.
+// A browser is named for what its header tells and never by the header (account/userAgent.ts),
+// and a device by its label, with its kind from the account's own list where the label does not
+// say.
 //
 // The words are D-93's: a copy's *last checkpoint*, a number the library gives and the row
 // shows as it is, and *download again*. An entity type has no word, so what disagreed is
@@ -45,7 +46,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import account from '../account/Settings.module.css'
-import { refocus, useNoWithdrawal } from '../account/common.ts'
+import { refocus, sameId, useData, useNoWithdrawal, useSaid } from '../account/common.ts'
+import { useClientNames } from '../account/userAgent.ts'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
@@ -55,7 +57,7 @@ import { useReread, writes } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { useRefusal } from '../household/settings/invitations.ts'
 import { HouseholdSettingsPage, Section } from '../household/settings/Page.tsx'
-import { isStandingRefusal, useSaid } from '../household/settings/profile.ts'
+import { isStandingRefusal } from '../household/settings/profile.ts'
 import { useTimeZone } from '../household/timezone.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { useInbox, useSync } from '../sync/ReplicaProvider.tsx'
@@ -72,7 +74,6 @@ import type { DataState } from '../ui/states.ts'
 import { useToast } from '../ui/Toast.tsx'
 import { NoReplica, Standing, type Mark } from './common.tsx'
 import {
-  sameId,
   syncStateKey,
   useOwn,
   useOwnDevices,
@@ -82,7 +83,6 @@ import {
   type Report,
 } from './data.ts'
 import styles from './Health.module.css'
-import { useClientNames, useData } from './names.ts'
 
 type Device = components['schemas']['Device']
 
