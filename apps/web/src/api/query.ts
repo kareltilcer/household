@@ -63,7 +63,8 @@ export function createQueryClient({ onProblem }: QueryClientOptions = {}): Query
  * deleted minutes after the press, with nothing on the screen to say it is still to come and
  * nobody there to see it, is not what was asked for. Asked at once it fails at once, and its
  * screen says that the server could not be reached and nothing was changed. Every write of the
- * screens before sign-in and of a member's own account is asked so (auth/, account/).
+ * screens before sign-in and of a member's own account is asked so (auth/, account/), and every
+ * write of a household's own screens (household/, D-170).
  */
 export const askedNow = { networkMode: 'always' } as const
 

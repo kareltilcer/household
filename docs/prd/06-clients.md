@@ -8,7 +8,7 @@ Two client applications, one contract, one design system, one set of translation
 | **TypeScript** | `strict: true` plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`. **No `any`, no non-null assertions** — both are lint errors, not warnings |
 | **Platforms** | iOS 16+, Android 10+ | Evergreen Chrome, Safari, Firefox, Edge; last two majors |
 | **Primary role** | Daily use, capture, notifications, everything offline | Setup, configuration, planning, long-form reading, admin, billing |
-| **Offline** | Full local replica, queued writes | Reads from cache, queued writes; a browser is not the offline-first surface. A sign-in and a change to a member's own account are no household's writes, and are asked at once, never queued (**D-164**) |
+| **Offline** | Full local replica, queued writes | Reads from cache, queued writes; a browser is not the offline-first surface. A sign-in and a change to a member's own account are no household's writes, and are asked at once, never queued (**D-164**); nor is a change to a household's settings, which is made on the server or not at all (**D-170**) |
 | **Data layer** | SQLite as the replica, kept by the sync engine: PowerSync's React Native SDK on op-sqlite, in a dev build (D-93) | TanStack Query with a persisted cache |
 
 **D-36: two codebases, not React Native Web.** The shared surface is the *contract, the tokens
@@ -59,7 +59,16 @@ should not scroll past Finance. Members pin, reorder and hide modules for themse
 they have `none` on is not in the list at all. Until the server keeps a member's arrangement
 (plan item 36), it is kept in the browser that made it, for each member and household (**D-155**).
 The web lists a module the member holds only where its build has a screen for it: one it cannot
-open yet is absent, as one the member does not hold is (**D-160**).
+open yet is absent, as one the member does not hold is (**D-160**). Household settings is listed
+for every member, whatever level they hold on it: its profile, its members and its modules are
+every member's to read (**D-167**).
+
+**Where the web opens.** A member is opened at the household they were last in, or their first
+(D-162); one who is in none, at making one, which is the first thing a new account does, and a
+child profile at its account (**D-168**). Making one asks for its country too where the device
+names none, and chooses none for its member (**D-172**). A household that was just made asks *what brought you
+here?* where the build has a module that takes a first record, and opens at its Home where it
+has none yet (**D-169**).
 
 ## 3. Design
 

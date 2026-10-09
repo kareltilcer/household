@@ -18,7 +18,7 @@ export type ModuleKey = components['schemas']['ModuleKeyValue']
  * `values`, held to the contract's modules in both directions: a key the contract has not fails
  * the build, and so does one this list leaves out, which makes the argument `never`.
  */
-function everyModule<const T extends readonly ModuleKey[]>(
+export function everyModule<const T extends readonly ModuleKey[]>(
   values: T & ([Exclude<ModuleKey, T[number]>] extends [never] ? unknown : never),
 ): readonly ModuleKey[] {
   return values
@@ -78,6 +78,16 @@ export function householdKey(household: string) {
  */
 export function membersKey(household: string) {
   return [...householdKey(household), 'members'] as const
+}
+
+/** The invitations a household sent (`getInvitations`), under the household's own key too. */
+export function invitationsKey(household: string) {
+  return [...householdKey(household), 'invitations'] as const
+}
+
+/** Which modules a household has on (`getModules`), under the household's own key too. */
+export function moduleStatesKey(household: string) {
+  return [...householdKey(household), 'modules'] as const
 }
 
 /** The households the member belongs to, a `suspended` one among them, in the server's order. */

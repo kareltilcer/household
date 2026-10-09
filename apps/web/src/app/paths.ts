@@ -28,7 +28,7 @@ export interface RoutePath {
   readonly path: string
   /**
    * An address that reaches it. `{household}` stands for a household of the member who opens
-   * it: the end-to-end suite puts in one it made.
+   * it, and `{member}` for that member in it: the end-to-end suite puts in ones it made.
    */
   readonly example: string
   /**
@@ -95,6 +95,11 @@ export const paths = {
   reset: { path: '/reset', example: '/reset', dev: false, layout: 'public' },
   /** What the reset email's link opens, its token in the fragment (A-10). */
   resetSet: { path: '/reset/set', example: '/reset/set', dev: false, layout: 'public' },
+  /**
+   * What an invitation's link opens, its token in the fragment (A-24): what is being given,
+   * shown to whoever holds the link, and taken or declined by a member who has signed in.
+   */
+  invitation: { path: '/invitation', example: '/invitation', dev: false, layout: 'public' },
   /** What a child profile's graduation link opens (ADR 0012). */
   graduate: { path: '/graduate', example: '/graduate', dev: false, layout: 'public' },
   /** What the link in an account deletion's email opens: it cancels it, signed out (D-136). */
@@ -138,6 +143,16 @@ export const paths = {
     dev: false,
     layout: 'account',
   },
+  /**
+   * Creating a household (A-22): the first thing a new account does (DD-6), and what a member of
+   * some makes another by. It is the account's, there being no household around it yet.
+   */
+  householdNew: {
+    path: '/account/households/new',
+    example: '/account/households/new',
+    dev: false,
+    layout: 'account',
+  },
 
   // One household, which the address names (D-4).
   household: { path: household, example: exampleHousehold, dev: false, layout: 'household' },
@@ -155,7 +170,73 @@ export const paths = {
     dev: false,
     layout: 'household',
   },
-  /** A module's own screens, where this build has them (modules/registry.ts). */
+  /**
+   * *What brought you here?* (DD-6): where a household's first member is sent once it is made,
+   * to choose the module they open at. It leads on to Home where no module of this build takes
+   * a first record yet.
+   */
+  start: {
+    path: `${household}/start`,
+    example: `${exampleHousehold}/start`,
+    dev: false,
+    layout: 'household',
+  },
+  /** Leaving the household (A-26): every member's but a child profile's, whatever they hold. */
+  leave: {
+    path: `${household}/leave`,
+    example: `${exampleHousehold}/leave`,
+    dev: false,
+    layout: 'household',
+  },
+
+  // Household settings (module `admin`, PRD 17 §1 to §3). The server's notifications link to
+  // `settings/invitations` and `settings/members/{user_id}` by these names.
+  /** The household's profile (C-49): its name, country, timezone, language, units and code. */
+  settings: {
+    path: `${household}/settings`,
+    example: `${exampleHousehold}/settings`,
+    dev: false,
+    layout: 'household',
+  },
+  /** Everybody's access, visible to everybody (C-50). */
+  settingsMembers: {
+    path: `${household}/settings/members`,
+    example: `${exampleHousehold}/settings/members`,
+    dev: false,
+    layout: 'household',
+  },
+  /** One member: what they hold, their role, and a child profile's own controls. */
+  settingsMember: {
+    path: `${household}/settings/members/:userId`,
+    example: `${exampleHousehold}/settings/members/{member}`,
+    dev: false,
+    layout: 'household',
+  },
+  /** The invitations the household sent, a declined one's notice among them (A-25). */
+  settingsInvitations: {
+    path: `${household}/settings/invitations`,
+    example: `${exampleHousehold}/settings/invitations`,
+    dev: false,
+    layout: 'household',
+  },
+  /** The invitation composer (A-23): who, how, as what, and the whole of what they get. */
+  settingsInvite: {
+    path: `${household}/settings/invitations/new`,
+    example: `${exampleHousehold}/settings/invitations/new`,
+    dev: false,
+    layout: 'household',
+  },
+  /** Which modules the household has on (C-51). */
+  settingsModules: {
+    path: `${household}/settings/modules`,
+    example: `${exampleHousehold}/settings/modules`,
+    dev: false,
+    layout: 'household',
+  },
+  /**
+   * A module by its name: it leads to where the module opens, for one the member holds and this
+   * build has screens for (modules/registry.ts), and opens nothing for any other.
+   */
   module: {
     path: `${household}/modules/:module/*`,
     example: `${exampleHousehold}/modules/shopping`,
@@ -217,6 +298,15 @@ export const inHousehold = {
   home: (householdId: string) => fill(paths.household.path, { householdId }),
   sync: (householdId: string) => fill(paths.sync.path, { householdId }),
   arrange: (householdId: string) => fill(paths.arrange.path, { householdId }),
+  start: (householdId: string) => fill(paths.start.path, { householdId }),
+  leave: (householdId: string) => fill(paths.leave.path, { householdId }),
+  settings: (householdId: string) => fill(paths.settings.path, { householdId }),
+  members: (householdId: string) => fill(paths.settingsMembers.path, { householdId }),
+  member: (householdId: string, userId: string) =>
+    fill(paths.settingsMember.path, { householdId, userId }),
+  invitations: (householdId: string) => fill(paths.settingsInvitations.path, { householdId }),
+  invite: (householdId: string) => fill(paths.settingsInvite.path, { householdId }),
+  modules: (householdId: string) => fill(paths.settingsModules.path, { householdId }),
   module: (householdId: string, module: string, rest = '') =>
     fill(paths.module.path, { householdId, module }, rest),
 } as const

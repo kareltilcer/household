@@ -1,0 +1,88 @@
+/* An invitation, as a row of the list of them (A-25): who it is for and as what, how it stands,
+   who sent it and what it gives, one under another, and beside them what an owner can do to it.
+   The words take the room and wrap inside it; the actions keep their size and go under the words
+   where the window is too narrow for both, so that nothing in a row has a width of its own. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-15);
+  align-items: flex-start;
+  min-width: 0;
+  min-height: var(--dens-row-min);
+  padding: var(--dens-pad-y) var(--dens-pad-x);
+  border-block-end: 1px solid var(--dens-rule);
+}
+
+.row:last-child {
+  border-block-end: 0;
+}
+
+.about {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+/* Whom it is for, and the role it gives beside the name. */
+.whom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+.who {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* How it stands: a glyph and the words that say it. The glyph is decoration beside its words, and
+   is muted for every status: none of them is told by a colour. */
+.status {
+  display: flex;
+  gap: var(--space-05);
+  align-items: flex-start;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.detail {
+  composes: caption from '../../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+/* What stands above the list and the list itself, one under another: the block of an address
+   not verified, a refusal, and the body. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* The composer's sentence of how many modules stand at each level. It takes the focus once
+   *Reset to the defaults* has gone from under it, and is no control: it shows no ring. */
+.counts {
+  overflow-wrap: anywhere;
+}
+
+.counts:focus {
+  outline: none;
+}

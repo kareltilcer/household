@@ -6,7 +6,6 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { storageKey } from '../display/modes.ts'
 import { dropCatalogs, fetchCatalog, holdCatalog } from '../i18n/catalogs.ts'
-import { initialsOf } from './Account.tsx'
 import {
   chata,
   createServer,
@@ -42,9 +41,8 @@ describe('the account screen', () => {
     expect(
       screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent),
     ).toEqual(['You', 'Appearance', 'Dates and times', 'Households', 'Account'])
-    // What the contract has none of is absent: no export, and no way to create a household.
+    // What the contract has none of is absent: no export.
     expect(screen.queryByText(/export/i)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /create/i })).not.toBeInTheDocument()
   })
 
   it('saves the name, and says so', async () => {
@@ -202,8 +200,6 @@ describe('the account screen', () => {
     if (picture === null) throw new Error('no picture')
     fireEvent.error(picture)
     expect(container.querySelector('img')).not.toBeInTheDocument()
-    expect(initialsOf(' jana  tilcerová nováková ')).toBe('JT')
-    expect(initialsOf('')).toBe('')
   })
 
   it('leaves the focus where its member took it while a picture was being removed', async () => {
@@ -383,25 +379,129 @@ describe('the account screen', () => {
     expect(zone).toHaveValue('Europe/Prague')
   })
 
-  it('lists the member’s households with their role in each, and switches nothing', async () => {
+  it('lists the member’s households with their role in each, and leads to each and to leaving it', async () => {
     const server = createServer()
     server.on('GET /households', () => Response.json({ items: [tilcerovi, chata] }))
     await account(server)
     const list = await screen.findByRole('list', { name: 'Households' })
+    const rows = within(list).getAllByRole('listitem')
+    expect(rows.map((row) => within(row).getAllByText(/./)[0]?.textContent)).toEqual([
+      'Tilcerovi',
+      'Chata Vysočina',
+    ])
+    expect(within(rows[0] as HTMLElement).getByText('Owner')).toBeInTheDocument()
+    expect(within(rows[1] as HTMLElement).getByText('Member')).toBeInTheDocument()
+    // Each link is named for its household, and drawn as the word its name begins with: a list
+    // of links read out is not *Open, Leave, Open, Leave*.
     expect(
       within(list)
-        .getAllByRole('listitem')
-        .map((row) => row.textContent),
-    ).toEqual(['TilceroviOwner', 'Chata VysočinaMember'])
-    expect(within(list).queryByRole('link')).not.toBeInTheDocument()
+        .getAllByRole('link')
+        .map((link) => [link.getAttribute('href'), link.textContent]),
+    ).toEqual([
+      [`/households/${tilcerovi.id}`, 'Open TilceroviOpen'],
+      [`/households/${tilcerovi.id}/leave`, 'Leave TilceroviLeave'],
+      [`/households/${chata.id}`, 'Open Chata VysočinaOpen'],
+      [`/households/${chata.id}/leave`, 'Leave Chata VysočinaLeave'],
+    ])
+    const open = within(list).getByRole('link', { name: 'Open Chata Vysočina' })
+    expect(within(open).getByText('Open')).toHaveAttribute('aria-hidden', 'true')
+    // A list of memberships, and no switcher: nothing in it is pressed to change anything.
     expect(within(list).queryByRole('button')).not.toBeInTheDocument()
+    // Under it, the way to another household of one's own.
+    expect(screen.getByRole('link', { name: 'Create another household' })).toHaveAttribute(
+      'href',
+      '/account/households/new',
+    )
   })
 
-  it('says a member is in no household yet, and draws no way to create one', async () => {
+  // Every route of a suspended household answers `404` (D-115): a link to one opens nothing.
+  it('names a suspended household with its state, and leads nowhere from it', async () => {
+    const server = createServer()
+    const suspended = {
+      ...chata,
+      entitlement: { state: 'suspended', can_write: false, can_upload: false },
+    }
+    server.on('GET /households', () => Response.json({ items: [tilcerovi, suspended] }))
+    await account(server)
+    const rows = within(await screen.findByRole('list', { name: 'Households' })).getAllByRole(
+      'listitem',
+    )
+    const row = within(rows[1] as HTMLElement)
+    expect(row.getByText('Chata Vysočina')).toBeInTheDocument()
+    expect(row.getByText('Member')).toBeInTheDocument()
+    expect(row.getByText('suspended')).toBeInTheDocument()
+    expect(row.queryByRole('link')).not.toBeInTheDocument()
+    // The one that opens is as it was.
+    expect(within(rows[0] as HTMLElement).getAllByRole('link')).toHaveLength(2)
+  })
+
+  it('says a member is in no household yet, and offers the one thing to do about it', async () => {
     await account()
     expect(await screen.findByText('You are not in a household yet')).toBeInTheDocument()
     expect(screen.getByText(/^Your account is complete on its own\./)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /household/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Create a household' })).toHaveAttribute(
+      'href',
+      '/account/households/new',
+    )
+    expect(screen.queryByRole('link', { name: 'Create another household' })).toBeNull()
+  })
+
+  it('lists the invitations that wait for the member above their households', async () => {
+    const server = createServer()
+    const token = '0190a000-0000-7000-8000-0000000000c7'
+    server.on('GET /households', () => Response.json({ items: [tilcerovi] }))
+    server.on('GET /me/invitations', () =>
+      Response.json({
+        items: [
+          {
+            token,
+            household_name: 'Chata Vysočina',
+            invited_by: 'Petr Tilcer',
+            role: 'member',
+            modules: [],
+            message: null,
+            expires_at: '2026-10-20T18:00:00Z',
+          },
+        ],
+      }),
+    )
+    await account(server)
+    const waiting = await screen.findByRole('list', { name: 'Invitations waiting for you' })
+    expect(
+      within(waiting).getByText('Petr Tilcer invited you to Chata Vysočina'),
+    ).toBeInTheDocument()
+    // It leads to the invitation's own screen, where what it gives is read before it is taken.
+    expect(
+      within(waiting).getByRole('link', { name: 'See the invitation to Chata Vysočina' }),
+    ).toHaveAttribute('href', `/invitation#token=${token}`)
+    const households = await screen.findByRole('list', { name: 'Households' })
+    expect(
+      waiting.compareDocumentPosition(households) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('draws nothing of the invitations while none waits, or while they cannot be read', async () => {
+    const server = createServer()
+    server.on('GET /households', () => Response.json({ items: [tilcerovi] }))
+    const { unmount } = await account(server)
+    await screen.findByRole('list', { name: 'Households' })
+    await waitFor(() => {
+      expect(server.to('GET /me/invitations')).toHaveLength(1)
+    })
+    expect(screen.queryByText('Invitations waiting for you')).not.toBeInTheDocument()
+    unmount()
+
+    const unread = createServer()
+    unread.on('GET /households', () => Response.json({ items: [tilcerovi] }))
+    unread.on('GET /me/invitations', () => Promise.reject(new TypeError('offline')))
+    await account(unread)
+    await screen.findByRole('list', { name: 'Households' })
+    await waitFor(() => {
+      expect(unread.to('GET /me/invitations')).not.toHaveLength(0)
+    })
+    expect(screen.queryByText('Invitations waiting for you')).not.toBeInTheDocument()
+    // No failure of this screen's: the households are drawn, and nothing is said of it.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('says the households could not be read, and reads them again', async () => {
@@ -442,5 +542,45 @@ describe('the account screen', () => {
     expect(
       screen.queryByRole('button', { name: 'Send the verification link again' }),
     ).not.toBeInTheDocument()
+  })
+
+  // A child profile is in the household an owner made it in: it makes none, and an owner
+  // removes it (D-104).
+  it('leads a child profile to its household, and to neither leaving it nor making another', async () => {
+    const server = createServer({
+      ...jana,
+      email: null,
+      email_verified: false,
+      is_child: true,
+      credentials: ['child_pin'],
+    })
+    server.on('GET /households', () =>
+      Response.json({ items: [{ ...tilcerovi, my_role: 'child' }] }),
+    )
+    await account(server)
+    const list = await screen.findByRole('list', { name: 'Households' })
+    expect(within(list).getByText('Child profile')).toBeInTheDocument()
+    expect(within(list).getByRole('link', { name: 'Open Tilcerovi' })).toHaveAttribute(
+      'href',
+      `/households/${tilcerovi.id}`,
+    )
+    expect(screen.getAllByRole('link')).toHaveLength(1)
+    // It has no address an invitation could be sent to: none is asked for.
+    expect(server.to('GET /me/invitations')).toHaveLength(0)
+  })
+
+  it('offers a child profile that is in no household nothing to make one with', async () => {
+    await account(
+      createServer({
+        ...jana,
+        email: null,
+        email_verified: false,
+        is_child: true,
+        credentials: ['child_pin'],
+      }),
+    )
+    expect(await screen.findByText('You are not in a household yet')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Your account is complete on its own\./)).not.toBeInTheDocument()
   })
 })
