@@ -16,6 +16,10 @@
 // - A suspended household the member owns answers nobody, so who else is in it cannot be read
 //   (D-115): the screen says so and offers its box all the same, the one way its only owner has
 //   on, and the server says where they stand in it (D-163).
+// - An owner whose own account is scheduled for deletion counts as no owner (D-137), and no list
+//   a member reads says whose is: the other owner of their household is told their membership
+//   ends, and is refused. What the refusal names as theirs alone to own is the server's word on
+//   it, kept beside what is read again and drawn as that, with its box (D-173).
 // - What the member added to a household that goes on stays there as a former member's (PRD 05
 //   §4): the prototype has it stay under their name, which the erasure does not leave.
 // - Counts of what a household holds have no source a member's own page can read, and are left
@@ -42,10 +46,11 @@ import { useMe, useSession, type Me } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
 import { Checkbox } from '../ui/Choice.tsx'
+import { cx } from '../ui/cx.ts'
 import { PasswordField, TextField } from '../ui/Field.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
-import { readState, useNoWithdrawal, useOwnZone, type Read } from './common.ts'
+import { readState, refocus, useNoWithdrawal, useOwnZone, type Read } from './common.ts'
 import { useOnline } from '../ui/online.ts'
 import { blockedBy, blocks, standingOf, type Standing } from './deletion.ts'
 import { Section, SettingsPage } from './Page.tsx'
@@ -56,10 +61,13 @@ const window30 = 30 * 24 * 60 * 60 * 1000
 
 function Situation({
   standing,
+  readAgain,
   chosen,
   onChoose,
 }: {
   readonly standing: Standing
+  /** Whether its members were read again since the server last refused a deletion. */
+  readonly readAgain: boolean
   readonly chosen: boolean
   readonly onChoose: (chosen: boolean) => void
 }) {
@@ -78,6 +86,10 @@ function Situation({
       {standing.kind === 'sole' ? (
         <>
           <span className={styles.text}>{t('account.delete.sole.body')}</span>
+          {/* Read again, the members still name another owner: one the server did not count. */}
+          {standing.uncounted && readAgain ? (
+            <span className={styles.text}>{t('household.leave.last_owner.deleting')}</span>
+          ) : null}
           <Checkbox
             label={t('account.delete.sole.choose', { household: name })}
             checked={chosen}
@@ -159,8 +171,24 @@ function Deletion({ me }: { readonly me: Me }) {
       ? 'paused'
       : 'idle',
   }
+  // The households the server named, refusing a press, as the member's alone to own: its word
+  // on where they stand there, kept beside what the page reads again after every refusal
+  // (D-173). An owner whose own account is scheduled for deletion counts as none (D-137) and is
+  // listed as an owner all the same, so the members read again would take away the box the
+  // refusal asks to be ticked. It stands until the server says otherwise.
+  const [named, setNamed] = useState<ReadonlySet<string>>(new Set())
+  // Whether the households were read again since it last refused: what their members say then
+  // is how they stand, and no longer what somebody changed while this page was open.
+  const [readAgain, setReadAgain] = useState(false)
   const standings = ready
-    ? list.map((household) => standingOf(household, me.id, members[owned.indexOf(household)]?.data))
+    ? list.map((household) =>
+        standingOf(
+          household,
+          me.id,
+          members[owned.indexOf(household)]?.data,
+          named.has(household.id.toLowerCase()),
+        ),
+      )
     : []
 
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set())
@@ -171,9 +199,7 @@ function Deletion({ me }: { readonly me: Me }) {
   const [opened] = useState(() => Date.now())
   const held = standings.some((standing) => blocks(standing, chosen))
 
-  const reread = () => {
-    void queries.invalidateQueries({ queryKey: householdsKey })
-  }
+  const reread = () => queries.invalidateQueries({ queryKey: householdsKey })
   // Whether the deletion was scheduled, and every session ended with it. The app is told to ask
   // who is signed in as this screen leaves the page, and not a moment sooner: the router draws
   // the next page when it is ready to, and until it has, the answer that nobody is signed in
@@ -205,9 +231,22 @@ function Deletion({ me }: { readonly me: Me }) {
       void navigate(`${paths.deletionCancel.path}#${kept.toString()}`, { replace: true })
     },
     onError: (error) => {
+      const refusal = problemIn(error)
+      if (refusal?.status !== 409 && refusal?.status !== 422) return
+      // What a `409` names as the member's alone to own is kept with what one named before: a
+      // household whose box was ticked since is named by none after it. A `422` says that one
+      // named to go with the account is not theirs alone to delete, and puts the server's
+      // earlier word away with the page's: the next press is answered as they stand.
+      const sole =
+        refusal.status === 409
+          ? blockedBy(refusal).soleOwned.map((household) => household.id.toLowerCase())
+          : undefined
+      setNamed((before) => (sole === undefined ? new Set() : new Set([...before, ...sole])))
       // The households are not as this page read them: they are read again.
-      const status = problemIn(error)?.status
-      if (status === 409 || status === 422) reread()
+      setReadAgain(false)
+      void reread().then(() => {
+        setReadAgain(true)
+      })
     },
   })
 
@@ -226,7 +265,14 @@ function Deletion({ me }: { readonly me: Me }) {
           ? t('account.password.wrong')
           : t('account.delete.confirm.email_wrong')
         : undefined
-  const refused = problem?.code === 'account_deletion_blocked' ? blockedBy(problem) : undefined
+  const blocked = problem?.code === 'account_deletion_blocked'
+  const refused = blocked ? blockedBy(problem) : undefined
+  // The server's answer to a press took the control away, at once or as the households were
+  // read again: the focus it held goes to their list, where what stands in the way is drawn.
+  const view = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    if (blocked && held) refocus(view.current)
+  }, [blocked, held])
   const other =
     schedule.isError && problem?.code !== 'invalid_credentials' && refused === undefined
       ? problem?.status === 403
@@ -282,11 +328,12 @@ function Deletion({ me }: { readonly me: Me }) {
           }}
         >
           {() => (
-            <ul className={styles.situations} role="list">
+            <ul ref={view} tabIndex={-1} className={cx(styles.situations, styles.view)} role="list">
               {standings.map((standing) => (
                 <Situation
                   key={standing.household.id}
                   standing={standing}
+                  readAgain={readAgain}
                   chosen={chosen.has(standing.household.id)}
                   onChoose={(ticked) => {
                     const next = new Set(chosen)

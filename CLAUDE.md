@@ -206,7 +206,12 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   `suspended` household whose every route answers `404` (D-115), so a screen that reads something
   of each of a member's households passes over it or says it cannot be read, and never waits on
   it: where the app opens ([D-162](docs/prd/09-decisions.md)), and before an account is deleted
-  ([D-163](docs/prd/09-decisions.md)). A household's replica is one tab's,
+  ([D-163](docs/prd/09-decisions.md)). Nor does any list say whose account is scheduled for
+  deletion, an owner the server counts as none (D-137): a screen that works out from a household's
+  members whether its member may go, leaving it (`household/Leave.tsx`) or deleting their account
+  (`account/DeleteAccount.tsx`), keeps what the server's refusal named beside the members it reads
+  again, draws by it, and puts it away at no read
+  ([D-173](docs/prd/09-decisions.md)). A household's replica is one tab's,
   by a Web Lock, asked for only if it is free and waited for where it is held, never read off
   the browser's list of locks, and opened as the session through `sync/sessionFetch.ts`; `@household/sync` is
   imported for its types alone outside `sync/open.ts`, which ESLint holds and which is what keeps

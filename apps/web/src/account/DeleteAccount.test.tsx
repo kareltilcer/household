@@ -7,6 +7,7 @@ import { blockedBy, blocks, standingOf } from './deletion.ts'
 import {
   chata,
   createServer,
+  invalid,
   jana,
   open,
   problem,
@@ -112,6 +113,35 @@ describe('where a member stands in a household', () => {
     expect(blocks(standing, new Set())).toBe(false)
     // Its only member is counted by the list itself: it goes with the account.
     expect(standingOf(zahrada, me, undefined)).toMatchObject({ kind: 'alone', payer: false })
+  })
+
+  it('is the server’s to say, for an owner beside one whose account is being deleted', () => {
+    // Petr is listed as an owner, as any other is, and the server counts him as none (D-137):
+    // nothing a member reads says so, and its refusal does.
+    const members = [member(me, 'owner'), member(petr, 'owner'), member(adam, 'child')]
+    expect(standingOf(tilcerovi, me, members)).toMatchObject({ kind: 'leaves' })
+    const standing = standingOf(tilcerovi, me, members, true)
+    expect(standing).toMatchObject({ kind: 'sole', payer: false, uncounted: true })
+    expect(blocks(standing, new Set())).toBe(true)
+    expect(blocks(standing, new Set([tilcerovi.id]))).toBe(false)
+    // One who pays too is its only owner first: its box is what lets it go with the account.
+    expect(
+      standingOf(
+        tilcerovi,
+        me,
+        [member(me, 'owner', { is_billing_payer: true }), member(petr, 'owner')],
+        true,
+      ),
+    ).toMatchObject({ kind: 'sole', payer: true, uncounted: true })
+    // Where the members name no other owner either, nobody was left uncounted.
+    expect(
+      standingOf(tilcerovi, me, [member(me, 'owner'), member(petr, 'member')], true),
+    ).toMatchObject({ kind: 'sole', uncounted: false })
+    // Its word is on who owns a household: not on who is in one, on one that could not be
+    // read, or on one the member does not own.
+    expect(standingOf(zahrada, me, [member(me, 'owner')], true)).toMatchObject({ kind: 'alone' })
+    expect(standingOf(tilcerovi, me, undefined, true)).toMatchObject({ kind: 'unread' })
+    expect(standingOf(chata, me, undefined, true)).toMatchObject({ kind: 'leaves' })
   })
 
   it('reads what a refusal names, and nothing from what is no such document', () => {
@@ -306,6 +336,120 @@ describe('deleting an account', () => {
     ).toBeInTheDocument()
     await waitFor(() => {
       expect(server.to('GET /households').length).toBeGreaterThan(read)
+    })
+  })
+
+  describe('beside an owner whose account is being deleted', () => {
+    // Petr owns the household too, by every list a member can read, and the server counts him
+    // as no owner: his own account is scheduled for deletion (D-137).
+    const members = [member(jana.id, 'owner'), member(petr, 'owner')]
+    const refusal = () =>
+      problem(409, 'account_deletion_blocked', {
+        sole_owned_households: [{ household_id: tilcerovi.id, name: 'Tilcerovi', member_count: 2 }],
+        billing_payer_for: [],
+      })
+    const uncounted = 'An owner whose account is being deleted does not count as one.'
+
+    /** Asks for the deletion the server refuses, naming the household as Jana's alone to own. */
+    async function refused(server: Server) {
+      withHouseholds(server, [tilcerovi], { [tilcerovi.id]: members })
+      server.on('POST /me/deletion', refusal)
+      const opened = await deleting(server)
+      // As its members read, the household goes on without her: nothing is held.
+      expect(
+        (await situation('Tilcerovi')).getByText(/^Your membership ends\./),
+      ).toBeInTheDocument()
+      await opened.user.type(screen.getByLabelText('Password'), 'the password')
+      return opened
+    }
+
+    it('draws the box of the household the server names as theirs alone, whatever its members say', async () => {
+      const server = createServer()
+      const { user, router } = await refused(server)
+      // The members are read again once it has refused: held back, to see what is drawn first.
+      let answer: (response: Response) => void = () => undefined
+      server.on(
+        `GET /households/${tilcerovi.id}/members`,
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve
+          }),
+      )
+      await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Tilcerovi: somebody else has to be an owner, or its box has to be ticked.',
+      )
+
+      // The box the refusal asks for is drawn, and no button that could only be refused again.
+      const row = await situation('Tilcerovi')
+      const box = await row.findByRole('checkbox', { name: 'Delete Tilcerovi with my account' })
+      expect(row.getByText(/^You are its only owner, and other people are members\./)).toBeVisible()
+      expect(row.queryByText(/^Your membership ends\./)).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^Schedule deletion/ })).not.toBeInTheDocument()
+      expect(screen.getByText(/^Deletion waits for what is said above/)).toBeInTheDocument()
+      // The control that was pressed left with its form: the focus goes to where the box is.
+      await waitFor(() => {
+        expect(document.activeElement).toContainElement(box)
+      })
+      // Why is said once the members, read again, still name another owner, and not before.
+      expect(row.queryByText(uncounted)).not.toBeInTheDocument()
+      answer(Response.json({ items: members }))
+      expect(await row.findByText(uncounted)).toBeInTheDocument()
+      // Read again they say what they said, and the server's word stands beside them.
+      expect(box).toBeInTheDocument()
+      expect(row.queryByText(/^Your membership ends\./)).not.toBeInTheDocument()
+
+      // Nor does the next press put it away, whatever that one is refused for.
+      await user.click(box)
+      server.on('POST /me/deletion', () => problem(401, 'invalid_credentials'))
+      await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+      await waitFor(() => {
+        expect(screen.getByLabelText('Password')).toHaveAccessibleDescription(
+          expect.stringContaining('That isn’t your password.'),
+        )
+      })
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(box).toBeChecked()
+
+      server.on('POST /me/deletion', () => Response.json(scheduled, { status: 202 }))
+      await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe('/account/deletion/cancel')
+      })
+      expect(await server.body('POST /me/deletion')).toEqual({
+        password_or_confirmation: 'the password',
+        delete_sole_owned_households: [tilcerovi.id],
+      })
+    })
+
+    it('puts the server’s word away once it says the household is not theirs alone to delete', async () => {
+      const server = createServer()
+      const { user, router } = await refused(server)
+      await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+      const row = await situation('Tilcerovi')
+      await user.click(
+        await row.findByRole('checkbox', { name: 'Delete Tilcerovi with my account' }),
+      )
+
+      // Petr kept his account after all, and is an owner the server counts again.
+      server.on('POST /me/deletion', () => invalid('/delete_sole_owned_households/0'))
+      await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+      expect(
+        await screen.findByText(/^Your households are not as this page read them\./),
+      ).toBeInTheDocument()
+      // The household is as its members say again: no box that would only be refused.
+      expect(await row.findByText(/^Your membership ends\./)).toBeInTheDocument()
+      expect(row.queryByRole('checkbox')).not.toBeInTheDocument()
+
+      server.on('POST /me/deletion', () => Response.json(scheduled, { status: 202 }))
+      await user.click(screen.getByRole('button', { name: /^Schedule deletion for / }))
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe('/account/deletion/cancel')
+      })
+      expect(await server.body('POST /me/deletion')).toEqual({
+        password_or_confirmation: 'the password',
+        delete_sole_owned_households: [],
+      })
     })
   })
 
