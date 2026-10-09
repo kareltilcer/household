@@ -385,7 +385,9 @@ describe('the account screen', () => {
     ).toEqual(['English', 'Čeština', 'Slovenčina', 'Deutsch', 'Polski'])
     await user.selectOptions(language, 'cs')
     expect(await screen.findByRole('heading', { level: 1, name: 'Váš účet' })).toBeInTheDocument()
-    expect(document.documentElement).toHaveAttribute('lang', 'cs')
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute('lang', 'cs')
+    })
     expect(await server.body('PATCH /me')).toEqual({ locale: 'cs' })
   })
 

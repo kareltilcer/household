@@ -212,7 +212,11 @@ describe('who is signed in', () => {
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('member Jana cs')
     })
-    expect(document.documentElement).toHaveAttribute('lang', 'cs')
+    // The document is told its language in an effect, which React may run a task after the
+    // commit that drew the words in it: the words found, the attribute is waited for.
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute('lang', 'cs')
+    })
   })
 })
 
