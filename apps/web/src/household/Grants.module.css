@@ -1,0 +1,82 @@
+/* The grant matrix (02-components §4.5). A row is a module's glyph and its choice, one row under
+   another: seventeen of them in one column, which is what a phone has room for and what a desk
+   reads fastest. Nothing in it has a width of its own, so at 200 % text it is the column's. */
+.matrix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-15);
+  align-items: start;
+  min-width: 0;
+}
+
+/* Beside the row's name, which is the choice's own label: decoration. */
+.glyph {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+/* What somebody holds, gathered by level. */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+.level {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.held {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+  margin: 0;
+}
+
+.says {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.names {
+  overflow-wrap: anywhere;
+}
+
+/* The same, as a row of a list of members: a line a level. */
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}

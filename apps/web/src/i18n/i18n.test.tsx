@@ -7,6 +7,18 @@ import { createFormatters } from './format.ts'
 import { I18nProvider, useI18n } from './I18nProvider.tsx'
 import { formattingLocale, initialLocale, storageKey } from './locale.ts'
 
+describe('a list of things', () => {
+  it('is joined as the language joins one', () => {
+    expect(createFormatters('en').list(['Tasks', 'Notes', 'Chat'])).toBe('Tasks, Notes, and Chat')
+    // Czech keeps its one-letter *a* with the word after it.
+    expect(createFormatters('cs').list(['Úkoly', 'Poznámky', 'Konverzace'])).toBe(
+      'Úkoly, Poznámky a Konverzace',
+    )
+    expect(createFormatters('en').list(['Tasks'])).toBe('Tasks')
+    expect(createFormatters('en').list([])).toBe('')
+  })
+})
+
 describe('money', () => {
   const en = createFormatters('en')
   const cs = createFormatters('cs')

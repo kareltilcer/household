@@ -108,3 +108,38 @@ test('a module the member put away is named in the arrange screen alone, and com
   // Finance is held at `none`: it is nowhere on the page, the arrange screen neither.
   await expect(page.getByText('Finance')).toHaveCount(0)
 })
+
+// The row leaves the list its controls were in, and what held the focus goes with its old place:
+// in a browser the menu hands the focus back to its opener first, which is gone a moment later.
+test('a row that is pinned or put away says so, and the focus goes with it to the list it went to', async ({
+  page,
+}) => {
+  await open(page, shell)
+  const said = page.getByRole('status').filter({ hasText: 'Tasks' })
+  const order = page.getByRole('region', { name: 'In order' }).first()
+  await order.getByRole('button', { name: 'More actions for Tasks' }).click()
+  await page.getByRole('menuitem', { name: 'Pin to the top' }).click()
+  await expect(said).toHaveText('Tasks is pinned to the top.')
+  const pinned = page.getByRole('region', { name: 'Pinned' }).first()
+  await expect(pinned.getByRole('button', { name: /^Reorder Tasks/ })).toBeFocused()
+
+  // By the keyboard alone from there: the row's menu, and putting it away.
+  await page.keyboard.press('Tab')
+  await expect(pinned.getByRole('button', { name: 'More actions for Tasks' })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await page.getByRole('menuitem', { name: 'Unpin' }).press('Enter')
+  await expect(said).toHaveText('Tasks is no longer pinned.')
+  await expect(order.getByRole('button', { name: /^Reorder Tasks/ })).toBeFocused()
+
+  await order.getByRole('button', { name: 'More actions for Tasks' }).click()
+  await page.getByRole('menuitem', { name: 'Hide from my list' }).click()
+  await expect(said).toHaveText('Tasks is hidden from your list.')
+  const show = page
+    .getByRole('region', { name: 'Hidden by me' })
+    .first()
+    .getByRole('button', { name: 'Show Tasks in your list again' })
+  await expect(show).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(said).toHaveText('Tasks is back in your list.')
+  await expect(order.getByRole('button', { name: /^Reorder Tasks/ })).toBeFocused()
+})

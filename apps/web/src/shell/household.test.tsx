@@ -1,7 +1,7 @@
 import { focusManager, onlineManager } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createWebClient } from '../api/client.ts'
 import { csrfCookie } from '../api/names.ts'
@@ -142,9 +142,13 @@ describe('a household’s shell', () => {
       'aria-current',
       'page',
     )
-    // No module has a screen in this build yet, so none is listed, though several are held.
+    // Of the modules the member holds, the ones this build has screens for are listed:
+    // household settings, and not Shopping, which has none yet.
     expect(within(navigation).queryByText('Shopping')).not.toBeInTheDocument()
-    expect(within(navigation).queryByText('Household settings')).not.toBeInTheDocument()
+    expect(within(navigation).getByRole('link', { name: 'Household settings' })).toHaveAttribute(
+      'href',
+      inHousehold.settings(home),
+    )
     // The first thing the keyboard reaches skips past the bar and the navigation.
     const skip = screen.getByRole('link', { name: 'Skip to the content' })
     expect(skip).toHaveAttribute('href', '#content')
@@ -296,6 +300,13 @@ describe('a household’s shell', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('leads from a module’s name to where the module opens, for one this build has screens for', async () => {
+    const { router } = open(inHousehold.module(home, 'admin'))
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.settings(home))
+    })
+  })
+
   it('is a panel opened from the bar where the window is too narrow for a sidebar', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: query.includes('width <'),
@@ -342,10 +353,12 @@ describe('where the app opens', () => {
     })
   })
 
-  it('is their account for a member who is in no household', async () => {
+  // The first thing a new account does (DD-6): the screen that makes a household, which says
+  // of an invitation that waits for them too.
+  it('is making a household for a member who is in none', async () => {
     const { router } = open(paths.home.path, { memberships: [] })
     await waitFor(() => {
-      expect(router.state.location.pathname).toBe(paths.account.path)
+      expect(router.state.location.pathname).toBe(paths.householdNew.path)
     })
   })
 
@@ -433,16 +446,22 @@ describe('a link that opened another household than the tab was in', () => {
 })
 
 describe('what stands above a household’s screens', () => {
-  function bars(sync: Sync) {
+  /** The bars over the screen at `address`: the household's Home unless a test names another. */
+  function bars(sync: Sync, address: string = inHousehold.home(home)) {
     return draw(
-      <SyncFixture value={sync}>
-        <HouseholdContext value={known[home] ?? household(home, 'Tilcerovi')}>
-          <HouseholdBars />
-        </HouseholdContext>
-      </SyncFixture>,
+      <MemoryRouter initialEntries={[address]}>
+        <SyncFixture value={sync}>
+          <HouseholdContext value={known[home] ?? household(home, 'Tilcerovi')}>
+            <HouseholdBars />
+          </HouseholdContext>
+        </SyncFixture>
+      </MemoryRouter>,
     )
   }
   const replica = { phase: 'opening' } as const
+  const saved = 'Offline — changes are saved and will sync'
+  const needed =
+    'Offline — you are reading what this browser kept. Changing anything here needs a connection.'
 
   it('is nothing while the browser is online and the household’s changes arrive', () => {
     bars({ replica, online: true, receiving: true })
@@ -454,7 +473,64 @@ describe('what stands above a household’s screens', () => {
 
   it('is the offline bar with no connection', async () => {
     bars({ replica, online: false, receiving: false })
-    expect(await screen.findByText('Offline — changes are saved and will sync')).toBeInTheDocument()
+    expect(await screen.findByText(saved)).toBeInTheDocument()
+  })
+
+  // The household's settings and leaving it are changed on the server or not at all (D-170):
+  // nothing pressed there is saved to be sent later, and the bar does not say that it is.
+  it.each([
+    ['the household’s profile', inHousehold.settings(home)],
+    ['its members', inHousehold.members(home)],
+    ['one member’s page', inHousehold.member(home, me.id)],
+    ['the invitation composer', inHousehold.invite(home)],
+    ['its modules', inHousehold.modules(home)],
+    ['leaving', inHousehold.leave(home)],
+    // The address names the household as it was typed, in whatever case.
+    ['an address that names the household in capitals', inHousehold.members(home.toUpperCase())],
+  ])('says with no connection that a change needs one, over %s', async (_screen, address) => {
+    bars({ replica, online: false, receiving: false }, address)
+    expect(await screen.findByText(needed)).toBeInTheDocument()
+    expect(screen.queryByText(saved)).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['Home', inHousehold.home(home)],
+    ['a module', inHousehold.module(home, 'shopping')],
+    ['arranging', inHousehold.arrange(home)],
+    // An address that only begins as the settings' does is none of them.
+    ['an address that begins like the settings’', `${inHousehold.settings(home)}-of-another`],
+  ])('says with no connection that changes are saved, over %s', async (_screen, address) => {
+    bars({ replica, online: false, receiving: false }, address)
+    expect(await screen.findByText(saved)).toBeInTheDocument()
+    expect(screen.queryByText(needed)).not.toBeInTheDocument()
+  })
+
+  // One bar, whose words change where they stand as its member goes from one screen to another.
+  it('is the same bar across the two, its sentence changed in place', async () => {
+    const router = createMemoryRouter(
+      [
+        {
+          path: '*',
+          element: (
+            <SyncFixture value={{ replica, online: false, receiving: false }}>
+              <HouseholdContext value={known[home] ?? household(home, 'Tilcerovi')}>
+                <HouseholdBars />
+              </HouseholdContext>
+            </SyncFixture>
+          ),
+        },
+      ],
+      { initialEntries: [inHousehold.home(home)] },
+    )
+    draw(<RouterProvider router={router} />)
+    const bar = await screen.findByRole('status')
+    await waitFor(() => {
+      expect(bar).toHaveTextContent(saved)
+    })
+    await act(() => router.navigate(inHousehold.members(home)))
+    expect(bar).toBeInTheDocument()
+    expect(bar).toHaveTextContent(needed)
+    expect(screen.getAllByRole('status')).toHaveLength(1)
   })
 
   it('says the household’s changes are not arriving, with the browser online (D-105)', async () => {

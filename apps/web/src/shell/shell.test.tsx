@@ -1,10 +1,11 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
+import { inHousehold } from '../app/paths.ts'
 import { HouseholdContext } from '../household/HouseholdContext.tsx'
-import type { Household, HouseholdSummary } from '../household/households.ts'
+import type { Household, HouseholdSummary, ModuleKey } from '../household/households.ts'
 import type { ModuleRegistry } from '../modules/registry.ts'
 import { SyncFixture, type Sync } from '../sync/ReplicaProvider.tsx'
 import { draw } from '../test/render.tsx'
@@ -14,12 +15,14 @@ import { SidebarView } from './Sidebar.tsx'
 import { SwitcherView } from './Switcher.tsx'
 
 const user = '01900000-0000-7000-8000-00000000d0e5'
-const screens = { load: () => Promise.reject(new Error('never loaded here')) }
+const at = (module: ModuleKey) => ({
+  home: (household: string) => inHousehold.module(household, module),
+})
 const registry: ModuleRegistry = {
-  tasks: screens,
-  shopping: screens,
-  garden: screens,
-  finance: screens,
+  tasks: at('tasks'),
+  shopping: at('shopping'),
+  garden: at('garden'),
+  finance: at('finance'),
 }
 
 function household(grants: NonNullable<Household['my_grants']>, name = 'Tilcerovi'): Household {
@@ -212,6 +215,53 @@ describe('arranging the modules', () => {
     expect(section('Pinned')).toEqual(['Garden'])
     expect(section('In order')).toEqual(['Tasks', 'Shopping'])
     expect(kept()).toMatchObject({ pinned: ['garden'] })
+  })
+
+  // The row left the list its controls were in, and the focus with them: what became of it is
+  // said, and the focus is on the row's handle where the row now is (D-166).
+  it('says that a row was pinned or unpinned, and takes the focus to it in the list it went to', async () => {
+    inShell(view)
+    await userEvent.click(screen.getByRole('button', { name: 'More actions for Garden' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Pin to the top' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Garden is pinned to the top.')
+    const pinnedHandle = within(screen.getByRole('region', { name: 'Pinned' })).getByRole(
+      'button',
+      { name: /^Reorder Garden/ },
+    )
+    await waitFor(() => {
+      expect(pinnedHandle).toHaveFocus()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'More actions for Garden' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Unpin' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Garden is no longer pinned.')
+    // Unpinned, it is first of the rest, next to where it was.
+    expect(section('In order')).toEqual(['Garden', 'Tasks', 'Shopping'])
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole('region', { name: 'In order' })).getByRole('button', {
+          name: /^Reorder Garden/,
+        }),
+      ).toHaveFocus()
+    })
+  })
+
+  it('says that a row was put away or shown again, and takes the focus with it both ways', async () => {
+    inShell(view)
+    await userEvent.click(screen.getByRole('button', { name: 'More actions for Shopping' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Hide from my list' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Shopping is hidden from your list.')
+    // Put away, the row has one control: what shows it again.
+    const show = screen.getByRole('button', { name: 'Show Shopping in your list again' })
+    await waitFor(() => {
+      expect(show).toHaveFocus()
+    })
+
+    await userEvent.click(show)
+    expect(screen.getByRole('status')).toHaveTextContent('Shopping is back in your list.')
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Reorder Shopping/ })).toHaveFocus()
+    })
   })
 
   it('hides a module in the one place it is named, and brings it back from there', async () => {

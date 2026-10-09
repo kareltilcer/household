@@ -27,6 +27,16 @@ export function fieldCodes(error: unknown): ReadonlyMap<string, string> {
 }
 
 /**
+ * Whether `error` is the server's answer to a create it has made already: a `422` that names the
+ * id the client made for it (D-23), and no field beside it. The first request for it took
+ * effect, and its answer never came: what was made is read, or said to be there to look for.
+ */
+export function isMadeAlready(error: unknown): boolean {
+  const named = fieldCodes(error)
+  return named.size === 1 && named.has('/id')
+}
+
+/**
  * Where the focus goes when a form is refused: to the first field the refusal marked, whose
  * sentence is then read with the field. A sentence that arrives beside a field the focus is not
  * on is said to nobody who cannot see it (WCAG 2.1, 4.1.3). `refused` is what the last

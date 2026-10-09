@@ -226,6 +226,55 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   passed where Chromium failed. A test that has a page looked at again dispatches a
   `visibilitychange` that bubbles, as the browser's own does: the query client listens on
   `window`.
+- **A household's own screens on the web**
+  ([ADR 0027](docs/adr/0027-the-households-web-screens-routes-of-the-apps-own-the-grant-matrix-and-settings-asked-at-once.md)).
+  A module's screens are lines of `src/app/paths.ts`, drawn in the household's shell, and never a
+  bundle the module routes itself: a screen that is no route is a screen the walk does not check.
+  `src/modules/registry.ts` says of a module only where it opens and where it takes a first
+  record, which *what brought you here?* offers (`household/Start.tsx`,
+  [D-169](docs/prd/09-decisions.md)). Household settings is under `/households/{id}/settings` and
+  is listed for every member, whatever they hold on it: `view` on it unlocks the invitations and
+  nothing else ([D-167](docs/prd/09-decisions.md)). A screen there is set in
+  `HouseholdSettingsPage`, draws a control that changes something only where
+  `useStanding().changes`, an owner's in a household that takes writes, and reads through
+  `household/data.ts`. Its entities are never written offline, so every write under
+  `src/household` spreads `askedNow`, which the test beside the query client holds them to, and
+  none is queued ([D-170](docs/prd/09-decisions.md)); a write that was answered reads the household
+  again (`useReread`), and so does one refused for where its member now stands, a `403`, a `402`
+  or a `404`, which is one list for every screen of the settings (`isStandingRefusal`,
+  `household/settings/profile.ts`). A level is never shown by the contract's word for it: `useLevelWords`,
+  `GrantMatrix` for an owner to fill in and `GrantSummary` for everybody to read, each saying
+  what a level comes to where it draws it; a role's defaults and its ceiling are
+  `@household/domain`'s, which `vectors/grants.json` holds to the server's, so a level a role may
+  not hold is not offered. An unverified account is refused where it presses and no earlier, with
+  `Unverified` in the control's place. Every create sends an id made once for each visit of its
+  screen, and a `422` for that id after an answer that never came is read as made, as is a
+  ceiling's `403` where what was to be made is found by its id, the server counting before it
+  looks at the id; an email invitation repeated so is answered for its address, which the
+  server looks at first, and the composer says that beside the field. What an
+  invitation's link carried is kept in the page's memory across a sign-in and in no storage
+  (`household/invitationToken.ts`), and a member in no household is opened at making one
+  ([D-168](docs/prd/09-decisions.md)), once their list of households has been read again: a kept
+  list that names none is not gone by (`app/Home.tsx`). A focus that a control took with it as
+  it left is put back through `refocus` (`account/common.ts`). A write on its way keeps its
+  control busy until it is answered: its mutation is not `reset()` while it is pending, and rows
+  that share one say for themselves which of them is asked. The page an invitation's link opens
+  is begun again for a fragment that arrives while it is drawn, since a link opened in the tab
+  already on its page loads nothing; the pages of `auth/` that read a fragment (`useFragment`)
+  do not yet. A write that leads to another screen goes there from `mutate`'s own callback,
+  which is dropped with its screen, where the mutation's `onSuccess` would lead a member away
+  from wherever they had gone meanwhile; what is kept and what is said of a success are the
+  mutation's own (`onSuccess` at the hook), which holds whether or not its screen is still
+  drawn, a confirmation holding its page inert and not the browser's own way back. It stays
+  busy once it has succeeded, until that screen's file has come; and a choice made on a form
+  while its save is on its way is kept and held against the answer. Whether somebody could do a
+  thing is read off their role and not off their being a member: a child profile is never made
+  an owner. A form chooses nothing for its member: what it would confirm and was
+  not given is asked, by its select's placeholder, and what follows from it is absent until it
+  is chosen ([D-172](docs/prd/09-decisions.md)); and it offers what the server takes, narrowed
+  by no rule of its own. A control drawn as one word beside its hidden name (`RowAction`,
+  `RowLink`, or by hand) holds that word in its name, together and in order, in all five
+  languages, which the catalogs' own test holds each pair to (WCAG 2.5.3).
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).

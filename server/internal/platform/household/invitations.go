@@ -1078,7 +1078,7 @@ func (s *Service) declineInvitation(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := s.Notify.Queue(scoped, tx, notify.Notification{
 			To: i.invitedBy, Category: notify.Direct, Message: messageDeclined, Args: i18n.Args{"invitee": invitee},
-			Module: Name, Link: "/households/" + i.household.String() + "/invitations",
+			Module: Name, Link: "/households/" + i.household.String() + "/settings/invitations",
 		}); err != nil {
 			return mutation.Record{}, err
 		}
