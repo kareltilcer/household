@@ -256,10 +256,12 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   control busy until it is answered: its mutation is not `reset()` while it is pending, so two
   controls whose presses each `reset()` the other's mutation, where a refusal is read off the
   mutation itself, take no press while the other's write is on its way (`aria-disabled`), and
-  rows that share one say for themselves which of them is asked. A select that saves as it is
-  changed is no busy control, and a later choice takes an earlier save's place (the language);
-  and a page the browser kept and shows again puts a provider's start back whatever became of
-  it (`useShownAgain`). The page an invitation's link opens
+  rows that share one say for themselves which of them is asked. A control that saves as it is
+  changed is no busy control: a select's later choice takes an earlier save's place (the
+  language), and a switch takes another change while one is on its way, sent beside it, what
+  either is refused with kept beside the mutation (`account/Notifications.tsx`); and a page the
+  browser kept and shows again puts a provider's start back whatever became of it
+  (`useShownAgain`). The page an invitation's link opens
   is begun again for a fragment that arrives while it is drawn, since a link opened in the tab
   already on its page loads nothing; the pages of `auth/` that read a fragment (`useFragment`)
   do not yet. A write that leads to another screen goes there from `mutate`'s own callback,
