@@ -1,8 +1,12 @@
+import { catalogs } from '@household/i18n'
+import * as lazy from '@household/i18n/lazy'
+import { partOf } from '@household/i18n/lazy'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createWebClient } from '../api/client.ts'
+import { dropCatalogs, holdCatalog } from '../i18n/catalogs.ts'
 import { heldDestination } from '../session/destination.ts'
 import { buildMeta } from '../update/build.ts'
 import { Providers } from './App.tsx'
@@ -184,6 +188,47 @@ describe('the app', () => {
       await screen.findByRole('heading', { level: 1, name: 'This page could not be shown' }),
     ).toBeInTheDocument()
     expect(screen.getAllByRole('main')).toHaveLength(1)
+  })
+
+  /** The app's own words in English, which are all a page holds until a screen brings more. */
+  const ownWords = Object.fromEntries(
+    Object.entries(catalogs.en).filter(([key]) => partOf(key) === 'app'),
+  )
+  const noInvitation = catalogs.en['household.invitation.none.title']
+
+  // A screen's own words are a file as its script is, and are fetched beside it (D-159).
+  it('draws a route with the words its path names, fetched with the screen’s file', async () => {
+    const load = vi.spyOn(lazy, 'loadCatalog')
+    dropCatalogs()
+    holdCatalog('en', ownWords, ['app'])
+    expect(paths.invitation.words).toEqual(['household'])
+    open(paths.invitation.example)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: noInvitation }, { timeout: 10_000 }),
+    ).toBeInTheDocument()
+    expect(load.mock.calls).toEqual([['en', 'household']])
+  })
+
+  it('names a route whose words could not be fetched as one that could not be drawn', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    // What a page meets when a newer build has taken a file of its own away, the words' this
+    // time: the screen's script came, and is not drawn without them.
+    const load = vi
+      .spyOn(lazy, 'loadCatalog')
+      .mockRejectedValue(new TypeError('Failed to fetch dynamically imported module'))
+    dropCatalogs()
+    holdCatalog('en', ownWords, ['app'])
+    open(paths.invitation.example)
+    expect(
+      await screen.findByRole(
+        'heading',
+        { level: 1, name: 'This page could not be shown' },
+        { timeout: 10_000 },
+      ),
+    ).toBeInTheDocument()
+    expect(load.mock.calls).toEqual([['en', 'household']])
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.queryByText(noInvitation)).not.toBeInTheDocument()
   })
 
   it('still says a newer build is live over a route that failed, which is when it most often is', async () => {

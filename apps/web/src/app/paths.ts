@@ -2,6 +2,7 @@
 // end-to-end suite walks it: axe runs on every route in both themes (06-clients §8), so a route
 // that is not here is a route nothing checks, and a test fails a router that has one. This file
 // is data, with nothing of React's: the suite reads it on Node.
+import type { Part } from '@household/i18n/lazy'
 
 /**
  * The mode of the one build that has the dev-only pages, beside the development server: the build
@@ -42,6 +43,13 @@ export interface RoutePath {
    * are signed in already.
    */
   readonly visitor?: true
+  /**
+   * The parts of the catalog its screen reads beside the app's own, fetched with the screen's
+   * file (routes.tsx, D-159). A test holds each route to them, both ways: no screen reads a word
+   * its route does not fetch, and no route fetches a part its screen does not read
+   * (i18n/words.test.ts).
+   */
+  readonly words?: readonly Part[]
 }
 
 const household = '/households/:householdId'
@@ -99,7 +107,13 @@ export const paths = {
    * What an invitation's link opens, its token in the fragment (A-24): what is being given,
    * shown to whoever holds the link, and taken or declined by a member who has signed in.
    */
-  invitation: { path: '/invitation', example: '/invitation', dev: false, layout: 'public' },
+  invitation: {
+    path: '/invitation',
+    example: '/invitation',
+    dev: false,
+    layout: 'public',
+    words: ['household'],
+  },
   /** What a child profile's graduation link opens (ADR 0012). */
   graduate: { path: '/graduate', example: '/graduate', dev: false, layout: 'public' },
   /** What the link in an account deletion's email opens: it cancels it, signed out (D-136). */
@@ -152,6 +166,7 @@ export const paths = {
     example: '/account/households/new',
     dev: false,
     layout: 'account',
+    words: ['household'],
   },
 
   // One household, which the address names (D-4).
@@ -180,6 +195,7 @@ export const paths = {
     example: `${exampleHousehold}/start`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** Leaving the household (A-26): every member's but a child profile's, whatever they hold. */
   leave: {
@@ -187,6 +203,7 @@ export const paths = {
     example: `${exampleHousehold}/leave`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
 
   // Household settings (module `admin`, PRD 17 §1 to §3). The server's notifications link to
@@ -197,6 +214,7 @@ export const paths = {
     example: `${exampleHousehold}/settings`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** Everybody's access, visible to everybody (C-50). */
   settingsMembers: {
@@ -204,6 +222,7 @@ export const paths = {
     example: `${exampleHousehold}/settings/members`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** One member: what they hold, their role, and a child profile's own controls. */
   settingsMember: {
@@ -211,6 +230,7 @@ export const paths = {
     example: `${exampleHousehold}/settings/members/{member}`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** The invitations the household sent, a declined one's notice among them (A-25). */
   settingsInvitations: {
@@ -218,6 +238,7 @@ export const paths = {
     example: `${exampleHousehold}/settings/invitations`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** The invitation composer (A-23): who, how, as what, and the whole of what they get. */
   settingsInvite: {
@@ -225,6 +246,7 @@ export const paths = {
     example: `${exampleHousehold}/settings/invitations/new`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** Which modules the household has on (C-51). */
   settingsModules: {
@@ -232,6 +254,7 @@ export const paths = {
     example: `${exampleHousehold}/settings/modules`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /**
    * A module by its name: it leads to where the module opens, for one the member holds and this
@@ -256,7 +279,13 @@ export const paths = {
   /** The primitives that carry no household data, each in its own states. */
   primitives: { path: '/dev/primitives', example: '/dev/primitives', dev: true, layout: 'plain' },
   /** The shell's own parts in their states: the sidebar, the switcher, the arrange screen. */
-  devShell: { path: '/dev/shell', example: '/dev/shell', dev: true, layout: 'plain' },
+  devShell: {
+    path: '/dev/shell',
+    example: '/dev/shell',
+    dev: true,
+    layout: 'plain',
+    words: ['household'],
+  },
   /** The sync UI in its states: the inbox, the two resolvers, the withdrawn treatment. */
   devSync: { path: '/dev/sync', example: '/dev/sync', dev: true, layout: 'plain' },
   /** Whatever no other route matches. */

@@ -559,7 +559,7 @@ function Households({ child }: { readonly child: boolean }) {
                             {household.my_role === 'child' ? null : (
                               <RowLink
                                 to={inHousehold.leave(household.id)}
-                                name={t('household.leave.action', { household: name })}
+                                name={t('account.households.leave_named', { household: name })}
                                 word={t('account.households.leave')}
                               />
                             )}

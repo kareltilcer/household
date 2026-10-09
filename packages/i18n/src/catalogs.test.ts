@@ -49,7 +49,7 @@ describe('a control drawn as a word and named in full', () => {
   const drawnInNamed: readonly (readonly [string, string])[] = [
     ['account.devices.rename.action', 'account.devices.rename.named'],
     ['account.devices.sign_out', 'account.devices.sign_out_named'],
-    ['account.households.leave', 'household.leave.action'],
+    ['account.households.leave', 'account.households.leave_named'],
     ['account.households.open', 'account.households.open_named'],
     ['account.households.waiting.open', 'account.households.waiting.open_named'],
     ['account.security.providers.disconnect', 'account.security.providers.disconnect_named'],

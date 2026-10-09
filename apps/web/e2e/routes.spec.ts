@@ -49,11 +49,12 @@ test('a page whose language could not be fetched is loaded again when the connec
   page,
   faults,
 }) => {
-  // The catalog's own file, refused for as long as the connection is away: the app's script
-  // came, and its words did not.
+  // The file of the app's own words in its language, the part of the catalog fetched before a
+  // word is drawn, refused for as long as the connection is away: the app's script came, and its
+  // words did not.
   let away = true
   let refused = 0
-  await page.route('**/assets/catalog-*.js', (route) => {
+  await page.route('**/assets/catalog-*.app-*.js', (route) => {
     if (!away) return route.continue()
     refused += 1
     return route.abort('internetdisconnected')
@@ -74,6 +75,44 @@ test('a page whose language could not be fetched is loaded again when the connec
   // The file that was refused is the one fault, and this test's own.
   expect(faults).toEqual([expect.stringContaining('ERR_INTERNET_DISCONNECTED')])
   faults.length = 0
+})
+
+test('a screen whose words could not be fetched says to reload, as one whose file could not', async ({
+  page,
+  enter,
+  faults,
+}) => {
+  const settings = await reach('settings', enter)
+  // A household's own words, the part of the catalog its settings read (src/app/paths.ts), which
+  // is fetched with the screen's file: refused, where the screen's script and the app's own
+  // words came.
+  let away = true
+  let refused = 0
+  await page.route('**/assets/catalog-*.household-*.js', (route) => {
+    if (!away) return route.continue()
+    refused += 1
+    return route.abort('internetdisconnected')
+  })
+  await page.goto(settings)
+  const failure = page.getByRole('heading', { level: 1, name: 'This page could not be shown' })
+  await expect(failure).toBeVisible()
+  expect(refused).toBe(1)
+  // In the screen's place and in the app's own words, inside the shell, which stays.
+  await expect(page.getByRole('main')).toHaveCount(1)
+  await expect(page.getByRole('main')).toContainText('This page could not be shown')
+  await expect(page.getByRole('link', { name: 'Household settings' })).toBeVisible()
+  await expectNamed(page)
+  // The file that was refused is this test's own fault, as the browser and the router say it.
+  expect(faults).toContainEqual(expect.stringContaining('ERR_INTERNET_DISCONNECTED'))
+  faults.length = 0
+
+  // The browser keeps the import that failed: the page is loaded again, by its member, and the
+  // screen is drawn with its words.
+  away = false
+  await page.getByRole('button', { name: 'Reload' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Household' })).toBeVisible()
+  await expect(failure).toHaveCount(0)
+  expect(refused).toBe(1)
 })
 
 test('a page opened at a route whose file is still on its way has its landmark already', async ({

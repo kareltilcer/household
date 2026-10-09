@@ -2,16 +2,20 @@
 // a document cleared between tests, and the few parts of a browser that jsdom leaves out and the
 // components ask for.
 import { catalogs, locales } from '@household/i18n'
+import { clientParts } from '@household/i18n/lazy'
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
-import { holdCatalog } from '../i18n/catalogs.ts'
+import { dropCatalogs, holdCatalog } from '../i18n/catalogs.ts'
 
 beforeEach(() => {
-  // The app fetches the catalog of the language it starts in before it draws (main.tsx), and a
-  // language chosen later when it is chosen. A test holds all five from the start, so that a
-  // component drawn in any of them is drawn at once; one that tests the fetching drops them.
-  for (const locale of locales) holdCatalog(locale, catalogs[locale])
+  // The app fetches its own words in the language it starts in before it draws (main.tsx), a
+  // screen's with its file, and a language chosen later when it is chosen. A test holds all five
+  // whole from the start, every part of each, so that a component drawn in any of them is drawn
+  // at once; one that tests the fetching drops them. What the test before this one needed is
+  // forgotten first.
+  dropCatalogs()
+  for (const locale of locales) holdCatalog(locale, catalogs[locale], clientParts)
   // jsdom has no media queries: every test starts on a device that prefers nothing.
   vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
     matches: false,

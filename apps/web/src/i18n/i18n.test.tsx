@@ -1,10 +1,21 @@
 import { currencyCodes, exponent, money } from '@household/domain'
-import { render, screen } from '@testing-library/react'
+import { catalogs } from '@household/i18n'
+import * as lazy from '@household/i18n/lazy'
+import { partOf, type CatalogPart, type Locale, type Part } from '@household/i18n/lazy'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { draw, Press } from '../test/render.tsx'
+import {
+  dropCatalogs,
+  fetchCatalog,
+  heldCatalog,
+  holdCatalog,
+  holdsCatalog,
+  needWords,
+} from './catalogs.ts'
 import { createFormatters } from './format.ts'
-import { I18nProvider, useI18n } from './I18nProvider.tsx'
+import { I18nProvider, useI18n, useTranslate } from './I18nProvider.tsx'
 import { formattingLocale, initialLocale, storageKey } from './locale.ts'
 
 describe('a list of things', () => {
@@ -248,5 +259,220 @@ describe('the language switch', () => {
     expect(
       screen.getByText('Offline — Änderungen sind gespeichert und werden später synchronisiert'),
     ).toBeInTheDocument()
+  })
+})
+
+/** `part` of `locale`'s catalog, as the package holds it whole. */
+function partOfCatalog(locale: Locale, part: Part): CatalogPart {
+  return Object.fromEntries(
+    Object.entries(catalogs[locale]).filter(([key]) => partOf(key) === part),
+  )
+}
+
+/** A language's own words and a household's together: what a household's screen is drawn from. */
+function withHousehold(locale: Locale): CatalogPart {
+  return { ...partOfCatalog(locale, 'app'), ...partOfCatalog(locale, 'household') }
+}
+
+/**
+ * Holds back every part of a catalog fetched from here on, until the test says what becomes of
+ * it, by its language and its name: it arrives, or fails as a file that could not be fetched. A
+ * part is a file fetched when it is needed, and the test answers for the fetch itself.
+ */
+function heldBack() {
+  interface File {
+    readonly fetched: Promise<CatalogPart>
+    readonly arrive: () => void
+    readonly fail: () => void
+  }
+  const files = new Map<string, File>()
+  // One fetch for each file, however often it is asked for, as the package's own keeps it.
+  vi.spyOn(lazy, 'loadCatalog').mockImplementation((locale, part) => {
+    const name = `${locale}.${part}`
+    let file = files.get(name)
+    if (file === undefined) {
+      let arrive: () => void = () => undefined
+      let fail: () => void = () => undefined
+      const fetched = new Promise<CatalogPart>((resolve, reject) => {
+        arrive = () => {
+          resolve(partOfCatalog(locale, part))
+        }
+        fail = () => {
+          reject(new TypeError('Failed to fetch dynamically imported module'))
+        }
+      })
+      file = { fetched, arrive, fail }
+      files.set(name, file)
+    }
+    return file.fetched
+  })
+  const settle = (name: string, how: 'arrive' | 'fail') =>
+    act(async () => {
+      const file = files.get(name)
+      if (file === undefined) throw new Error(`${name} was not asked for`)
+      file[how]()
+      // Long enough for whatever waited for the file to have gone on.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+  return {
+    /** The files asked for so far, in the order they were first asked for. */
+    asked: () => [...files.keys()],
+    arrive: (name: string) => settle(name, 'arrive'),
+    fail: (name: string) => settle(name, 'fail'),
+  }
+}
+
+const householdWord = 'household.invitation.none.title'
+
+/**
+ * A word of a household's own, where the part that has it is held, and nothing where it is not:
+ * a screen is drawn once its words have come, and this says whether they have.
+ */
+function ScreenWord() {
+  const t = useTranslate()
+  let word = ''
+  try {
+    word = t(householdWord)
+  } catch {
+    // Its part is not held.
+  }
+  return <p>{word}</p>
+}
+
+describe('the words this page holds', () => {
+  it('are the app’s own in the language it starts in, and with the next every part needed since', async () => {
+    const load = vi.spyOn(lazy, 'loadCatalog')
+    dropCatalogs()
+    await fetchCatalog('en')
+    expect(heldCatalog('en')).toEqual(partOfCatalog('en', 'app'))
+    // A screen that reads a household's words is on its way.
+    await needWords(['household'])
+    expect(heldCatalog('en')).toEqual(withHousehold('en'))
+    await fetchCatalog('cs')
+    expect(heldCatalog('cs')).toEqual(withHousehold('cs'))
+    expect(load.mock.calls).toEqual([
+      ['en', 'app'],
+      ['en', 'household'],
+      ['cs', 'app'],
+      ['cs', 'household'],
+    ])
+    // The pseudo-locale is shown from English, which is held whole.
+    await fetchCatalog('en-XA')
+    await needWords(['household'])
+    expect(load).toHaveBeenCalledTimes(4)
+  })
+
+  it('are drawn as they arrive: a part that comes makes its words of what is drawn already', async () => {
+    dropCatalogs()
+    holdCatalog('en', partOfCatalog('en', 'app'), ['app'])
+    draw(<ScreenWord />)
+    expect(screen.queryByText(catalogs.en[householdWord])).not.toBeInTheDocument()
+    await act(() => needWords(['household']))
+    expect(screen.getByText(catalogs.en[householdWord])).toBeInTheDocument()
+  })
+
+  it('are fetched in a language switched to, every part needed, before it is shown', async () => {
+    dropCatalogs()
+    // A household's screen is drawn, in English.
+    holdCatalog('en', withHousehold('en'), ['app', 'household'])
+    await needWords(['household'])
+    const files = heldBack()
+    draw(
+      <>
+        <Probe />
+        <ScreenWord />
+      </>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'cs' }))
+    expect(files.asked()).toEqual(['cs.app', 'cs.household'])
+    await files.arrive('cs.app')
+    // Not yet: a screen that is drawn reads the part that has not come.
+    expect(holdsCatalog('cs')).toBe(false)
+    expect(document.documentElement).toHaveAttribute('lang', 'en')
+    expect(screen.getByText(catalogs.en[householdWord])).toBeInTheDocument()
+    await files.arrive('cs.household')
+    expect(await screen.findByText(catalogs.cs[householdWord])).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('cs cs')
+  })
+
+  // A language may be switched to while a screen is on its way, and a screen opened while a
+  // language is: either way the screen is drawn with its words in the language then shown.
+  it('are a screen’s in the language shown when it is drawn, one switched to while it loaded', async () => {
+    dropCatalogs()
+    holdCatalog('en', partOfCatalog('en', 'app'), ['app'])
+    const files = heldBack()
+    draw(
+      <>
+        <Probe />
+        <ScreenWord />
+      </>,
+    )
+    // The screen first, and then the language.
+    let drawn = false
+    const words = needWords(['household']).then(() => {
+      drawn = true
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'cs' }))
+    expect(files.asked()).toEqual(['en.household', 'cs.app', 'cs.household'])
+    await files.arrive('cs.app')
+    await files.arrive('cs.household')
+    // Czech came whole, the screen's part with it, and is shown. The screen still waits for
+    // what it asked for, its words in the language that was shown then.
+    expect(await screen.findByText(catalogs.cs[householdWord])).toBeInTheDocument()
+    expect(drawn).toBe(false)
+    await files.arrive('en.household')
+    await words
+    expect(heldCatalog('en')).toEqual(withHousehold('en'))
+    expect(heldCatalog('cs')).toEqual(withHousehold('cs'))
+  })
+
+  it('are a screen’s in the language shown when it is drawn, one opened while a language loaded', async () => {
+    dropCatalogs()
+    holdCatalog('en', partOfCatalog('en', 'app'), ['app'])
+    const files = heldBack()
+    draw(
+      <>
+        <Probe />
+        <ScreenWord />
+      </>,
+    )
+    // The language first, and then the screen.
+    await userEvent.click(screen.getByRole('button', { name: 'cs' }))
+    expect(files.asked()).toEqual(['cs.app'])
+    let drawn = false
+    const words = needWords(['household']).then(() => {
+      drawn = true
+    })
+    // In the language that is shown and in the one on its way.
+    expect(files.asked()).toEqual(['cs.app', 'en.household', 'cs.household'])
+    await files.arrive('en.household')
+    // The screen waits: Czech may be shown by the time it is drawn, and has not its words.
+    expect(drawn).toBe(false)
+    await files.arrive('cs.app')
+    // And Czech waits for them too, the screen's part being needed since it was asked for.
+    expect(document.documentElement).toHaveAttribute('lang', 'en')
+    await files.arrive('cs.household')
+    await words
+    expect(await screen.findByText(catalogs.cs[householdWord])).toBeInTheDocument()
+    expect(heldCatalog('cs')).toEqual(withHousehold('cs'))
+  })
+
+  it('are refused to a screen whose part cannot be fetched, and to a language that lacks one', async () => {
+    dropCatalogs()
+    holdCatalog('en', partOfCatalog('en', 'app'), ['app'])
+    const files = heldBack()
+    const words = needWords(['household'])
+    const refused = expect(words).rejects.toThrow('Failed to fetch')
+    await files.fail('en.household')
+    await refused
+    expect(heldCatalog('en')).toEqual(partOfCatalog('en', 'app'))
+    // The part is needed still: a language fetched now is whole with it, or is not shown.
+    const czech = fetchCatalog('cs')
+    const unfetched = expect(czech).rejects.toThrow('Failed to fetch')
+    await files.arrive('cs.app')
+    await files.fail('cs.household')
+    await unfetched
+    expect(holdsCatalog('cs')).toBe(false)
+    expect(holdsCatalog('en')).toBe(false)
   })
 })

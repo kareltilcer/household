@@ -3,12 +3,21 @@
 // here to be right and to be wrong in each way the check names.
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
-import { budgets, compressed, initialFiles, measure } from './budget.ts'
+import {
+  budgets,
+  catalogChunk,
+  catalogOf,
+  compressed,
+  initialFiles,
+  isOwnWords,
+  measure,
+  ownWords,
+} from './budget.ts'
 import { metaPolicy } from './csp.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -114,6 +123,67 @@ describe('the bundle budget', () => {
     ])
   })
 
+  // The app holds one language at a time, and a language in parts (D-159): its own words are
+  // fetched before it draws one, in whichever language its member reads, and a screen's with
+  // the screen.
+  it('counts the app’s own words in the largest language with the initial scripts, and a screen’s as its script', () => {
+    const contents: Readonly<Record<string, string | Uint8Array>> = {
+      '/assets/display-1.js': 'a'.repeat(100),
+      '/assets/index-1.js': 'b'.repeat(100),
+      '/assets/vendor-1.js': 'c'.repeat(100),
+      '/assets/index-1.css': 'd'.repeat(100),
+      '/assets/catalog-en.app-1.js': randomBytes(1000),
+      '/assets/catalog-de.app-1.js': randomBytes(3000),
+      '/assets/catalog-cs.app-1.js': randomBytes(2000),
+      '/assets/catalog-de.household-1.js': randomBytes(4000),
+      '/assets/catalog-en.storage-1.js': 'e'.repeat(100),
+    }
+    const read = (path: string) => contents[path] ?? ''
+    const one = compressed('a'.repeat(100))
+    const sized = (path: string) => compressed(read(path))
+    expect(
+      measure(
+        page(),
+        Object.keys(contents).filter((path) => path.endsWith('.js')),
+        read,
+      ),
+    ).toEqual([
+      {
+        budget: 'script',
+        what: "3 initial scripts and the app's own words in the largest language",
+        bytes: one * 3 + sized('/assets/catalog-de.app-1.js'),
+        limit: budgets.script,
+      },
+      { budget: 'style', what: '1 initial stylesheets', bytes: one, limit: budgets.style },
+      {
+        budget: 'lazy',
+        what: '/assets/catalog-de.household-1.js',
+        bytes: sized('/assets/catalog-de.household-1.js'),
+        limit: budgets.lazy,
+      },
+      { budget: 'lazy', what: '/assets/catalog-en.storage-1.js', bytes: one, limit: budgets.lazy },
+    ])
+  })
+
+  it('knows a part of a catalog by the file @household/i18n generates for it', () => {
+    const parts = join(here, '..', '..', '..', 'packages', 'i18n', 'src', 'generated', 'parts')
+    expect(catalogOf([join(parts, 'de.household.json')])).toBe('de.household')
+    // As Vite writes a path on every platform, and with the query a plugin may add.
+    expect(catalogOf([`${join(parts, 'en.app.json').split('\\').join('/')}?import`])).toBe('en.app')
+    // A chunk that holds anything else, or anything more, is no part's own file.
+    expect(catalogOf([join(here, '..', 'src', 'main.tsx')])).toBeUndefined()
+    expect(
+      catalogOf([join(parts, 'en.app.json'), join(parts, 'en.household.json')]),
+    ).toBeUndefined()
+    expect(catalogOf([join(parts, '..', '..', '..', 'catalogs', 'en.json')])).toBeUndefined()
+    expect(catalogOf([])).toBeUndefined()
+    // The file is there, and the app's own words are a part it writes: what the build names by.
+    expect(existsSync(join(parts, `en.${ownWords}.json`))).toBe(true)
+    expect(isOwnWords(`/assets/${catalogChunk}pl.${ownWords}-B2quqb2a.js`)).toBe(true)
+    expect(isOwnWords(`/assets/${catalogChunk}pl.household-B2quqb2a.js`)).toBe(false)
+    expect(isOwnWords('/assets/app-B2quqb2a.js')).toBe(false)
+  })
+
   it('counts a file as a server sends it', () => {
     expect(compressed('a'.repeat(10_000))).toBeLessThan(100)
     expect(compressed(randomBytes(10_000))).toBeGreaterThan(10_000)
@@ -152,6 +222,16 @@ describe('the check of a build', () => {
     [
       'a later script over the budget',
       { 'assets/Garden-1.js': randomBytes(budgets.lazy + 1000) },
+      'is over the lazy budget',
+    ],
+    [
+      'the app’s own words over what the initial scripts leave of the budget',
+      { 'assets/catalog-de.app-1.js': randomBytes(budgets.script) },
+      'is over the script budget',
+    ],
+    [
+      'a screen’s words over the budget',
+      { 'assets/catalog-de.household-1.js': randomBytes(budgets.lazy + 1000) },
       'is over the lazy budget',
     ],
     [

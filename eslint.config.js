@@ -493,7 +493,7 @@ export default defineConfig(
   // design/ holds the clickable ES5 prototype, a reference that never ships; Prettier and
   // CodeQL skip it too. An editor that lints it with this file would flag every script.
   // src/generated/ is written by each package's `gen` script from a committed source (the
-  // contract, the English catalog) and is never edited by hand.
+  // contract, the catalogs) and is never edited by hand.
   globalIgnores(['**/dist/', '**/coverage/', '**/.turbo/', 'design/', 'packages/*/src/generated/']),
   {
     linterOptions: {

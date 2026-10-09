@@ -1,7 +1,8 @@
 // The router's routes, one for each path of paths.ts, each drawn in the layout its path names:
 // the plain one, the frame of the screens before sign-in, or the shell around an account or a
 // household, which are a member's alone. Every screen is a file of its own, fetched when its
-// address is opened: a first visit downloads the app and the one screen it opened at (D-153).
+// address is opened: a first visit downloads the app and the one screen it opened at (D-153),
+// and with a screen's file the parts of the catalog its path says it reads (D-159).
 //
 // The dev-only pages are named only where a build is told to have them: the development server,
 // and the build the end-to-end suite runs against (`vite build --mode e2e`). Both conditions are
@@ -9,10 +10,11 @@
 // imports the pages is dead code, and neither they nor the files they would load are written
 // (build/check.ts holds the build a deployment serves to that).
 import type { RouteObject } from 'react-router'
+import { needWords } from '../i18n/catalogs.ts'
 import { Signed, VisitorOnly } from './guards.tsx'
 import { Home } from './Home.tsx'
 import { NotAvailable } from './NotAvailable.tsx'
-import { paths, routeIds, type Layout, type RouteId } from './paths.ts'
+import { paths, routeIds, type Layout, type RouteId, type RoutePath } from './paths.ts'
 import { Public } from './Public.tsx'
 import { Plain, Root } from './Root.tsx'
 import { RootError, RouteError } from './RouteError.tsx'
@@ -156,6 +158,30 @@ export const served: readonly RouteId[] = routeIds.filter(
 )
 
 /**
+ * The page of the route `id`, with its words: where paths.ts names parts of the catalog that its
+ * screen reads, they are fetched beside the screen's file, and the screen is drawn once both have
+ * come. Either failing is the screen's file failing, and is named as that is (RouteError): a
+ * file of the app's own whose import failed is not imported again. A screen that is no file of
+ * its own is in the first download, which has the app's own words and no other.
+ */
+function pageOf(id: RouteId): Page | undefined {
+  const page = pages[id]
+  const { words }: RoutePath = paths[id]
+  if (page === undefined || words === undefined) return page
+  const { lazy } = page
+  if (typeof lazy !== 'function') {
+    throw new Error(`routes: ${id} names words, and its page fetches no file to fetch them with`)
+  }
+  return {
+    ...page,
+    lazy: async () => {
+      const [screen] = await Promise.all([lazy(), needWords(words)])
+      return screen
+    },
+  }
+}
+
+/**
  * What stands in a screen's place while its file loads, on the visit that opens the app at it:
  * nothing. It is there for what it leaves the router free to draw around it. With no such place
  * named, the router draws nothing at all until the file has loaded or failed to, Root neither.
@@ -201,7 +227,7 @@ function idsOf(layout: Layout, visitor?: boolean): RouteId[] {
 
 /** The served routes of `layout`, by their whole paths. */
 function of(layout: Layout, visitor?: boolean): RouteObject[] {
-  return idsOf(layout, visitor).map((id) => ({ path: paths[id].path, ...pages[id] }))
+  return idsOf(layout, visitor).map((id) => ({ path: paths[id].path, ...pageOf(id) }))
 }
 
 /**
@@ -212,7 +238,7 @@ function of(layout: Layout, visitor?: boolean): RouteObject[] {
 function underHousehold(): RouteObject[] {
   return idsOf('household').map((id): RouteObject => {
     const rest = paths[id].path.slice(paths.household.path.length).replace(/^\//, '')
-    return rest === '' ? { index: true, ...pages[id] } : { path: rest, ...pages[id] }
+    return rest === '' ? { index: true, ...pageOf(id) } : { path: rest, ...pageOf(id) }
   })
 }
 

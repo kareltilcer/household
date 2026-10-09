@@ -143,7 +143,8 @@ jobs:
         with:
           cache: true
           require-lockfile: true
-      # The typed client and the message keys, which the app's sources import.
+      # The typed client, the message keys and the parts of each language's catalog, which the
+      # app's sources import.
       - name: Generate
         run: pnpm exec turbo run gen
       # The build a deployment serves, held to what can be read off its files: the bundle budget,

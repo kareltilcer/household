@@ -1,7 +1,8 @@
 // Account settings (A-19) as a member uses them: each control's save and its refusal, what is
 // kept in this browser alone, the households list in its states, and what a child profile has
 // none of.
-import { catalogs, type Catalog } from '@household/i18n'
+import { catalogs } from '@household/i18n'
+import { clientParts } from '@household/i18n/lazy'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { storageKey } from '../display/modes.ts'
@@ -19,7 +20,7 @@ import {
 } from './testing.tsx'
 
 // A language's catalog is fetched when it is chosen, where this page does not hold it: a test
-// that says when one arrives answers for the fetch itself.
+// that says when one arrives answers for the fetch itself, and holds what it fetched.
 vi.mock(import('../i18n/catalogs.ts'), async (original) => {
   const actual = await original()
   return { ...actual, fetchCatalog: vi.fn(actual.fetchCatalog) }
@@ -394,13 +395,16 @@ describe('the account screen', () => {
   it('tells the account of the language chosen last, though one chosen before it arrives after', async () => {
     // German is still to be fetched, and Polish this page holds.
     dropCatalogs()
-    holdCatalog('en', catalogs.en)
-    holdCatalog('pl', catalogs.pl)
-    let arrive: (catalog: Catalog) => void = () => undefined
+    holdCatalog('en', catalogs.en, clientParts)
+    holdCatalog('pl', catalogs.pl, clientParts)
+    let arrive: () => void = () => undefined
     vi.mocked(fetchCatalog).mockImplementationOnce(
       () =>
-        new Promise<Catalog>((resolve) => {
-          arrive = resolve
+        new Promise<void>((resolve) => {
+          arrive = () => {
+            holdCatalog('de', catalogs.de, clientParts)
+            resolve()
+          }
         }),
     )
     const server = createServer()
@@ -421,7 +425,7 @@ describe('the account screen', () => {
     })
     // German's catalog arrives now, for a choice that another has taken the place of.
     await act(async () => {
-      arrive(catalogs.de)
+      arrive()
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(server.to('PATCH /me')).toHaveLength(1)
@@ -434,13 +438,16 @@ describe('the account screen', () => {
   it('keeps a language chosen over one still being saved, whatever becomes of that save', async () => {
     // Czech this page holds, and German is still to be fetched.
     dropCatalogs()
-    holdCatalog('en', catalogs.en)
-    holdCatalog('cs', catalogs.cs)
-    let arrive: (catalog: Catalog) => void = () => undefined
+    holdCatalog('en', catalogs.en, clientParts)
+    holdCatalog('cs', catalogs.cs, clientParts)
+    let arrive: () => void = () => undefined
     vi.mocked(fetchCatalog).mockImplementationOnce(
       () =>
-        new Promise<Catalog>((resolve) => {
-          arrive = resolve
+        new Promise<void>((resolve) => {
+          arrive = () => {
+            holdCatalog('de', catalogs.de, clientParts)
+            resolve()
+          }
         }),
     )
     const server = createServer()
@@ -475,7 +482,7 @@ describe('the account screen', () => {
       return Response.json(server.me)
     })
     await act(async () => {
-      arrive(catalogs.de)
+      arrive()
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(await screen.findByRole('heading', { level: 1, name: 'Ihr Konto' })).toBeInTheDocument()

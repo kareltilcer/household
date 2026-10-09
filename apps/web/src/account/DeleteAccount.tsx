@@ -88,7 +88,7 @@ function Situation({
           <span className={styles.text}>{t('account.delete.sole.body')}</span>
           {/* Read again, the members still name another owner: one the server did not count. */}
           {standing.uncounted && readAgain ? (
-            <span className={styles.text}>{t('household.leave.last_owner.deleting')}</span>
+            <span className={styles.text}>{t('account.delete.sole.uncounted')}</span>
           ) : null}
           <Checkbox
             label={t('account.delete.sole.choose', { household: name })}
