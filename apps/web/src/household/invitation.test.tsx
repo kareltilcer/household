@@ -337,6 +337,56 @@ describe('the token an invitation’s link carries', () => {
     expect(server.to(`GET /me/invitations/${other}`)).toHaveLength(1)
   })
 
+  // The link the page already read, opened where the page says what became of it: an arrival
+  // as any other, since a load would ask again too, and the server says what it is good for now.
+  it('begins again for the link it read before, and says what the server says of it now', async () => {
+    const server = serving()
+    server.on(declining, noContent)
+    const { user, router } = open(link, server)
+    await user.click(await screen.findByRole('button', { name: 'Decline' }))
+    await titled('You declined the invitation to Tilcerovi')
+    expect(server.to(reading)).toHaveLength(1)
+
+    const slow = pending()
+    server.on(reading, () => slow.response)
+    await act(() => router.navigate(link))
+    await waitFor(() => {
+      expect(server.to(reading)).toHaveLength(2)
+    })
+    // Until the server has said, the page is one that has read nothing: what the screen before
+    // it read is not drawn again, an invitation just declined with both its answers.
+    expect(await titled(waiting)).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    slow.answer(problem(410, 'token_already_used'))
+    expect(await titled('This invitation has already been answered')).toBeInTheDocument()
+    expect(server.to(declining)).toHaveLength(1)
+    expect(router.state.location.hash).toBe('')
+
+    // Once more, where the page says it is over: asked again, and not read off the last answer.
+    server.on(reading, () => problem(410, 'token_already_used'))
+    await act(() => router.navigate(link))
+    await waitFor(() => {
+      expect(server.to(reading)).toHaveLength(3)
+    })
+    expect(await titled('This invitation has already been answered')).toBeInTheDocument()
+  })
+
+  it('says the link it read before could not be read, where the server is not reached this time', async () => {
+    const server = serving()
+    server.on(declining, noContent)
+    const { user, router } = open(link, server)
+    await user.click(await screen.findByRole('button', { name: 'Decline' }))
+    await titled('You declined the invitation to Tilcerovi')
+
+    server.on(reading, () => Promise.reject(new TypeError('offline')))
+    await act(() => router.navigate(link))
+    expect(await screen.findByText('The invitation could not be read')).toBeInTheDocument()
+    // Nothing is kept of it to draw in its place: no invitation, and neither answer.
+    expect(screen.queryByRole('button', { name: 'Join Tilcerovi' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument()
+  })
+
   it('goes on holding the link opened since, when the one before it is answered', async () => {
     const other = 'r8t5-2hjw-6bn4'
     const server = serving()
@@ -394,7 +444,7 @@ describe('the read of an invitation', () => {
     await titled(invited)
     await screen.findByRole('button', { name: 'Join Tilcerovi' })
     const cache = page.cache()
-    expect(cache.getQueryData(['invitation', token])).toMatchObject({
+    expect(cache.getQueryData(['invitation', token, 0])).toMatchObject({
       household_name: 'Tilcerovi',
     })
     // As the app stores its cache (api/query.ts): the account is kept, and nothing of the token.
@@ -405,8 +455,9 @@ describe('the read of an invitation', () => {
     expect(JSON.stringify(kept)).not.toContain(token)
 
     page.unmount()
+    // Whatever arrival it was filed under: no read of an invitation is left.
     await waitFor(() => {
-      expect(cache.getQueryCache().find({ queryKey: ['invitation', token] })).toBeUndefined()
+      expect(cache.getQueryCache().findAll({ queryKey: ['invitation'] })).toEqual([])
     })
   })
 

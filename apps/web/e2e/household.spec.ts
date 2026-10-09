@@ -532,6 +532,28 @@ test('an invitation’s link opened in a tab that is on the invitation’s page 
   await page.goto(`${paths.invitation.path}#token=${token}`)
   await expect(title(page, `${who.name} has invited you to ${home}`)).toBeVisible()
   await expect(page).toHaveURL(paths.invitation.path)
+
+  // The same link again, where the page shows what it read: the screen is begun again and reads
+  // for itself. Its read is held back for as long as the test says, and nothing the screen
+  // before it read is drawn meanwhile, the two answers least of all. Handed on to the route that
+  // names this test's network (fixtures.ts), and not past it.
+  const reading = `**${apiPath}/me/invitations/${token}`
+  let send: () => void = () => undefined
+  const held = new Promise<void>((resolve) => {
+    send = resolve
+  })
+  await page.route(reading, async (route) => {
+    await held
+    await route.fallback()
+  })
+  await page.goto(`${paths.invitation.path}#token=${token}`)
+  await expect(title(page, 'An invitation to a household')).toBeVisible()
+  await expect(page.getByRole('main').getByRole('button')).toHaveCount(0)
+  send()
+  await expect(title(page, `${who.name} has invited you to ${home}`)).toBeVisible()
+  await expect(page).toHaveURL(paths.invitation.path)
+  await page.unroute(reading)
+
   await page.getByRole('button', { name: `Join ${home}` }).click()
   await expect(title(page, 'Home')).toBeVisible()
   await expect(page).toHaveURL(inHousehold.home(household))
