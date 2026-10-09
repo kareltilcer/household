@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -118,11 +118,18 @@ describe('the app', () => {
       </Providers>,
     )
     await screen.findByRole('heading', { level: 1, name: 'Sign in' })
-    expect(document.title).toBe('Sign in · Household')
+    // The page is named in an effect, which React may run a task after the commit that drew the
+    // heading: the heading found, its title is waited for.
+    await waitFor(() => {
+      expect(document.title).toBe('Sign in · Household')
+    })
     await act(() => router.navigate(paths.notFound.example))
     const nothing = 'This link doesn’t open anything here.'
     await screen.findByRole('heading', { level: 1, name: nothing })
-    expect(document.title).toBe(`${nothing} · Household`)
+    await waitFor(() => {
+      expect(document.title).toBe(`${nothing} · Household`)
+    })
+    // What the effect undoes is undone before `unmount` returns.
     unmount()
     expect(document.title).toBe('Household')
   })

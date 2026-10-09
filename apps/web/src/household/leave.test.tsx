@@ -111,7 +111,9 @@ describe('leaving a household', () => {
     server.on(leaving, noContent)
     const { user, router } = await read(server)
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
-    expect(document.title).toBe(`${title} · Household`)
+    await waitFor(() => {
+      expect(document.title).toBe(`${title} · Household`)
+    })
     // Nothing stands in the way, and nothing says that anything does.
     expect(sections()).toEqual(['What you leave behind'])
     expect(screen.getByText(behind)).toBeInTheDocument()

@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { inHousehold } from '../../app/paths.ts'
 import {
@@ -44,7 +44,9 @@ describe('what every screen of household settings is set in', () => {
   it('titles the page for the screen it shows', async () => {
     open(inHousehold.modules(home))
     expect(await screen.findByRole('heading', { level: 1, name: 'Modules' })).toBeInTheDocument()
-    expect(document.title).toBe('Modules · Household')
+    await waitFor(() => {
+      expect(document.title).toBe('Modules · Household')
+    })
   })
 
   it('says nothing of where an owner stands, who may change what is here', async () => {
