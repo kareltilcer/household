@@ -275,14 +275,25 @@ function SignInWith({ me }: { readonly me: Me }) {
   // Back from the provider's page with no link made, to this one as the browser kept it: the
   // control that stayed busy while the page was leaving is put back.
   useShownAgain(connect.reset)
+  // A provider that is disconnected is said to be, and the account read again, which is what
+  // its row says so from. The row offers to disconnect it until then, so the disconnection
+  // stays on its way for as long, its control busy: no second one is asked for meanwhile, of
+  // what the account holds no longer.
+  const disconnected = (provider: Provider) => {
+    toast({ message: t('account.security.providers.disconnected', { provider: name(provider) }) })
+    return queries.invalidateQueries({ queryKey: meKey, exact: true })
+  }
   const disconnect = useMutation({
     ...askedNow,
     mutationFn: async (provider: Provider) => {
       unwrap(await api.DELETE('/auth/oauth/{provider}', { params: { path: { provider } } }))
     },
-    onSuccess: (_answer, provider) => {
-      toast({ message: t('account.security.providers.disconnected', { provider: name(provider) }) })
-      void queries.invalidateQueries({ queryKey: meKey, exact: true })
+    onSuccess: (_answer, provider) => disconnected(provider),
+    onError: async (error, provider) => {
+      // The server's word that the account holds none of it: disconnected from somewhere else
+      // since this page read the account, or by a press before this one, after which the
+      // account could not be read. What was asked for is so.
+      if (problemIn(error)?.code === 'not_found') await disconnected(provider)
     },
   })
 
@@ -315,6 +326,11 @@ function SignInWith({ me }: { readonly me: Me }) {
 
   const linked = new Set<string>(me.credentials ?? [])
   const only = problemIn(disconnect.error)?.code === 'only_credential'
+  // One of them at a time: while a start or a disconnection is on its way no other control here
+  // takes a press, so neither is put away, nor another sent in its place, before it is answered.
+  // A start that was answered holds nothing: the page is leaving, and where it did not, the
+  // other controls are still there to be pressed.
+  const asking = connect.isPending || disconnect.isPending
   return (
     <Section title={t('account.security.providers.title')}>
       <List label={t('account.security.providers.title')}>
@@ -332,6 +348,7 @@ function SignInWith({ me }: { readonly me: Me }) {
                     </span>
                     <Button
                       loading={disconnect.isPending && disconnect.variables === provider}
+                      aria-disabled={asking}
                       onClick={() => {
                         connect.reset()
                         disconnect.mutate(provider)
@@ -351,6 +368,7 @@ function SignInWith({ me }: { readonly me: Me }) {
                     loading={
                       (connect.isPending || connect.isSuccess) && connect.variables === provider
                     }
+                    aria-disabled={asking}
                     onClick={() => {
                       disconnect.reset()
                       connect.mutate(provider)
@@ -365,7 +383,7 @@ function SignInWith({ me }: { readonly me: Me }) {
         })}
       </List>
       <p className={styles.note}>{t('account.security.providers.note')}</p>
-      {disconnect.isError ? (
+      {disconnect.isError && problemIn(disconnect.error)?.code !== 'not_found' ? (
         <Banner
           tone="danger"
           announce

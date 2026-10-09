@@ -1007,10 +1007,14 @@ test('an owner makes a child profile, sets it a new PIN, sends it a sign-in of i
   await expectAccessible(page)
   await panel.getByRole('button', { name: 'Send the link' }).click()
   // Sent, which is said in the form's place as it arrives, and the form's own button went with
-  // the form: the focus it held goes to the one that stays, which ends the panel.
-  await expect(panel.getByRole('status')).toContainText(
-    `A link is on its way to ${young.email}. It works for 14 days.`,
-  )
+  // the form: the focus it held goes to the one that stays, which ends the panel. The status is
+  // named by its words: a toast is read out from inside the modal that is open, for a second
+  // from when it is raised, so the panel may hold what reads out the PIN's beside its own.
+  await expect(
+    panel.getByRole('status').filter({
+      hasText: `A link is on its way to ${young.email}. It works for 14 days.`,
+    }),
+  ).toBeVisible()
   const done = panel.getByRole('button', { name: 'Done' })
   await expect(done).toBeFocused()
   await expect(panel.getByRole('button', { name: 'Send the link' })).toHaveCount(0)

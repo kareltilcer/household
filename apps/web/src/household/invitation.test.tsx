@@ -480,7 +480,9 @@ describe('the read of an invitation', () => {
     server.on(reading, () => answer.response)
     open(link, server)
     expect(await titled(waiting)).toBeInTheDocument()
-    expect(document.title).toBe(`${waiting} · Household`)
+    await waitFor(() => {
+      expect(document.title).toBe(`${waiting} · Household`)
+    })
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
 
@@ -583,7 +585,9 @@ describe('the read of an invitation', () => {
     const heading = await titled(title)
     expect(screen.getByText(sentence)).toBeInTheDocument()
     if (next !== undefined) expect(screen.getByText(next)).toBeInTheDocument()
-    expect(document.title).toBe(`${title} · Household`)
+    await waitFor(() => {
+      expect(document.title).toBe(`${title} · Household`)
+    })
     // Its words took the place of the title the page opened with: they are said.
     expect(heading.parentElement).toHaveAttribute('aria-live', 'polite')
     expect(screen.getByRole('link', { name: 'Go to Home' })).toHaveAttribute(
@@ -621,7 +625,9 @@ describe('what an invitation shows', () => {
     holdDestination(paths.invitation.path)
     open(link, serving())
     expect(await titled(invited)).toBeInTheDocument()
-    expect(document.title).toBe(`${invited} · Household`)
+    await waitFor(() => {
+      expect(document.title).toBe(`${invited} · Household`)
+    })
     expect(screen.getByText('Here is exactly what that gives you.')).toBeInTheDocument()
     // The two answers, once it is known who is here: the one that joins first.
     await screen.findByRole('button', { name: 'Join Tilcerovi' })

@@ -107,7 +107,9 @@ describe('creating a household', () => {
   it('asks for the name alone, and opens with the rest read from the device and the countries', async () => {
     await form()
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
-    expect(document.title).toBe(`${title} · Household`)
+    await waitFor(() => {
+      expect(document.title).toBe(`${title} · Household`)
+    })
     expect(
       screen.getByText(
         'Only the name is asked. The rest is read from this device, and any of it can be changed.',

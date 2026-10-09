@@ -206,7 +206,12 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   `suspended` household whose every route answers `404` (D-115), so a screen that reads something
   of each of a member's households passes over it or says it cannot be read, and never waits on
   it: where the app opens ([D-162](docs/prd/09-decisions.md)), and before an account is deleted
-  ([D-163](docs/prd/09-decisions.md)). A household's replica is one tab's,
+  ([D-163](docs/prd/09-decisions.md)). Nor does any list say whose account is scheduled for
+  deletion, an owner the server counts as none (D-137): a screen that works out from a household's
+  members whether its member may go, leaving it (`household/Leave.tsx`) or deleting their account
+  (`account/DeleteAccount.tsx`), keeps what the server's refusal named beside the members it reads
+  again, draws by it, and puts it away at no read
+  ([D-173](docs/prd/09-decisions.md)). A household's replica is one tab's,
   by a Web Lock, asked for only if it is free and waited for where it is held, never read off
   the browser's list of locks, and opened as the session through `sync/sessionFetch.ts`; `@household/sync` is
   imported for its types alone outside `sync/open.ts`, which ESLint holds and which is what keeps
@@ -257,8 +262,18 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   ([D-168](docs/prd/09-decisions.md)), once their list of households has been read again: a kept
   list that names none is not gone by (`app/Home.tsx`). A focus that a control took with it as
   it left is put back through `refocus` (`account/common.ts`). A write on its way keeps its
-  control busy until it is answered: its mutation is not `reset()` while it is pending, and rows
-  that share one say for themselves which of them is asked. The page an invitation's link opens
+  control busy until it is answered: its mutation is not `reset()` while it is pending, so two
+  controls whose presses each `reset()` the other's mutation, where a refusal is read off the
+  mutation itself, take no press while the other's write is on its way (`aria-disabled`), and
+  rows that share one say for themselves which of them is asked. The two controls of one picture
+  hold each other too, whatever their presses put away (`household/settings/ChildPicture.tsx`):
+  sent side by side, which of the two writes the server took last is not the order their answers
+  come in, and the picture drawn could be another than the one kept. A control that saves as it is
+  changed is no busy control: a select's later choice takes an earlier save's place (the
+  language), and a switch takes another change while one is on its way, sent beside it, what
+  either is refused with kept beside the mutation (`account/Notifications.tsx`); and a page the
+  browser kept and shows again puts a provider's start back whatever became of it
+  (`useShownAgain`). The page an invitation's link opens
   is begun again for a link that arrives while it is drawn, as the pages of `auth/` that read a
   fragment are: its screen is keyed by the `arrival` that `useFragment` counts, and the link it
   read already arrives as any other. What a screen keyed so reads through the query client is

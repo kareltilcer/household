@@ -107,7 +107,9 @@ describe('the invitations a household sent', () => {
   it('is titled for what it shows, and says what it is', async () => {
     await list()
     expect(screen.getByRole('heading', { level: 1, name: 'Invitations' })).toBeInTheDocument()
-    expect(document.title).toBe('Invitations · Household')
+    await waitFor(() => {
+      expect(document.title).toBe('Invitations · Household')
+    })
     expect(
       screen.getByText('Everybody this household has invited, and what became of each invitation.'),
     ).toBeInTheDocument()

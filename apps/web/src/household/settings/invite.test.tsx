@@ -59,7 +59,9 @@ describe('the invitation composer', () => {
   it('starts with every decision answered: by email, as a member, at the defaults', async () => {
     await composer()
     expect(screen.getByRole('heading', { level: 1, name: 'Invite somebody' })).toBeInTheDocument()
-    expect(document.title).toBe('Invite somebody · Household')
+    await waitFor(() => {
+      expect(document.title).toBe('Invite somebody · Household')
+    })
     expect(
       screen.getByText('Seventeen decisions, already answered. Change the ones you want to.'),
     ).toBeInTheDocument()

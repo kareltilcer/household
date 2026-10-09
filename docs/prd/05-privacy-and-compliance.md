@@ -130,6 +130,12 @@ as an owner the household has by then does, and nothing else. The request is ref
 blocking household at once, never one at a time. A `suspended` household answers nobody (D-115),
 so a client cannot read who else is in one before it asks: the web says so of one the user owns,
 offers to delete it with the account all the same, and the server's resolution stands (**D-163**).
+Nor can it read whose account is scheduled for deletion: such an owner is listed as an owner
+still, so the other owner of their household is told the membership ends and is then refused. The
+web draws a household the refusal names as the user's alone to own as that from then on, with the
+box that deletes it with the account, whoever its members name as an owner when they are read
+again, until the server answers that a household named to go with the account is not the user's
+alone to delete (**D-173**).
 
 **FR-PR4 — Deletion is a 30-day soft window then irreversible.** The account is disabled
 immediately, sessions and tokens are revoked (under D-93 a sync token already issued runs until it
