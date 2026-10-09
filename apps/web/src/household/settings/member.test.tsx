@@ -1098,14 +1098,22 @@ describe('a member’s role', () => {
     await page(jana.id, ownedBy(petr))
     expect(screen.queryByRole('button', { name: /Make Jana/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Remove Jana/ })).not.toBeInTheDocument()
+    // As the server has it (FR-HH4): only the payer offers billing, and cancelling the
+    // subscription leaves them the payer.
+    const role = screen.getByRole('region', { name: 'Role' })
     expect(
-      screen.getByText(
-        'Jana Tilcerová pays for the household, so they stay an owner until billing has moved to another owner.',
+      within(role).getByText(
+        'Jana Tilcerová pays for the household, so they stay an owner until billing has moved to another owner. Only whoever pays can offer it, and cancelling the subscription does not change who pays.',
       ),
     ).toBeInTheDocument()
+    // The way to the screen that says who pays, and where the payer offers it.
+    expect(within(role).getByRole('link', { name: 'Billing' })).toHaveAttribute(
+      'href',
+      inHousehold.billing(home),
+    )
     expect(
       screen.getByText(
-        'Jana Tilcerová pays for the household, so billing moves to another owner before they can be removed.',
+        'Jana Tilcerová pays for the household, so billing moves to another owner before they can be removed. Only whoever pays can offer it, and cancelling the subscription does not change who pays.',
       ),
     ).toBeInTheDocument()
   })
@@ -1266,7 +1274,7 @@ describe('removing a member', () => {
       }),
     )
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Petr Tilcer pays for the household, so billing moves to another owner before they can be removed.',
+      'Petr Tilcer pays for the household, so billing moves to another owner before they can be removed. Only whoever pays can offer it, and cancelling the subscription does not change who pays.',
     )
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(router.state.location.pathname).toBe(inHousehold.member(home, petr))
