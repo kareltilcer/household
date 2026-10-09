@@ -12,6 +12,9 @@
 // - The only owner of a household with other people in it has two ways on, and both are offered:
 //   make someone else an owner, which is said in words, the members' screen not being built yet
 //   (plan item 26), or name the household to be deleted with the account, by a box that names it.
+//   Where everybody else in it is a child profile, which is never made an owner (PRD 02 §4), the
+//   first way is to invite somebody as one, and is said so: the server holds the household all
+//   the same, and its members could give no owner.
 // - A payer is held until billing is handed over or the subscription cancelled.
 // - A suspended household the member owns answers nobody, so who else is in it cannot be read
 //   (D-115): the screen says so and offers its box all the same, the one way its only owner has
@@ -85,7 +88,9 @@ function Situation({
       ) : null}
       {standing.kind === 'sole' ? (
         <>
-          <span className={styles.text}>{t('account.delete.sole.body')}</span>
+          <span className={styles.text}>
+            {standing.successor ? t('account.delete.sole.body') : t('account.delete.sole.children')}
+          </span>
           {/* Read again, the members still name another owner: one the server did not count. */}
           {standing.uncounted && readAgain ? (
             <span className={styles.text}>{t('household.leave.last_owner.deleting')}</span>

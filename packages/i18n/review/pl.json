@@ -98,6 +98,7 @@
   "account.delete.renews": "You pay for it. If its subscription is still set to renew, cancel it first: deletion is refused until then.",
   "account.delete.schedule": "Schedule deletion for {date}",
   "account.delete.sole.body": "You are its only owner, and other people are members. Somebody else has to be an owner before you can go, or nobody could invite, remove or change what anyone sees. Make someone an owner from the household’s members, or tick the box and it is deleted with your account.",
+  "account.delete.sole.children": "You are its only owner, and nobody else in it can be made one: a child profile can’t be an owner. Somebody else has to be an owner before you can go, or nobody could invite, remove or change what anyone sees. Invite somebody as an owner, or tick the box and it is deleted with your account.",
   "account.delete.sole.choose": "Delete {household} with my account",
   "account.delete.sole.chosen": "It is scheduled for deletion with your account, and its members are told now. Cancelling your account’s deletion cancels its deletion too.",
   "account.delete.sole.payer": "You also pay for it: once someone else is an owner, hand billing over to them or cancel the subscription.",
