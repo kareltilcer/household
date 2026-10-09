@@ -7,7 +7,7 @@
 // else is registered with, and each screen a journey passes is held to axe as it stands.
 import type { Page } from '@playwright/test'
 import { paths } from '../src/app/paths.ts'
-import { expect, expectAccessible, frames, open, test } from './fixtures.ts'
+import { expect, expectAccessible, frames, kept, open, test } from './fixtures.ts'
 import { linkToken, person, register, totp, type Person } from './stack.ts'
 
 /** The page's one title, which a screen is known by. */
@@ -54,8 +54,9 @@ test('a person registers, verifies their address, signs in, turns the second ste
   await expectAccessible(page)
 
   await signInAs(page, who)
-  // They are in no household yet, and their account is theirs either way (A-19).
-  await expect(page).toHaveURL(paths.account.path)
+  // They are in no household yet, and are opened at making one, the first thing a new account
+  // does (DD-6); their account is beside it either way (A-19).
+  await expect(page).toHaveURL(paths.householdNew.path)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 
   // The second step, turned on from the account's own screens (A-5): the password, the
@@ -107,7 +108,7 @@ test('a person registers, verifies their address, signs in, turns the second ste
   await expectAccessible(page)
   await page.getByLabel('Six-digit code').fill(totp(secret))
   await page.getByRole('button', { name: 'Continue' }).click()
-  await expect(page).toHaveURL(paths.account.path)
+  await expect(page).toHaveURL(paths.householdNew.path)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 
   // And with the authenticator out of reach, one of the ten stands in for it (A-8).
@@ -118,7 +119,7 @@ test('a person registers, verifies their address, signs in, turns the second ste
   await expectAccessible(page)
   await page.getByLabel('Recovery code').fill(codes[0] ?? '')
   await page.getByRole('button', { name: 'Continue' }).click()
-  await expect(page).toHaveURL(paths.account.path)
+  await expect(page).toHaveURL(paths.householdNew.path)
   await page.getByRole('link', { name: 'Signing in' }).click()
   await expect(page.getByText('9 recovery codes left')).toBeVisible()
 })
@@ -141,37 +142,6 @@ test('a visitor who opens a member’s address signs in and lands there', async 
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 })
 
-/**
- * The reads this browser keeps, by their keys: the app's persisted cache as it wrote it, one
- * clone under one key of one store (src/api/query.ts). Read once the app has drawn, which is
- * after it opened the store.
- */
-function kept(page: Page): Promise<string[]> {
-  return page.evaluate(
-    () =>
-      new Promise<string[]>((resolve, reject) => {
-        const opening = indexedDB.open('household-web')
-        opening.onerror = () => {
-          reject(new Error('the kept reads could not be opened'))
-        }
-        opening.onsuccess = () => {
-          const database = opening.result
-          const read = database.transaction('query-cache').objectStore('query-cache').get('client')
-          read.onerror = () => {
-            reject(new Error('the kept reads could not be read'))
-          }
-          read.onsuccess = () => {
-            const client = read.result as
-              | { readonly clientState: { readonly queries: { readonly queryHash: string }[] } }
-              | undefined
-            database.close()
-            resolve((client?.clientState.queries ?? []).map((query) => query.queryHash))
-          }
-        }
-      }),
-  )
-}
-
 // A second visit, which a browser that kept nothing never makes: the account is in what this
 // browser kept, and the session's cookies are not. The page that finds it so removes what was
 // kept and draws nothing again for that, and a sign-in on it is still seen (ADR 0026).
@@ -183,8 +153,8 @@ test('a member whose browser kept their account and lost its session signs in on
   await page.goto(paths.signIn.example)
   await register(page, who)
   await signInAs(page, who)
-  // In no household yet, a member is opened at their account, and this browser keeps no replica.
-  await expect(page).toHaveURL(paths.account.path)
+  // In no household yet, a member is opened at making one, and this browser keeps no replica.
+  await expect(page).toHaveURL(paths.householdNew.path)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
   await expect.poll(() => kept(page)).toContain(JSON.stringify(['me']))
 
@@ -229,7 +199,7 @@ test('a password is set anew by the link a reset’s email carried, and the old 
   await signInAs(page, who)
   await expect(page.getByText('Email or password is not correct.')).toBeVisible()
   await signInAs(page, who, next)
-  await expect(page).toHaveURL(paths.account.path)
+  await expect(page).toHaveURL(paths.householdNew.path)
 })
 
 test('a sign-in pressed with no connection says so at once, and nothing signs in once the connection is back', async ({
@@ -263,7 +233,7 @@ test('a sign-in pressed with no connection says so at once, and nothing signs in
   await expect(page).toHaveURL(paths.signIn.path)
 
   await button.click()
-  await expect(page).toHaveURL(paths.account.path)
+  await expect(page).toHaveURL(paths.householdNew.path)
   // The requests that found no connection, as the browser says each, are this test's own doing.
   expect(faults.filter((fault) => !/ERR_INTERNET_DISCONNECTED/.test(fault))).toEqual([])
   faults.length = 0

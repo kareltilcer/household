@@ -1,6 +1,8 @@
 package household
 
 import (
+	"encoding/json"
+	"fmt"
 	"maps"
 	"regexp"
 	"slices"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/kareltilcer/household/server/internal/platform/access"
 	"github.com/kareltilcer/household/server/internal/platform/module"
+	"github.com/kareltilcer/household/server/internal/platform/vectors"
 )
 
 // The defaults are PRD 02's tables, every module named: FR-AC3's for a member, FR-AC4's for a
@@ -40,6 +43,42 @@ func TestTheDefaultsArePRD02s(t *testing.T) {
 			}
 		}
 	}
+}
+
+// The shared vectors, run against the server's twin of @household/domain's grants (D-37): what a
+// client draws of a role's defaults and its ceiling before it asks is what the server writes and
+// refuses above.
+func TestGrantVectors(t *testing.T) {
+	vectors.Run(t, "grants", map[string]vectors.Subject{
+		"defaults": func(in json.RawMessage) (any, error) {
+			name, err := vectors.Decode[string](in)
+			if err != nil {
+				return nil, err
+			}
+			role, err := access.ParseRole(name)
+			if err != nil {
+				return nil, err
+			}
+			return Defaults(role, Modules), nil
+		},
+		"ceiling": func(in json.RawMessage) (any, error) {
+			v, err := vectors.Decode[struct {
+				Role   string `json:"role"`
+				Module string `json:"module"`
+			}](in)
+			if err != nil {
+				return nil, err
+			}
+			role, err := access.ParseRole(v.Role)
+			if err != nil {
+				return nil, err
+			}
+			if !slices.Contains(Modules, v.Module) {
+				return nil, fmt.Errorf("%q is no module", v.Module)
+			}
+			return access.Ceiling(role, v.Module), nil
+		},
+	}, func(error) string { return "" })
 }
 
 // A household code is eight characters of an alphabet without 0, O, 1 and I, and codes differ.

@@ -1,7 +1,8 @@
 // What every screen of a member's own account is set in (A-19, 04-navigation §4): the screen's
 // one title, and under it sections with a heading each. The shell's frame draws the bar, the
 // account's navigation and the page's one landmark around it (shell/AccountShell.tsx); a screen
-// is its title and its sections.
+// is its title and its sections. A household's own settings are set in the same
+// (household/settings/Page.tsx), with the way between their screens above the title.
 import { useId, type ReactNode } from 'react'
 import { usePageTitle } from '../app/title.ts'
 import styles from './Settings.module.css'
@@ -11,13 +12,16 @@ export interface SettingsPageProps {
   readonly title: string
   /** A sentence under it, where the title alone would not say what the screen is for. */
   readonly lead?: string | undefined
+  /** What stands above the title: the way between the screens of one set of settings. */
+  readonly above?: ReactNode
   readonly children: ReactNode
 }
 
-export function SettingsPage({ title, lead, children }: SettingsPageProps) {
+export function SettingsPage({ title, lead, above, children }: SettingsPageProps) {
   usePageTitle(title)
   return (
     <div className={styles.page}>
+      {above}
       <div className={styles.head}>
         <h1 className={styles.title}>{title}</h1>
         {lead === undefined ? null : <p className={styles.lead}>{lead}</p>}

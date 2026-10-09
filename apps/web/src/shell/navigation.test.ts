@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { inHousehold } from '../app/paths.ts'
+import type { ModuleKey } from '../household/households.ts'
 import type { ModuleRegistry } from '../modules/registry.ts'
 import { arrangementKey, parseArrangement } from './arrangement.ts'
 import {
@@ -13,14 +15,16 @@ import {
   type Arrangement,
 } from './navigation.ts'
 
-const screens = { load: () => Promise.reject(new Error('never loaded here')) }
+const at = (module: ModuleKey) => ({
+  home: (household: string) => inHousehold.module(household, module),
+})
 /** A build with screens for five modules, the household's own settings among them. */
 const registry: ModuleRegistry = {
-  tasks: screens,
-  shopping: screens,
-  finance: screens,
-  garden: screens,
-  admin: screens,
+  tasks: at('tasks'),
+  shopping: at('shopping'),
+  finance: at('finance'),
+  garden: at('garden'),
+  admin: at('admin'),
 }
 
 /** A member who holds four of them, Finance at `none`, and Chat, which this build cannot open. */
@@ -46,7 +50,14 @@ describe('the modules a member holds', () => {
       'chat',
       'admin',
     ])
-    expect(heldModules({})).toEqual([])
+  })
+
+  // Its profile, its members and its modules are every member's to read (PRD 17, Permissions):
+  // a level of `none` on household settings takes its invitations away, and not its screens.
+  it('have household settings among them whatever level the member holds on it', () => {
+    expect(heldModules({ my_grants: { tasks: 'view', admin: 'none' } })).toEqual(['tasks', 'admin'])
+    expect(heldModules({ my_grants: { tasks: 'view' } })).toEqual(['tasks', 'admin'])
+    expect(heldModules({})).toEqual(['admin'])
   })
 })
 
@@ -64,8 +75,14 @@ describe('the shell’s module list', () => {
     for (const absent of ['finance', 'chat', 'dashboard']) expect(everywhere).not.toContain(absent)
   })
 
-  it('is nothing at all for a member who holds no module', () => {
+  it('is household settings alone for a member who holds no other module', () => {
     expect(navigationOf({ my_grants: { dashboard: 'view' } }, registry)).toEqual({
+      pinned: [],
+      listed: ['admin'],
+      hidden: [],
+    })
+    // And nothing at all in a build that has no screen for it.
+    expect(navigationOf({ my_grants: { dashboard: 'view' } }, { tasks: at('tasks') })).toEqual({
       pinned: [],
       listed: [],
       hidden: [],

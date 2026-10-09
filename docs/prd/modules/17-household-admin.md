@@ -194,6 +194,11 @@ None — this module is a consumer of every catalog and a contributor to none.
 | Billing | The payer; other owners see state only |
 | Personal notification categories and quiet hours | Any member — these are personal preferences |
 
+So a client lists household settings for every member, whatever level they hold on it, and a
+level of `none` takes away what `view` unlocks and no screen; a control that changes something is
+drawn for an owner alone (**D-167**). Nothing here is written offline (Sync, above): a client
+asks each change as it is made, and says so where the server could not be reached (**D-170**).
+
 ## Non-goals
 
 - No custom roles, no role builder, no permission templates beyond the four levels.

@@ -56,6 +56,9 @@ const pages: Partial<Record<RouteId, Page>> = {
   deletionCancel: {
     lazy: async () => ({ Component: (await import('../auth/DeletionCancel.tsx')).DeletionCancel }),
   },
+  invitation: {
+    lazy: async () => ({ Component: (await import('../household/Invitation.tsx')).Invitation }),
+  },
 
   account: { lazy: async () => ({ Component: (await import('../account/Account.tsx')).Account }) },
   accountSecurity: {
@@ -75,6 +78,9 @@ const pages: Partial<Record<RouteId, Page>> = {
   accountDelete: {
     lazy: async () => ({ Component: (await import('../account/DeleteAccount.tsx')).DeleteAccount }),
   },
+  householdNew: {
+    lazy: async () => ({ Component: (await import('../household/Create.tsx')).Create }),
+  },
 
   household: {
     lazy: async () => ({
@@ -83,6 +89,38 @@ const pages: Partial<Record<RouteId, Page>> = {
   },
   sync: { lazy: async () => ({ Component: (await import('../sync/Inbox.tsx')).Inbox }) },
   arrange: { lazy: async () => ({ Component: (await import('../shell/Arrange.tsx')).Arrange }) },
+  start: { lazy: async () => ({ Component: (await import('../household/Start.tsx')).Start }) },
+  leave: { lazy: async () => ({ Component: (await import('../household/Leave.tsx')).Leave }) },
+  settings: {
+    lazy: async () => ({
+      Component: (await import('../household/settings/Profile.tsx')).Profile,
+    }),
+  },
+  settingsMembers: {
+    lazy: async () => ({
+      Component: (await import('../household/settings/Members.tsx')).Members,
+    }),
+  },
+  settingsMember: {
+    lazy: async () => ({
+      Component: (await import('../household/settings/Member.tsx')).Member,
+    }),
+  },
+  settingsInvitations: {
+    lazy: async () => ({
+      Component: (await import('../household/settings/Invitations.tsx')).Invitations,
+    }),
+  },
+  settingsInvite: {
+    lazy: async () => ({
+      Component: (await import('../household/settings/Invite.tsx')).Invite,
+    }),
+  },
+  settingsModules: {
+    lazy: async () => ({
+      Component: (await import('../household/settings/Modules.tsx')).Modules,
+    }),
+  },
   module: {
     lazy: async () => ({ Component: (await import('../modules/ModuleRoute.tsx')).ModuleRoute }),
   },

@@ -1,0 +1,63 @@
+/* A member's row in the list of members (C-50): their picture or initials, and beside it one
+   thing under another, their name, what they are, when they joined, what they hold. Nothing in
+   it is a column: the words take what room the picture leaves while there is room for both, and
+   the whole of the row's width under the picture once there is not, which is a phone at 200 %
+   text. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-15);
+  align-items: flex-start;
+  min-width: 0;
+  padding: var(--space-15) 0;
+  border-block-end: 1px solid var(--divider);
+}
+
+.row:last-child {
+  border-block-end: 0;
+}
+
+.text {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: var(--space-05);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* What a member is, in a word, and that they pay: side by side while both fit. */
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+/* A member's picture, the size their initials are drawn at where they have none. */
+.picture {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  object-fit: cover;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+}
+
+/* A household of one: its member's own row, and under it what inviting somebody takes. */
+.alone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* A heading inside the sheet that makes a child profile, under the sheet's own: the size of the
+   words it stands over, and heavier. */
+.subheading {
+  composes: body from '../../styles/type.module.css';
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

@@ -86,3 +86,12 @@
   padding: 0;
   list-style: none;
 }
+
+/* The way past the first run's question: a link of a row's height, under what it offers. */
+.skip {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: var(--dens-row-min);
+  overflow-wrap: anywhere;
+}

@@ -2,7 +2,9 @@
 // starts itself (playwright.config.ts) on the development services (`pnpm run up`,
 // `pnpm run db:setup`, `pnpm run up:sync`), behind the preview server's proxy, so that a page is
 // same-origin with it as a deployment's is. This file is how a test makes what it needs there:
-// a person, their session, a household, the link an email carried, a second step's code.
+// a person, their session, a household, the link an email carried, a second step's code, and
+// who is in a household (plan item 26): an invitation, a member who joined by one, another
+// owner, a child profile.
 //
 // Each test is a network of its own to the server. Registering, signing in and asking for an
 // email are limited by the client's network (PRD 02 §9), and every test comes from this machine:
@@ -10,7 +12,7 @@
 // test spends another's limits, in one run or across runs against the same database.
 import { createHmac, randomBytes, randomInt } from 'node:crypto'
 import { crc32, deflateSync } from 'node:zlib'
-import { newId } from '@household/api'
+import { entityTag, newId } from '@household/api'
 import type { Page } from '@playwright/test'
 import { csrfCookie } from '../src/api/names.ts'
 
@@ -55,10 +57,17 @@ export interface Answer {
 /**
  * Asks the API from the page, as the app's own client does: same-origin, with the browser's
  * cookies, and the CSRF token with an unsafe request. The page must be at the app's origin.
+ * `headers` are what the request says beside those: the version a change is held against.
  */
-export function call(page: Page, method: string, path: string, body?: unknown): Promise<Answer> {
+export function call(
+  page: Page,
+  method: string,
+  path: string,
+  body?: unknown,
+  headers: Readonly<Record<string, string>> = {},
+): Promise<Answer> {
   return page.evaluate(
-    async ([cookie, method, path, body]) => {
+    async ([cookie, method, path, body, headers]) => {
       const token = document.cookie
         .split(';')
         .map((pair) => pair.trim())
@@ -67,6 +76,7 @@ export function call(page: Page, method: string, path: string, body?: unknown): 
       const response = await fetch(`/api/v1${path}`, {
         method,
         headers: {
+          ...headers,
           ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
           ...(token === undefined || method === 'GET' ? {} : { 'X-CSRF-Token': token }),
         },
@@ -81,7 +91,7 @@ export function call(page: Page, method: string, path: string, body?: unknown): 
       }
       return { status: response.status, body: parsed }
     },
-    [csrfCookie, method, path, body] as const,
+    [csrfCookie, method, path, body, headers] as const,
   )
 }
 
@@ -101,8 +111,8 @@ interface Message {
 
 /**
  * The token of the link the newest email to `email` carries to the web client's `route`
- * (`verify-email`, `reset/set`, `account/deletion/cancel`), waited for: the API sends its mail
- * after it has answered.
+ * (`verify-email`, `reset/set`, `account/deletion/cancel`, `invitation`, `graduate`), waited
+ * for: the API sends its mail after it has answered.
  */
 export async function linkToken(email: string, route: string): Promise<string> {
   // The route is looked for as it is written, and no pattern is made of it: only what follows
@@ -128,8 +138,12 @@ export async function linkToken(email: string, route: string): Promise<string> {
   throw new Error(`no email to ${email} carries a link to ${route}`)
 }
 
-/** Registers `who` and confirms their address, as the link in their email would. */
-export async function register(page: Page, who: Person): Promise<void> {
+/**
+ * Registers `who` and leaves their address unconfirmed: the link their email carried is not
+ * opened. Such an account signs in and makes a household like any other, and waits for a proven
+ * address where trust is extended beyond it: joining a household, inviting into one (FR-ID1).
+ */
+export async function registerUnverified(page: Page, who: Person): Promise<void> {
   expecting(
     await call(page, 'POST', '/auth/register', {
       email: who.email,
@@ -140,6 +154,11 @@ export async function register(page: Page, who: Person): Promise<void> {
     202,
     'registering',
   )
+}
+
+/** Registers `who` and confirms their address, as the link in their email would. */
+export async function register(page: Page, who: Person): Promise<void> {
+  await registerUnverified(page, who)
   const token = await linkToken(who.email, 'verify-email')
   expecting(await call(page, 'POST', '/auth/verify-email', { token }), 204, 'verifying')
 }
@@ -157,6 +176,25 @@ export async function signIn(page: Page, who: Person): Promise<void> {
   )
 }
 
+/**
+ * Signs the page's browser out, at the server: the session its cookies were is ended. What the
+ * app kept in this browser of the member it drew is not removed, as its own way out removes it
+ * (the account's *Sign out*), so this is for a browser that has not drawn the app as them: one
+ * that is still making what a test needs. A test that changes who is at the screen signs out
+ * there, as a member does.
+ */
+export async function signOut(page: Page): Promise<void> {
+  expecting(await call(page, 'POST', '/auth/logout'), 204, 'signing out')
+}
+
+/** The id of the person the page's browser is signed in as. */
+export async function whoAmI(page: Page): Promise<string> {
+  const { body } = expecting(await call(page, 'GET', '/me'), 200, 'reading the account')
+  const { id } = body as { readonly id?: unknown }
+  if (typeof id !== 'string') throw new Error('the account has no id')
+  return id
+}
+
 /** Makes a household the signed-in person owns, and returns its id. */
 export async function createHousehold(page: Page, name = 'Dům č. 7'): Promise<string> {
   const id = newId()
@@ -171,6 +209,110 @@ export async function createHousehold(page: Page, name = 'Dům č. 7'): Promise<
     }),
     201,
     'creating a household',
+  )
+  return id
+}
+
+/** A level on a module, as the contract names it. */
+export type Level = 'none' | 'view' | 'contribute' | 'manage'
+
+/**
+ * Invites `email` to `household` by email, as the signed-in person, who owns it and whose own
+ * address is verified: as a member with a member's defaults and `grants` over them, `message`
+ * in the email. It answers the token of the link the email carried, which the page that link
+ * opens reads from its address's fragment.
+ */
+export async function invite(
+  page: Page,
+  household: string,
+  email: string,
+  { grants, message }: { readonly grants?: Readonly<Record<string, Level>>; message?: string } = {},
+): Promise<string> {
+  expecting(
+    await call(page, 'POST', `/households/${household}/invitations`, {
+      id: newId(),
+      kind: 'email',
+      role: 'member',
+      email,
+      ...(grants === undefined ? {} : { grants }),
+      ...(message === undefined ? {} : { message }),
+    }),
+    201,
+    'inviting by email',
+  )
+  return linkToken(email, 'invitation')
+}
+
+/** Joins the household the invitation `token` opens, as the signed-in person. */
+export async function acceptInvitation(page: Page, token: string): Promise<void> {
+  expecting(await call(page, 'POST', `/me/invitations/${token}/accept`), 200, 'joining')
+}
+
+/**
+ * Brings `who`, whom nobody has registered, into `household` as a member, and returns their id:
+ * invited by `owner` with a member's defaults and `grants` over them, registered, and joined by
+ * the link their email carried. The page's browser is signed in as `owner` before and after, and
+ * has not drawn the app as anybody yet (`signOut`).
+ */
+export async function join(
+  page: Page,
+  owner: Person,
+  household: string,
+  who: Person,
+  grants?: Readonly<Record<string, Level>>,
+): Promise<string> {
+  const token = await invite(page, household, who.email, grants === undefined ? {} : { grants })
+  await signOut(page)
+  await register(page, who)
+  await signIn(page, who)
+  await acceptInvitation(page, token)
+  const id = await whoAmI(page)
+  await signOut(page)
+  await signIn(page, owner)
+  return id
+}
+
+/**
+ * Changes what `path` names under the version it has now, behind the back of a page that read
+ * it before, as another owner's device would: it is read for its version, and `change` is sent
+ * with that as its `If-Match`. A save from the page is then held against a version that has
+ * passed.
+ */
+export async function changeMeanwhile(page: Page, path: string, change: unknown): Promise<void> {
+  const { body } = expecting(await call(page, 'GET', path), 200, 'reading what is to be changed')
+  const { version } = body as { readonly version?: unknown }
+  if (typeof version !== 'number') throw new Error(`${path} has no version`)
+  expecting(
+    await call(page, 'PATCH', path, change, { 'If-Match': entityTag(version) }),
+    200,
+    'changing it meanwhile',
+  )
+}
+
+/** Makes `user`, a member of `household`, an owner of it too, as the signed-in person, who is one. */
+export async function makeOwner(page: Page, household: string, user: string): Promise<void> {
+  expecting(
+    await call(page, 'POST', `/households/${household}/ownership/transfer`, { user_id: user }),
+    200,
+    'making an owner',
+  )
+}
+
+/**
+ * Makes a child profile in `household`, as the signed-in person, who owns it, and returns its
+ * id: a name and a PIN, a child's defaults, and no address, which a child profile has none of.
+ */
+export async function createChild(page: Page, household: string, name = 'Ádík'): Promise<string> {
+  const id = newId()
+  expecting(
+    await call(page, 'POST', `/households/${household}/children`, {
+      id,
+      display_name: name,
+      // Six digits drawn at random: no test signs in with it.
+      pin: String(randomInt(0, 1_000_000)).padStart(6, '0'),
+    }),
+    201,
+    'making a child profile',
   )
   return id
 }
