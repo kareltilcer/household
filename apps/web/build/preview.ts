@@ -16,3 +16,15 @@ export const api = { host: '127.0.0.1', port: 8080 } as const
 
 /** The API's origin, as a proxy and a test reach it. */
 export const apiOrigin = `http://${api.host}:${String(api.port)}`
+
+/**
+ * Where the end-to-end suite's stand-in for Stripe listens (server/cmd/stripe-standin): the
+ * loopback, which is all it listens on, at the port beside stripe-mock's (docker-compose.yml).
+ * Stripe's API is under `/v1` there, and what drives the stand-in, the payment form's
+ * confirmation and what Stripe does on its own, under `/_standin`. The suite starts it
+ * (playwright.config.ts) and asks it from Node (e2e/stack.ts): no page reaches it.
+ */
+export const stripeStandIn = { host: '127.0.0.1', port: 12112 } as const
+
+/** The stand-in's origin, as the suite's API and its tests reach it. */
+export const stripeStandInOrigin = `http://${stripeStandIn.host}:${String(stripeStandIn.port)}`

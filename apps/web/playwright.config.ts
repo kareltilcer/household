@@ -15,7 +15,13 @@
 // (docs/runbooks/billing.md).
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
-import { api, apiOrigin, previewOrigin } from './build/preview.ts'
+import {
+  api,
+  apiOrigin,
+  previewOrigin,
+  stripeStandIn,
+  stripeStandInOrigin,
+} from './build/preview.ts'
 import { apiPath } from './src/api/names.ts'
 import { devPagesMode } from './src/app/paths.ts'
 
@@ -31,15 +37,6 @@ const apiAddress = process.env.HOUSEHOLD_E2E_API_ADDR ?? `${api.host}:${String(a
 
 /** The server's sources, which both of its commands the suite starts are run from. */
 const server = fileURLToPath(new URL('../../server', import.meta.url))
-
-/**
- * Where the stand-in for Stripe listens: the loopback, which is all it listens on, at the port
- * beside stripe-mock's (docker-compose.yml). Stripe's API is under `/v1` there, and what drives
- * the stand-in, the payment form's confirmation and what Stripe does on its own, under
- * `/_standin` (server/cmd/stripe-standin/control.go).
- */
-const stripeStandIn = { host: '127.0.0.1', port: 12112 } as const
-const stripeStandInOrigin = `http://${stripeStandIn.host}:${String(stripeStandIn.port)}`
 
 /**
  * The plans of the stand-in's account, as `go run ./cmd/stripe-standin prices` prints them from
