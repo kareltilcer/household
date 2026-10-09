@@ -17,9 +17,17 @@
       "title": "Zákon č. 245/2000 Sb., o státních svátcích, o ostatních svátcích, o významných dnech a o dnech pracovního klidu",
       "url": "https://www.zakonyprolidi.cz/cs/2000-245"
     },
+    "cz-uoou": {
+      "title": "Úřad pro ochranu osobních údajů: Stížnost na správce nebo zpracovatele na porušení předpisů na ochranu osobních údajů. The Office's own site, which names it in Czech and, at /en, in English",
+      "url": "https://uoou.gov.cz/poradna/chci-podat-stiznost-na-spravce-nebo-zpracovatele"
+    },
     "cz-vehicle-operation-act": {
       "title": "Zákon č. 56/2001 Sb., o podmínkách provozu vozidel na pozemních komunikacích: technical inspection (technická prohlídka) at a stanice technické kontroly, and emission measurement",
       "url": "https://www.zakonyprolidi.cz/cs/2001-56"
+    },
+    "de-bfdi": {
+      "title": "Der Bundesbeauftragte für den Datenschutz und die Informationsfreiheit: Kontakt zu den Landesbehörden, the supervisory authorities of the Länder. The federal authority's own site, which names it in German and, under /EN/, in English",
+      "url": "https://www.bfdi.bund.de/DE/Service/Anschriften/Laender/Laender-node.html"
     },
     "de-holidays": {
       "title": "Bundesministerium des Innern: Nationale Feiertage. Public holidays in Germany are set by each Land's Feiertagsgesetz, except the Day of German Unity (Einigungsvertrag, Art. 2 Abs. 2)",
@@ -65,6 +73,10 @@
       "title": "Ustawa z dnia 20 czerwca 1997 r. Prawo o ruchu drogowym, art. 81: badanie techniczne pojazdu",
       "url": "https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU19970980602"
     },
+    "pl-uodo": {
+      "title": "Urząd Ochrony Danych Osobowych: Składanie skarg. The Office's own site; the European Data Protection Board's list of its members names it in English, the Personal Data Protection Office",
+      "url": "https://uodo.gov.pl/pl/492/2464"
+    },
     "prd-documents": {
       "title": "Household PRD, modules/08 — Documents: document types per country, with a lead time per type (D-53)",
       "path": "docs/prd/modules/08-documents.md"
@@ -81,9 +93,17 @@
       "title": "Zákon č. 241/1993 Z. z. o štátnych sviatkoch, dňoch pracovného pokoja a pamätných dňoch",
       "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/1993/241/"
     },
+    "sk-uoou": {
+      "title": "Úrad na ochranu osobných údajov Slovenskej republiky: Konanie o ochrane osobných údajov, with how a proposal to start proceedings is made. The Office's own site, which names it in Slovak and, at /en/, in English",
+      "url": "https://dataprotection.gov.sk/sk/dotknute-osoby/konanie-ochrane-osobnych-udajov/"
+    },
     "sk-vehicle-operation-act": {
       "title": "Zákon č. 106/2018 Z. z. o prevádzke vozidiel v cestnej premávke: technická kontrola (TK) and emisná kontrola (EK)",
       "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2018/106/"
+    },
+    "uk-ico": {
+      "title": "Information Commission (ICO): Make a complaint. The regulator's own site, which says the Information Commissioner's Office became the Information Commission on 30 September 2026 (Data (Use and Access) Act 2025)",
+      "url": "https://ico.org.uk/make-a-complaint/"
     },
     "uk-weights-measures-act": {
       "title": "Weights and Measures Act 1985, Schedule 1: definitions of the imperial units by the metric ones (yard, pound, gallon)",

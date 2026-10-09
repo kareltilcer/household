@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"net/url"
 	"path"
 	"slices"
 	"strconv"
@@ -60,7 +61,8 @@ func (e *Invalid) Error() string {
 //   - a field names a source sources.json lists;
 //   - a text carries every language the server ships (i18n.Locales), which the schema could lag;
 //   - a file is named for its record's key, and holds nothing but JSON records;
-//   - a country's currency is ISO 4217's;
+//   - a country's currency is ISO 4217's, and its supervisory authority's address an https one
+//     with a host;
 //   - a unit's key and CLDR identifier are unique across every dimension, its dimension's base
 //     unit is one of the dimension's and converts to itself, and its counterpart is a unit of the
 //     same dimension in the other system.
@@ -418,6 +420,17 @@ func (r *Reader) checkCountry(file string, c Country) {
 	if _, err := money.Exponent(c.Currency.Value); err != nil {
 		r.Problem(file, "/currency/value", "%s is not an ISO 4217 currency", c.Currency.Value)
 	}
+	r.Localized(file, "/supervisory_authority/name/value", c.SupervisoryAuthority.Name.Value)
+	if address := c.SupervisoryAuthority.URL.Value; !httpsAddress(address) {
+		r.Problem(file, "/supervisory_authority/url/value", "%s is not the https address of a page", address)
+	}
+}
+
+// httpsAddress reports whether address is one a client may link to as it stands: an https URL with
+// a host, carrying no credentials. The schema holds it to its scheme; this, to being an address.
+func httpsAddress(address string) bool {
+	u, err := url.Parse(address)
+	return err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil
 }
 
 // unitAt is a unit, its dimension, and where it is.

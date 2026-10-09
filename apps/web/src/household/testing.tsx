@@ -224,6 +224,10 @@ export const countries: readonly Country[] = [
     holiday_set: 'CZ',
     inspection_label: 'STK',
     document_type_set: 'CZ',
+    supervisory_authority: {
+      name: text('Office for Personal Data Protection', 'Úřad pro ochranu osobních údajů'),
+      url: 'https://uoou.gov.cz/poradna/chci-podat-stiznost-na-spravce-nebo-zpracovatele',
+    },
   },
   {
     code: 'DE',
@@ -236,6 +240,13 @@ export const countries: readonly Country[] = [
     holiday_set: 'DE',
     inspection_label: 'HU/AU',
     document_type_set: 'DE',
+    supervisory_authority: {
+      name: text(
+        'The Federal Commissioner for Data Protection and Freedom of Information',
+        'Der Bundesbeauftragte für den Datenschutz und die Informationsfreiheit',
+      ),
+      url: 'https://www.bfdi.bund.de/DE/Service/Anschriften/Laender/Laender-node.html',
+    },
   },
   {
     code: 'GB',
@@ -248,6 +259,10 @@ export const countries: readonly Country[] = [
     holiday_set: 'GB',
     inspection_label: 'MOT',
     document_type_set: 'GB',
+    supervisory_authority: {
+      name: text('Information Commission', 'Information Commission'),
+      url: 'https://ico.org.uk/make-a-complaint/',
+    },
   },
 ]
 

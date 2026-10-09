@@ -237,8 +237,9 @@ func (s *Service) settle(ctx context.Context, j job, claim uuid.UUID, status, ob
 }
 
 // ready emails j's requester that their export is ready, at their address if it is verified, with a
-// link to where it is listed: the archive's own link is issued to whoever is signed in as them, for
-// minutes, and is in no email.
+// link to where it is listed, the privacy centre for their own and the household's settings for a
+// household's: the archive's own link is issued to whoever is signed in as them, for minutes, and is
+// in no email.
 func (s *Service) ready(ctx context.Context, j job) {
 	var (
 		address  *string
@@ -267,7 +268,7 @@ func (s *Service) ready(ctx context.Context, j job) {
 	}
 	route, kind := "account/privacy", scopeUser
 	if j.household != nil {
-		route, kind = "households/"+j.household.String()+"/exports", scopeHousehold
+		route, kind = "households/"+j.household.String()+"/settings/exports", scopeHousehold
 	}
 	s.cfg.Accounts.SendLink(ctx, *address, locale, emailExportReady, route, "",
 		i18n.Args{"kind": kind, "household": name, "days": int(ArchiveKept / (24 * time.Hour))})

@@ -34,5 +34,25 @@
     "drafted": true,
     "note": "Northern Ireland's MOT is the DVA's, and first falls due later; Vehicles (plan item 81) holds the cadence."
   },
-  "document_type_set": { "value": "gb", "source": "prd-documents", "drafted": true }
+  "document_type_set": { "value": "gb", "source": "prd-documents", "drafted": true },
+  "supervisory_authority": {
+    "name": {
+      "value": {
+        "en": "Information Commission",
+        "cs": "Information Commission",
+        "sk": "Information Commission",
+        "de": "Information Commission",
+        "pl": "Information Commission"
+      },
+      "source": "uk-ico",
+      "drafted": true,
+      "note": "The Information Commissioner's Office became the Information Commission on 30 September 2026 (Data (Use and Access) Act 2025), and says it is still to be known as the ICO, which is what PRD 05 calls it. No other language has an established name for the new body, so each carries the English one."
+    },
+    "url": {
+      "value": "https://ico.org.uk/make-a-complaint/",
+      "source": "uk-ico",
+      "drafted": true,
+      "note": "The ICO's page for every complaint it takes; the one about how an organisation has used personal information is at /make-a-complaint/data-protection-complaints/ below it, which said it was under review when this was drafted."
+    }
+  }
 }

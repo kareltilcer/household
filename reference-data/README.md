@@ -53,6 +53,7 @@ refuses:
 - a source that `sources.json` does not list, and, in the test of these files, a source nothing cites;
 - a file not named for its record;
 - a currency that is not ISO 4217's;
+- a country's supervisory authority whose address is not an `https` one with a host;
 - a unit whose key or CLDR identifier another unit has;
 - a dimension whose base unit is not its own, or does not convert to itself;
 - a counterpart that is not a unit of the same dimension in the other system.

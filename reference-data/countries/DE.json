@@ -28,5 +28,25 @@
     "drafted": true,
     "note": "The Abgasuntersuchung has been part of the Hauptuntersuchung since 2010, but HU/AU is still how it is named, and colloquially TÜV after one of the testing organisations; PRD 13 writes HU/AU (TÜV)."
   },
-  "document_type_set": { "value": "de", "source": "prd-documents", "drafted": true }
+  "document_type_set": { "value": "de", "source": "prd-documents", "drafted": true },
+  "supervisory_authority": {
+    "name": {
+      "value": {
+        "en": "The Federal Commissioner for Data Protection and Freedom of Information",
+        "cs": "Der Bundesbeauftragte für den Datenschutz und die Informationsfreiheit",
+        "sk": "Der Bundesbeauftragte für den Datenschutz und die Informationsfreiheit",
+        "de": "Der Bundesbeauftragte für den Datenschutz und die Informationsfreiheit",
+        "pl": "Der Bundesbeauftragte für den Datenschutz und die Informationsfreiheit"
+      },
+      "source": "de-bfdi",
+      "drafted": true,
+      "note": "The federal authority, the BfDI, as its own site names it in German and in English (bfdi.bund.de/EN). The office is named for its holder, die or der Bundesbeauftragte (BDSG § 8): der since 1 October 2026, so the name changes with the next. Czech, Slovak and Polish have no established name for it, and carry the German one."
+    },
+    "url": {
+      "value": "https://www.bfdi.bund.de/DE/Service/Anschriften/Laender/Laender-node.html",
+      "source": "de-bfdi",
+      "drafted": true,
+      "note": "Germany has a supervisory authority in each Land beside the federal one, and a complaint about a private body goes to a Land's. So the address is not a complaint form but the federal authority's own list of the Länder's authorities: which of them is theirs, a person finds there. The same list is in English under /EN/."
+    }
+  }
 }

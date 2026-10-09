@@ -17,5 +17,25 @@
     "drafted": true,
     "note": "The station's initials name the whole inspection in everyday Czech. Emission measurement is done at the same visit; PRD 13 writes it STK + emissions, and Vehicles (plan item 81) schedules both."
   },
-  "document_type_set": { "value": "cz", "source": "prd-documents", "drafted": true }
+  "document_type_set": { "value": "cz", "source": "prd-documents", "drafted": true },
+  "supervisory_authority": {
+    "name": {
+      "value": {
+        "en": "Office for Personal Data Protection",
+        "cs": "Úřad pro ochranu osobních údajů",
+        "sk": "Úřad pro ochranu osobních údajů",
+        "de": "Úřad pro ochranu osobních údajů",
+        "pl": "Úřad pro ochranu osobních údajů"
+      },
+      "source": "cz-uoou",
+      "drafted": true,
+      "note": "The English is the Office's own (uoou.gov.cz/en). Slovak, German and Polish have no established name for it, and carry the Czech one."
+    },
+    "url": {
+      "value": "https://uoou.gov.cz/poradna/chci-podat-stiznost-na-spravce-nebo-zpracovatele",
+      "source": "cz-uoou",
+      "drafted": true,
+      "note": "The Office's page on a complaint about a controller or a processor: who may make one, what it must say, its form, and how it is sent. In Czech only."
+    }
+  }
 }
