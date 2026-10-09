@@ -94,17 +94,22 @@ function Mounted({
     const unloaded = () => {
       if (!gone) setPhase('unloaded')
     }
-    loadProcessor(key, language).then((processor) => {
-      if (gone) return
-      frame = processor.frame({ secret, kind, appearance: appearanceAt(node) })
-      frame.mount(node, {
-        onReady: () => {
-          if (!gone) setPhase('ready')
-        },
-        onLoadError: unloaded,
+    loadProcessor(key, language)
+      .then((processor) => {
+        if (gone) return
+        frame = processor.frame({ secret, kind, appearance: appearanceAt(node) })
+        frame.mount(node, {
+          onReady: () => {
+            if (!gone) setPhase('ready')
+          },
+          onLoadError: unloaded,
+        })
+        drawn.current = frame
       })
-      drawn.current = frame
-    }, unloaded)
+      // The script that did not come, and the script that came and would not make the form, a
+      // secret or a key it does not take: either is a form that could not be loaded, and is
+      // said, where a skeleton would stand for ever.
+      .catch(unloaded)
     return () => {
       gone = true
       drawn.current = null

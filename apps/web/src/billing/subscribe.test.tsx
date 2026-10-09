@@ -456,6 +456,32 @@ describe('the payment form', () => {
     expect(server.to(subscribing)).toHaveLength(1)
   })
 
+  it('says the same where the script came and would not make the form', async () => {
+    // Stripe.js throws as the form is made for a secret or a key it does not take, which no
+    // event of the form's says: nothing would then take the skeleton's place.
+    vi.mocked(loadProcessor).mockImplementationOnce(() =>
+      Promise.resolve({
+        frame: () => {
+          throw new Error('Invalid value for elements()')
+        },
+      }),
+    )
+    const server = inTrial()
+    server.on(subscribing, () => Response.json(intent('payment')))
+    const { user } = await toPayment(server)
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /^The payment form could not be loaded/,
+    )
+    expect(screen.queryByRole('button', { name: /^Pay / })).not.toBeInTheDocument()
+    expect(standIn.frames).toHaveLength(0)
+    // Begun again, it is made by a script that takes it.
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(
+      await screen.findByRole('button', { name: money('Pay EUR 59.88 for a year') }),
+    ).toBeVisible()
+    expect(server.to(subscribing)).toHaveLength(1)
+  })
+
   it('says the same where the frame itself could not be drawn', async () => {
     standIn.readies = false
     const server = inTrial()
