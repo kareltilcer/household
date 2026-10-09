@@ -158,6 +158,17 @@ export const paths = {
     layout: 'account',
   },
   /**
+   * The privacy centre (A-34): a member's rights over their data, each with its one way, and
+   * their own exports. The server's email that an export of the account's is ready links here.
+   */
+  accountPrivacy: {
+    path: '/account/privacy',
+    example: '/account/privacy',
+    dev: false,
+    layout: 'account',
+    words: ['privacy'],
+  },
+  /**
    * Creating a household (A-22): the first thing a new account does (DD-6), and what a member of
    * some makes another by. It is the account's, there being no household around it yet.
    */
@@ -256,6 +267,82 @@ export const paths = {
     layout: 'household',
     words: ['household'],
   },
+
+  // The settings' other sections (PRD 17 §5 to §8; plan item 27). The server's notifications
+  // and emails link to `settings/storage`, `settings/billing`, `settings/billing/takeover` and
+  // `settings/exports` by these names.
+  /** What the household stores against what its plan includes (C-54). */
+  settingsStorage: {
+    path: `${household}/settings/storage`,
+    example: `${exampleHousehold}/settings/storage`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'storage'],
+  },
+  /** The subscription as its owners read it, and as its payer manages it (A-28, C-55). */
+  settingsBilling: {
+    path: `${household}/settings/billing`,
+    example: `${exampleHousehold}/settings/billing`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'billing'],
+  },
+  /** Subscribing, in the payment processor's own form (A-27). */
+  settingsSubscribe: {
+    path: `${household}/settings/billing/subscribe`,
+    example: `${exampleHousehold}/settings/billing/subscribe`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'billing'],
+  },
+  /** Taking billing over from the payer who offered it (A-29). */
+  settingsTakeover: {
+    path: `${household}/settings/billing/takeover`,
+    example: `${exampleHousehold}/settings/billing/takeover`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'billing'],
+  },
+  /** A copy of the household, a restriction, an owner made, the household deleted (C-56). */
+  settingsData: {
+    path: `${household}/settings/data`,
+    example: `${exampleHousehold}/settings/data`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'privacy'],
+  },
+  /** The exports of the household its reader asked for: asked, made, downloaded (A-35). */
+  settingsExports: {
+    path: `${household}/settings/exports`,
+    example: `${exampleHousehold}/settings/exports`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'privacy'],
+  },
+  /** The reader's own replicas of the household, and what each has (A-32). */
+  settingsSync: {
+    path: `${household}/settings/sync`,
+    example: `${exampleHousehold}/settings/sync`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'health'],
+  },
+  /** A diagnostic bundle, read whole before it is sent (A-33). */
+  settingsDiagnostics: {
+    path: `${household}/settings/sync/diagnostics`,
+    example: `${exampleHousehold}/settings/sync/diagnostics`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'health'],
+  },
+  /** The clients that synced the household, and the version each named (C-57). */
+  settingsClients: {
+    path: `${household}/settings/clients`,
+    example: `${exampleHousehold}/settings/clients`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'health'],
+  },
   /**
    * A module by its name: it leads to where the module opens, for one the member holds and this
    * build has screens for (modules/registry.ts), and opens nothing for any other.
@@ -336,6 +423,15 @@ export const inHousehold = {
   invitations: (householdId: string) => fill(paths.settingsInvitations.path, { householdId }),
   invite: (householdId: string) => fill(paths.settingsInvite.path, { householdId }),
   modules: (householdId: string) => fill(paths.settingsModules.path, { householdId }),
+  storage: (householdId: string) => fill(paths.settingsStorage.path, { householdId }),
+  billing: (householdId: string) => fill(paths.settingsBilling.path, { householdId }),
+  subscribe: (householdId: string) => fill(paths.settingsSubscribe.path, { householdId }),
+  takeover: (householdId: string) => fill(paths.settingsTakeover.path, { householdId }),
+  data: (householdId: string) => fill(paths.settingsData.path, { householdId }),
+  exports: (householdId: string) => fill(paths.settingsExports.path, { householdId }),
+  syncHealth: (householdId: string) => fill(paths.settingsSync.path, { householdId }),
+  diagnostics: (householdId: string) => fill(paths.settingsDiagnostics.path, { householdId }),
+  clients: (householdId: string) => fill(paths.settingsClients.path, { householdId }),
   module: (householdId: string, module: string, rest = '') =>
     fill(paths.module.path, { householdId, module }, rest),
 } as const

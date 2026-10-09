@@ -26,7 +26,17 @@ describe('what every screen of household settings is set in', () => {
       within(navigation)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Household', 'Members', 'Invitations', 'Modules'])
+    ).toEqual([
+      'Household',
+      'Members',
+      'Invitations',
+      'Modules',
+      'Storage',
+      'Billing',
+      'Data',
+      'Sync health',
+      'Apps and versions',
+    ])
     expect(within(navigation).getByRole('link', { name: 'Members' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -74,7 +84,17 @@ describe('what every screen of household settings is set in', () => {
       within(navigation)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Household', 'Members', 'Modules'])
+    ).toEqual(['Household', 'Members', 'Modules', 'Data', 'Sync health'])
+  })
+
+  it('lists the storage picture for a member who holds view on them, and neither billing nor the clients, which are an owner’s', async () => {
+    open(inHousehold.settings(home), createServer(accountOf(petr)))
+    const navigation = await sections()
+    expect(
+      within(navigation)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Household', 'Members', 'Invitations', 'Modules', 'Storage', 'Data', 'Sync health'])
   })
 
   it('says that a read-only household changes nothing, to its owner too', async () => {

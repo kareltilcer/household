@@ -7,8 +7,10 @@
 //
 // Every member may open these screens, whatever they hold on household settings (D-167): the
 // profile, the members with what each holds, and the modules are every member's to read. What
-// `view` on it unlocks is the invitations, which are listed for those who hold it and are
-// absent from this navigation for those who do not. Every change is an owner's, in a household
+// `view` on it unlocks is the invitations and the storage picture, which are listed for those who
+// hold it and are absent from this navigation for those who do not. Billing and the clients are
+// an owner's to read and are listed for nobody else; the household's data and the reader's own
+// sync health are every member's (plan item 27). Every change is an owner's, in a household
 // that takes writes, and is made on the server or not at all (data.ts): a control that changes
 // something is drawn for a member who may use it, and for nobody else.
 import type { ReactNode } from 'react'
@@ -34,6 +36,8 @@ export interface Standing {
   readonly changes: boolean
   /** Whether the invitations are theirs to read: at least `view` on household settings. */
   readonly invitations: boolean
+  /** Whether the storage picture is theirs to read: the same level unlocks it (D-167). */
+  readonly storage: boolean
 }
 
 export function useStanding(): Standing {
@@ -41,11 +45,13 @@ export function useStanding(): Standing {
   const owner = household.my_role === 'owner'
   const taken = writes(household)
   const level = household.my_grants?.admin
+  const sees = level !== undefined && level !== 'none'
   return {
     owner,
     writes: taken,
     changes: owner && taken,
-    invitations: level !== undefined && level !== 'none',
+    invitations: sees,
+    storage: sees,
   }
 }
 
@@ -70,6 +76,17 @@ function SettingsNavigation() {
           ? link(inHousehold.invitations(household.id), t('household.settings.invitations.title'))
           : null}
         {link(inHousehold.modules(household.id), t('household.settings.modules.title'))}
+        {standing.storage
+          ? link(inHousehold.storage(household.id), t('household.settings.storage.title'))
+          : null}
+        {standing.owner
+          ? link(inHousehold.billing(household.id), t('household.settings.billing.title'))
+          : null}
+        {link(inHousehold.data(household.id), t('household.settings.data.title'))}
+        {link(inHousehold.syncHealth(household.id), t('household.settings.sync.title'))}
+        {standing.owner
+          ? link(inHousehold.clients(household.id), t('household.settings.clients.title'))
+          : null}
       </ul>
     </nav>
   )

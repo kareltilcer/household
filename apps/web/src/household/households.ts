@@ -90,6 +90,19 @@ export function moduleStatesKey(household: string) {
   return [...householdKey(household), 'modules'] as const
 }
 
+/**
+ * A household's subscription (`getBillingSubscription`), under the household's own key too: what
+ * moves the household's entitlement moves this, and the two are read again together.
+ */
+export function subscriptionKey(household: string) {
+  return [...householdKey(household), 'billing', 'subscription'] as const
+}
+
+/** The month's storage as it will be billed (`getBillingUsage`), under the household's own key. */
+export function usageKey(household: string) {
+  return [...householdKey(household), 'billing', 'usage'] as const
+}
+
 /** The households the member belongs to, a `suspended` one among them, in the server's order. */
 export function useHouseholds(): UseQueryResult<HouseholdSummary[]> {
   const api = useApi()

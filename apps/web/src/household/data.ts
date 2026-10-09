@@ -21,6 +21,8 @@ import {
   invitationsKey,
   membersKey,
   moduleStatesKey,
+  subscriptionKey,
+  usageKey,
   type Household,
   type ModuleKey,
 } from './households.ts'
@@ -29,6 +31,8 @@ export type Membership = components['schemas']['Membership']
 export type Invitation = components['schemas']['Invitation']
 export type InvitationForInvitee = components['schemas']['InvitationForInvitee']
 export type ModuleState = components['schemas']['ModuleState']
+export type Subscription = components['schemas']['Subscription']
+export type UsageSummary = components['schemas']['UsageSummary']
 export type Country = components['schemas']['Country']
 export type LocalizedText = components['schemas']['LocalizedText']
 
@@ -118,6 +122,57 @@ export function useOff(household: string): ReadonlySet<ModuleKey> {
       ),
     [states],
   )
+}
+
+/**
+ * The household's subscription: the state it leaves the household in, what it pays or would
+ * (`plans`), who pays, and an offer of billing while one is open. An owner's to read: a member
+ * and a child profile are answered `404`, billing being no part of their app (FR-BI5), so a
+ * screen that every member opens asks only where its reader is an owner (`enabled`).
+ */
+export function subscriptionQuery(api: ApiClient, household: string) {
+  return queryOptions({
+    queryKey: subscriptionKey(household),
+    queryFn: async ({ signal }) =>
+      unwrap(
+        await api.GET('/households/{household_id}/billing/subscription', {
+          params: { path: { household_id: household } },
+          signal,
+        }),
+      ),
+  })
+}
+
+export function useSubscription(
+  household: string,
+  { enabled = true }: { readonly enabled?: boolean } = {},
+): UseQueryResult<Subscription> {
+  return useQuery({ ...subscriptionQuery(useApi(), household), enabled })
+}
+
+/**
+ * The calendar month's storage as it stands and as it will be billed: the month so far, its
+ * projection, the blocks and the charge they come to (FR-BI4). An owner's to read, as the
+ * subscription is.
+ */
+export function usageQuery(api: ApiClient, household: string) {
+  return queryOptions({
+    queryKey: usageKey(household),
+    queryFn: async ({ signal }) =>
+      unwrap(
+        await api.GET('/households/{household_id}/billing/usage', {
+          params: { path: { household_id: household } },
+          signal,
+        }),
+      ),
+  })
+}
+
+export function useUsage(
+  household: string,
+  { enabled = true }: { readonly enabled?: boolean } = {},
+): UseQueryResult<UsageSummary> {
+  return useQuery({ ...usageQuery(useApi(), household), enabled })
 }
 
 /** The countries Household has a profile of: the ones a household can be set in. */

@@ -64,6 +64,7 @@ export function AccountNavigation() {
         <NavLink to={paths.accountSecurity.path}>{t('account.nav.security')}</NavLink>
         <NavLink to={paths.accountDevices.path}>{t('account.nav.devices')}</NavLink>
         <NavLink to={paths.accountNotifications.path}>{t('account.nav.notifications')}</NavLink>
+        <NavLink to={paths.accountPrivacy.path}>{t('account.nav.privacy')}</NavLink>
       </div>
       <div className={styles.foot}>
         <SignOut />

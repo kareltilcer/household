@@ -80,6 +80,9 @@ const pages: Partial<Record<RouteId, Page>> = {
   accountDelete: {
     lazy: async () => ({ Component: (await import('../account/DeleteAccount.tsx')).DeleteAccount }),
   },
+  accountPrivacy: {
+    lazy: async () => ({ Component: (await import('../privacy/Privacy.tsx')).Privacy }),
+  },
   householdNew: {
     lazy: async () => ({ Component: (await import('../household/Create.tsx')).Create }),
   },
@@ -122,6 +125,33 @@ const pages: Partial<Record<RouteId, Page>> = {
     lazy: async () => ({
       Component: (await import('../household/settings/Modules.tsx')).Modules,
     }),
+  },
+  settingsStorage: {
+    lazy: async () => ({ Component: (await import('../storage/Storage.tsx')).Storage }),
+  },
+  settingsBilling: {
+    lazy: async () => ({ Component: (await import('../billing/Billing.tsx')).Billing }),
+  },
+  settingsSubscribe: {
+    lazy: async () => ({ Component: (await import('../billing/Subscribe.tsx')).Subscribe }),
+  },
+  settingsTakeover: {
+    lazy: async () => ({ Component: (await import('../billing/Takeover.tsx')).Takeover }),
+  },
+  settingsData: {
+    lazy: async () => ({ Component: (await import('../privacy/Data.tsx')).Data }),
+  },
+  settingsExports: {
+    lazy: async () => ({ Component: (await import('../privacy/Exports.tsx')).Exports }),
+  },
+  settingsSync: {
+    lazy: async () => ({ Component: (await import('../health/SyncHealth.tsx')).SyncHealth }),
+  },
+  settingsDiagnostics: {
+    lazy: async () => ({ Component: (await import('../health/Diagnostics.tsx')).Diagnostics }),
+  },
+  settingsClients: {
+    lazy: async () => ({ Component: (await import('../health/Clients.tsx')).Clients }),
   },
   module: {
     lazy: async () => ({ Component: (await import('../modules/ModuleRoute.tsx')).ModuleRoute }),

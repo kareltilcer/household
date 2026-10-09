@@ -29,8 +29,8 @@ export const parts = {
   household: ['household'],
   billing: ['billing'],
   storage: ['storage'],
-  data: ['data'],
-  privacy: ['privacy'],
+  // A household's data and a member's own are one part: the screens of both show an export.
+  privacy: ['data', 'privacy'],
   health: ['health', 'clients'],
 } as const satisfies Readonly<Record<string, readonly string[]>>
 
