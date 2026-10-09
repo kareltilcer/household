@@ -77,6 +77,38 @@ const signedIn: Credential = {
   renew: () => Promise.resolve(),
 }
 
+/** A credential each renewal replaces, token-0 by token-1 and so on, and how often it was renewed. */
+function renewable(): { credential: Credential; renewals: () => number } {
+  let token = 0
+  return {
+    credential: {
+      current: () => Promise.resolve(`token-${String(token)}`),
+      renew: () => {
+        token++
+        return Promise.resolve()
+      },
+    },
+    renewals: () => token,
+  }
+}
+
+/**
+ * A route that answers as answer does a request carrying the credential accepts names, and refuses
+ * any other 401, as the API refuses a credential that has lapsed; carried is what each request
+ * carried, in order.
+ */
+function admitting(accepts: () => string, answer: Route): { route: Route; carried: string[] } {
+  const carried: string[] = []
+  const route: Route = (url, init) => {
+    const bearer = new Headers(init?.headers).get('authorization') ?? ''
+    carried.push(bearer)
+    return bearer === `Bearer ${accepts()}`
+      ? answer(url, init)
+      : json(401, { code: 'unauthenticated' })
+  }
+  return { route, carried }
+}
+
 async function open(
   options: {
     readonly dir?: string
@@ -977,6 +1009,110 @@ describe('a replica', waits, () => {
     // It wipes itself outside the upload that found the revocation, and then says so.
     await eventually(() => revoked)
     expect(revoked).toBe(true)
+  })
+
+  it("renews the credential its request for PowerSync's credentials is refused with, and asks once more", async () => {
+    const { credential, renewals } = renewable()
+    let accepted = 'token-1'
+    const theirs = {
+      endpoint: 'https://sync.test',
+      token: 'theirs',
+      expires_at: '2026-10-02T10:05:00Z',
+    }
+    const { route, carried } = admitting(
+      () => accepted,
+      () => json(200, theirs),
+    )
+    const { replica } = await open({
+      fetch: routes({ '/sync/credentials': route }).fetch,
+      credential,
+    })
+    // What PowerSync is handed to ask with, asked here as it asks: no PowerSync is there to connect to.
+    const connect = vi.spyOn(replica.db, 'connect').mockResolvedValue()
+    await replica.connect()
+    const connector = connect.mock.calls[0]?.[0]
+    expect(await connector?.fetchCredentials()).toEqual({
+      endpoint: theirs.endpoint,
+      token: theirs.token,
+      expiresAt: new Date(theirs.expires_at),
+    })
+    expect(carried).toEqual(['Bearer token-0', 'Bearer token-1'])
+    expect(renewals()).toBe(1)
+    // Refused with the credential it renewed as well, it asks no third time: PowerSync is told, and
+    // asks again in its own time.
+    accepted = 'none'
+    await expect(connector?.fetchCredentials()).rejects.toThrow('the sync credentials: 401')
+    expect(carried.slice(2)).toEqual(['Bearer token-1', 'Bearer token-2'])
+    expect(renewals()).toBe(2)
+  })
+
+  it('renews the credential its report is refused with, and sends the report once more', async () => {
+    const { credential, renewals } = renewable()
+    let accepted = 'token-1'
+    const verdict = { matched: true, resnapshot_required: false, entries: [] }
+    const reports: string[] = []
+    const { route, carried } = admitting(
+      () => accepted,
+      () => json(200, verdict),
+    )
+    const { fetch } = routes({
+      '/sync/digest': (url, init) => {
+        reports.push(bodyOf(init))
+        return route(url, init)
+      },
+    })
+    const { replica } = await open({ fetch, credential })
+    expect(await replica.report()).toEqual(verdict)
+    expect(carried).toEqual(['Bearer token-0', 'Bearer token-1'])
+    expect(renewals()).toBe(1)
+    // The report it was refused, sent again as it was.
+    expect(reports[0]).toContain(await replica.id())
+    expect(reports[1]).toBe(reports[0])
+    // Refused with the credential it renewed as well, it has no verdict, and sends no third time.
+    accepted = 'none'
+    expect(await replica.report()).toBeNull()
+    expect(carried.slice(2)).toEqual(['Bearer token-1', 'Bearer token-2'])
+    expect(renewals()).toBe(2)
+  })
+
+  it('renews the credential a file is refused with, and sends the file at the next run', async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    const { credential, renewals } = renewable()
+    const { route, carried } = admitting(
+      () => 'token-1',
+      () => json(201, {}),
+    )
+    const { replica } = await open({
+      fetch: routes({ '/content': route }).fetch,
+      credential,
+      storage,
+    })
+    const file = {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'r.pdf',
+    }
+    const [receipt, scan] = [newId(), newId()]
+    for (const id of [receipt, scan]) {
+      await arrive(replica, 'items', id, { household_id: household, title: 'Paper', version: 1 })
+      await replica.attach('items', id, file)
+    }
+    await replica.attachments().upload()
+    // The run ends at the refusal, the file behind it unsent: it would carry the same credential.
+    expect(carried).toEqual(['Bearer token-0'])
+    expect(renewals()).toBe(1)
+    // Both wait, bytes and all, and no try of the file is counted: what was refused is the credential.
+    const waiting = await replica.attachments().list()
+    expect(waiting).toMatchObject([
+      { id: receipt, status: 'pending', attempts: 0, code: null },
+      { id: scan, status: 'pending', attempts: 0, code: null },
+    ])
+    expect(waiting.map((a) => existsSync(a.local_uri))).toEqual([true, true])
+    await replica.attachments().upload()
+    expect(carried.slice(1)).toEqual(['Bearer token-1', 'Bearer token-1'])
+    expect(renewals()).toBe(1)
+    expect(await replica.attachments().list()).toEqual([])
   })
 
   it('uploads a file once the server holds its row, and keeps a refusal for the member (D-25)', async () => {
