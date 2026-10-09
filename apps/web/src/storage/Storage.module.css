@@ -1,0 +1,134 @@
+/* The storage picture (C-54): its sections one under another, in the settings' one column.
+   Nothing in it has a width of its own: a row is its words and its figure, which wrap where the
+   window is narrower than the two, and a drawn share is as wide as the row it stands in. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* A share of a whole, drawn under the figure that says it: decoration, its width an attribute of
+   the drawing and never a style. The series colour is tested against the well it lies in. */
+.share {
+  display: block;
+  width: 100%;
+  height: var(--space-1);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+}
+
+.well {
+  fill: var(--surface-sunken);
+}
+
+.held {
+  fill: var(--chart-1);
+}
+
+/* A line of a split, or one of the largest items: its glyph where it has one, and beside it the
+   name with its figure, the share drawn under them, and what else is said of it. */
+.row {
+  display: flex;
+  gap: var(--space-15);
+  align-items: flex-start;
+  min-width: 0;
+  min-height: var(--dens-row-min);
+  padding: var(--dens-pad-y) var(--dens-pad-x);
+  border-block-end: 1px solid var(--dens-rule);
+}
+
+.row:last-child {
+  border-block-end: 0;
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.about {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+/* The name at the start and the figure at the end while both fit, and one under the other when
+   they do not. */
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-15);
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+/* Who a line is of, and beside the name that they have left. */
+.whom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.figure {
+  composes: num from '../styles/type.module.css';
+  white-space: nowrap;
+}
+
+.detail {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The largest items, in their order. */
+.ranked {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The trend: a plot on a raised ground, which the series colour and the axis are tested
+   against, and under it the sentences that say what it shows. */
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-15);
+  min-width: 0;
+  padding: var(--space-15);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+/* As wide as its ground and as tall as a chart's plot is (ui/charts): the columns are drawn in
+   the plot's own units and stretched to it. */
+.plot {
+  display: block;
+  width: 100%;
+  height: var(--space-10);
+  border-block-end: 1px solid var(--chart-axis);
+}
+
+.column {
+  fill: var(--chart-1);
+}
+
+.says {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
