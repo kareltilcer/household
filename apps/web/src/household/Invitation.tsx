@@ -14,7 +14,8 @@
 // The token is in the link's fragment, read once and taken out of the address (auth/fragment.ts),
 // and held in this page's memory while its visitor signs in (invitationToken.ts). The read is
 // kept out of this browser's stored cache and out of the page's own once the page is left: its
-// key holds the token. A visitor is sent to sign in with this address held for them
+// key holds the token. It holds the arrival the screen is drawn for as well, so that a screen
+// begun again reads for itself. A visitor is sent to sign in with this address held for them
 // (session/destination.ts) and comes back to the invitation they were reading. A page that is
 // loaded again holds no token, as one is on the way back from a provider's sign-in: it says so,
 // and that the link is to be opened again.
@@ -151,9 +152,11 @@ function Offer({
 interface OpenedProps {
   /** The token the link that reached the page last carried, or none. */
   readonly carried: string
+  /** Which arrival the screen is drawn for (auth/fragment.ts): its read is filed under it. */
+  readonly arrival: number
 }
 
-function Opened({ carried }: OpenedProps) {
+function Opened({ carried, arrival }: OpenedProps) {
   const t = useTranslate()
   const api = useApi()
   const queries = useQueryClient()
@@ -217,7 +220,12 @@ function Opened({ carried }: OpenedProps) {
   // The invitation as whoever holds its token is shown it, signed in or not, and read again each
   // time the page is looked at again: it may have been withdrawn meanwhile.
   const read = useQuery({
-    queryKey: ['invitation', token],
+    // Under the arrival as under the token. A screen begun again for the link the page read
+    // already is drawn in the commit the one before it leaves in: that one's entry is never
+    // left with nobody drawing it, and stays whatever `gcTime` says. Found there, it would be
+    // drawn as this screen's own: an invitation declined a moment ago with both its answers,
+    // for as long as the server takes to say otherwise, or an end it is not asked about again.
+    queryKey: ['invitation', token, arrival],
     queryFn: async ({ signal }) =>
       unwrap(await api.GET('/me/invitations/{token}', { params: { path: { token } }, signal })),
     // The key holds the token, which is half a credential: the answer is kept out of this
@@ -567,5 +575,5 @@ function Opened({ carried }: OpenedProps) {
  */
 export function Invitation() {
   const { arrival, fragment } = useFragment()
-  return <Opened key={arrival} carried={fragment.get('token') ?? ''} />
+  return <Opened key={arrival} carried={fragment.get('token') ?? ''} arrival={arrival} />
 }

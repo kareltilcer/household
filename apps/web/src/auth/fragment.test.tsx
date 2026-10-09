@@ -79,7 +79,7 @@ describe('what arrives where its page is drawn already', () => {
     expect(backend.to('POST /auth/password-reset/confirm')[0]?.body).toMatchObject({ token: 'r2' })
   })
 
-  it('is kept nowhere but in the page: no storage holds it, before or after it is read', async () => {
+  it('is kept nowhere but in the page: no storage holds it once it is read', async () => {
     openInBrowser(paths.graduate.path)
     await screen.findByRole('heading', { level: 1, name: 'This link doesn’t open anything' })
     window.location.hash = 'token=g-arrived'

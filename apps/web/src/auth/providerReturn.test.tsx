@@ -180,6 +180,9 @@ describe('a return from a provider, to sign in', () => {
     expect(screen.getByRole('link', { name: 'Start again' })).toBeInTheDocument()
   })
 
+  // A browser changes only a fragment under a page, and loads an address whose query changed:
+  // a query arrives where its page is drawn by the app's own router alone. The hook counts
+  // both, and both are held to it.
   it.each([
     ['Google’s, in the query', 'google' as const, '/sign-in/google?code=c1&state=s1'],
     ['Apple’s, in the fragment', 'apple' as const, '/sign-in/apple#code=c1&state=s1'],

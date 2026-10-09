@@ -2,13 +2,13 @@
 // that is on the link's page, or taken from a bookmark there. The browser loads nothing and only
 // changes the fragment under the page, so the page is begun again for what arrived
 // (src/auth/fragment.ts). A unit harness goes there by its router; what a browser does with an
-// address, only a browser shows, and every other spec opens a link from another document, as a
-// mail client does.
+// address, only a browser shows, and the other specs open a link from another document, as a
+// mail client does, but for the invitation's own, which household.spec.ts opens this way too.
 import type { Page } from '@playwright/test'
 import { paths } from '../src/app/paths.ts'
 import { buildFile } from '../src/update/build.ts'
 import { expect, open, test } from './fixtures.ts'
-import { call, linkToken, person } from './stack.ts'
+import { linkToken, person, registerUnverified } from './stack.ts'
 
 /** The page's one title, which a screen is known by. */
 function title(page: Page, name: string) {
@@ -33,13 +33,7 @@ test('a link opened in a tab that is on its page already is the one the page rea
   // Somebody who registered, and has not opened the link in their email yet.
   const who = person()
   await page.goto(buildFile)
-  const registered = await call(page, 'POST', '/auth/register', {
-    email: who.email,
-    password: who.password,
-    display_name: who.name,
-    locale: 'en',
-  })
-  expect(registered.status).toBe(202)
+  await registerUnverified(page, who)
   const link = `${paths.verifyEmail.path}#token=${await linkToken(who.email, 'verify-email')}`
 
   let asked = 0

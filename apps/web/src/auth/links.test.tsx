@@ -182,7 +182,7 @@ describe('the link a verification email carries', () => {
       expect(backend.to(verify)).toHaveLength(4)
     })
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Your email is verified' }),
+      await screen.findByRole('heading', { level: 1, name: 'Your email is verified' }),
     ).toBeInTheDocument()
     expect(backend.to(verify).map((request) => request.body)).toEqual([
       { token: 't1' },
