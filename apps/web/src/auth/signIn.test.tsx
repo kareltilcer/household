@@ -313,6 +313,37 @@ describe('the providers on the sign-in screen', () => {
     expect(vi.mocked(startProvider).mock.calls.length - before).toBe(2)
   })
 
+  // Left before its start was answered and shown again as the browser kept it, the page cannot
+  // know what became of that start: it is put back all the same, so that nothing of the screen
+  // is left busy, or held, for an answer that may never come.
+  it('take a press again on a page shown again with its start still on its way', async () => {
+    const user = userEvent.setup()
+    vi.mocked(startProvider).mockImplementationOnce(() => new Promise<void>(() => undefined))
+    const backend = serve()
+    backend.on('GET /auth/oauth', () => Response.json({ providers: ['google', 'apple'] }))
+    open(paths.signIn.path, { backend })
+    const google = await screen.findByRole('button', { name: 'Continue with Google' })
+    const apple = screen.getByRole('button', { name: 'Continue with Apple' })
+    const button = screen.getByRole('button', { name: 'Sign in' })
+    const before = vi.mocked(startProvider).mock.calls.length
+    await user.click(google)
+    await waitFor(() => {
+      expect(google).toHaveAttribute('aria-busy', 'true')
+    })
+    expect(apple).toHaveAttribute('aria-disabled', 'true')
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    })
+    await waitFor(() => {
+      expect(google).not.toHaveAttribute('aria-busy')
+    })
+    expect(apple).not.toHaveAttribute('aria-disabled')
+    expect(button).not.toHaveAttribute('aria-disabled')
+    await user.click(apple)
+    expect(vi.mocked(startProvider).mock.calls.length - before).toBe(2)
+  })
+
   // Put away while it is on its way, a sign-in's control would be busy no longer and take a
   // second press, and a start's refusal would be said nowhere.
   it('take no press while a sign-in is on its way, which is sent once', async () => {

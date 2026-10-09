@@ -339,6 +339,31 @@ describe('Google and Apple', () => {
     expect(startProvider).toHaveBeenCalledTimes(2)
   })
 
+  // Shown again with its start still on its way, the page cannot know what became of it: it is
+  // put back all the same, so that no row is left busy, or held, for an answer that may not come.
+  it('take a press again on a page shown again with a link’s start still on its way', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google'] })
+    configured(server, ['google', 'apple'])
+    vi.mocked(startProvider).mockImplementationOnce(() => new Promise<void>(() => undefined))
+    const { user } = await security(server)
+    const connect = await screen.findByRole('button', { name: 'Connect Apple' })
+    const disconnect = screen.getByRole('button', { name: 'Disconnect Google' })
+    await user.click(connect)
+    await waitFor(() => {
+      expect(connect).toHaveAttribute('aria-busy', 'true')
+    })
+    expect(disconnect).toHaveAttribute('aria-disabled', 'true')
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    })
+    await waitFor(() => {
+      expect(connect).not.toHaveAttribute('aria-busy')
+    })
+    expect(disconnect).not.toHaveAttribute('aria-disabled')
+    await user.click(connect)
+    expect(startProvider).toHaveBeenCalledTimes(2)
+  })
+
   it('disconnect one that is connected, and say so', async () => {
     const server = createServer({ ...jana, credentials: ['password', 'google'] })
     configured(server, ['google', 'apple'])

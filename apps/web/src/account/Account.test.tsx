@@ -427,6 +427,63 @@ describe('the account screen', () => {
     expect(document.documentElement).toHaveAttribute('lang', 'pl')
   })
 
+  // The one save a later choice puts away while it is on its way, and means to: the select is no
+  // busy control, and what becomes of the earlier save is no word on the choice made since.
+  it('keeps a language chosen over one still being saved, whatever becomes of that save', async () => {
+    // Czech this page holds, and German is still to be fetched.
+    dropCatalogs()
+    holdCatalog('en', catalogs.en)
+    holdCatalog('cs', catalogs.cs)
+    let arrive: (catalog: Catalog) => void = () => undefined
+    vi.mocked(fetchCatalog).mockImplementationOnce(
+      () =>
+        new Promise<Catalog>((resolve) => {
+          arrive = resolve
+        }),
+    )
+    const server = createServer()
+    let refuse: () => void = () => undefined
+    server.on(
+      'PATCH /me',
+      () =>
+        new Promise<Response>((resolve) => {
+          refuse = () => {
+            resolve(problem(500, 'internal'))
+          }
+        }),
+    )
+    const { user } = await account(server)
+    const language = screen.getByRole('combobox', { name: 'Language' })
+    await user.selectOptions(language, 'cs')
+    await waitFor(() => {
+      expect(server.to('PATCH /me')).toHaveLength(1)
+    })
+    await user.selectOptions(language, 'de')
+    refuse()
+    // Long enough for the refusal to be read and whatever follows it to have followed.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    // The save that was put away says nothing, and puts nothing back under the later choice.
+    expect(language).toHaveValue('de')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Váš účet' })).toBeInTheDocument()
+
+    server.on('PATCH /me', async (request) => {
+      const change = (await request.json()) as { locale: string }
+      server.me = { ...server.me, locale: change.locale }
+      return Response.json(server.me)
+    })
+    await act(async () => {
+      arrive(catalogs.de)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Ihr Konto' })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(server.to('PATCH /me')).toHaveLength(2)
+    })
+    expect(await server.body('PATCH /me')).toEqual({ locale: 'de' })
+    expect(language).toHaveValue('de')
+  })
+
   it('puts the language back where the account could not be told', async () => {
     const server = createServer()
     server.on('PATCH /me', () => problem(500, 'internal'))
