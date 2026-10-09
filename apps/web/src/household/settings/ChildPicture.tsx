@@ -122,9 +122,13 @@ export function ChildPicture({
                   if (file !== undefined) upload.mutate(file)
                 }}
               />
+              {/* One write of the picture at a time, as of a member's own: while either is on
+                  its way the other's control takes no press. Sent side by side, which of the two
+                  the server took last is not the order their answers come in. */}
               <Button
                 ref={choose}
                 loading={upload.isPending}
+                aria-disabled={remove.isPending}
                 onClick={() => {
                   chooser.current?.click()
                 }}
@@ -137,6 +141,7 @@ export function ChildPicture({
             <Button
               variant="ghost"
               loading={remove.isPending}
+              aria-disabled={upload.isPending}
               onClick={(event) => {
                 const pressed = event.currentTarget
                 refusals.clear()

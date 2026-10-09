@@ -393,6 +393,92 @@ describe('a child profile’s picture', () => {
     })
   })
 
+  // Sent side by side, which of the two the server took last is not the order their answers come
+  // in: the picture drawn could be another than the one kept.
+  it('takes no press to remove a picture while one is being sent, and says what became of it', async () => {
+    const server = createServer()
+    change(server, { avatar_url: address, version: 2 })
+    const sent = `${origin}/files/sent`
+    let answer = () => {}
+    const held = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    server.on(`PUT ${profile}/avatar`, async () => {
+      await held
+      return Response.json(change(server, { avatar_url: sent, version: 3 }))
+    })
+    server.on(`DELETE ${profile}/avatar`, () =>
+      Response.json(change(server, { avatar_url: null, version: 4 })),
+    )
+    parts()
+    const { user, part, container } = await page(server)
+    const choose = within(part).getByRole('button', { name: 'Change picture' })
+    const remove = within(part).getByRole('button', { name: 'Remove picture' })
+
+    fireEvent.change(chooser(container), { target: { files: [file] } })
+    await waitFor(() => {
+      expect(server.to(`PUT ${profile}/avatar`)).toHaveLength(1)
+    })
+    expect(choose).toHaveAttribute('aria-busy', 'true')
+    expect(remove).toHaveAttribute('aria-disabled', 'true')
+    await user.click(remove)
+    // The picture on its way is its control's still, and nothing was asked beside it.
+    expect(choose).toHaveAttribute('aria-busy', 'true')
+    expect(server.to(`DELETE ${profile}/avatar`)).toHaveLength(0)
+
+    answer()
+    expect(await screen.findByText('Adam’s picture is saved.')).toBeInTheDocument()
+    expect(container.querySelector('img')).toHaveAttribute('src', sent)
+    expect(choose).not.toHaveAttribute('aria-busy')
+    // Answered, it is there to be removed, and is removed by one request.
+    expect(remove).not.toHaveAttribute('aria-disabled')
+    await user.click(remove)
+    await waitFor(() => {
+      expect(within(part).queryByRole('button', { name: 'Remove picture' })).toBeNull()
+    })
+    expect(server.to(`PUT ${profile}/avatar`)).toHaveLength(1)
+    expect(server.to(`DELETE ${profile}/avatar`)).toHaveLength(1)
+  })
+
+  it('opens no chooser while a picture is being removed, and says a removal that was refused', async () => {
+    const server = createServer()
+    change(server, { avatar_url: address, version: 2 })
+    let refuse = () => {}
+    const held = new Promise<void>((resolve) => {
+      refuse = resolve
+    })
+    server.on(`DELETE ${profile}/avatar`, async () => {
+      await held
+      return problem(500, 'internal')
+    })
+    const { user, part, container } = await page(server)
+    const opened = vi.spyOn(chooser(container), 'click')
+    const choose = within(part).getByRole('button', { name: 'Change picture' })
+    const remove = within(part).getByRole('button', { name: 'Remove picture' })
+
+    await user.click(remove)
+    await waitFor(() => {
+      expect(server.to(`DELETE ${profile}/avatar`)).toHaveLength(1)
+    })
+    expect(remove).toHaveAttribute('aria-busy', 'true')
+    expect(choose).toHaveAttribute('aria-disabled', 'true')
+    await user.click(choose)
+    expect(opened).not.toHaveBeenCalled()
+
+    refuse()
+    expect(await within(part).findByRole('alert')).toHaveTextContent(
+      /^Something went wrong at our end\./,
+    )
+    expect(remove).not.toHaveAttribute('aria-busy')
+    // Answered, the chooser opens at a press again, and the picture is the one that was kept.
+    expect(choose).not.toHaveAttribute('aria-disabled')
+    await user.click(choose)
+    expect(opened).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('img')).toHaveAttribute('src', address)
+    expect(server.to(`DELETE ${profile}/avatar`)).toHaveLength(1)
+    expect(server.to(`PUT ${profile}/avatar`)).toHaveLength(0)
+  })
+
   it('gives each refusal its sentence, and changes no picture', async () => {
     const server = createServer()
     parts()
