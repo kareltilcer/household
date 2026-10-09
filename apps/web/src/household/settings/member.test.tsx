@@ -179,7 +179,9 @@ describe('one member’s page', () => {
   it('is titled with the member’s name, and says their role under it', async () => {
     await page(petr)
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
-    expect(document.title).toBe('Petr Tilcer · Household')
+    await waitFor(() => {
+      expect(document.title).toBe('Petr Tilcer · Household')
+    })
     expect(screen.getByText('Member')).toBeInTheDocument()
     // It stands among the members, which the settings' own navigation says.
     expect(
@@ -199,7 +201,9 @@ describe('one member’s page', () => {
     server.on(`GET ${at}/members/${petr}`, () => new Promise<Response>(() => undefined))
     open(inHousehold.member(home, petr), server)
     expect(await screen.findByRole('heading', { level: 1, name: 'Members' })).toBeInTheDocument()
-    expect(document.title).toBe('Members · Household')
+    await waitFor(() => {
+      expect(document.title).toBe('Members · Household')
+    })
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument()
   })
 

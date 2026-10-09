@@ -73,7 +73,9 @@ describe('the list of members', () => {
   it('names every member in the order they joined, each with their role and what they hold', async () => {
     await membersScreen()
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
-    expect(document.title).toBe('Members · Household')
+    await waitFor(() => {
+      expect(document.title).toBe('Members · Household')
+    })
     expect(screen.getAllByRole('main')).toHaveLength(1)
     expect(screen.getByText('Everybody’s access, visible to everybody.')).toBeInTheDocument()
     const list = await rows()
