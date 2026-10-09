@@ -16,10 +16,12 @@
 // drawn, and nowhere else.
 //
 // Once the processor has taken the payment the server is asked again, which is how it reads the
-// processor itself: answered that the household is subscribed, it is, and the screen says so and
-// leads to billing; answered a secret again, the payment is on its way and not through, a bank
-// debit clearing, and billing says that (D-134). Answered `already_subscribed` the first time it
-// is no error either: a credit covered it, or another tab paid.
+// processor itself and settles a household that is paid for. Its answer is not what the screen
+// says: `already_subscribed` is a payment that went through and also a bank debit that is on its
+// way, so the subscription is read, and the screen says the household is subscribed where that
+// names a plan, and otherwise that the payment was sent, which billing then says is on its way
+// (D-134). Answered `already_subscribed` the first time it is no error either: a credit covered
+// it, or another tab paid.
 //
 // An owner who does not pay reads the plan and is told whose it is to subscribe; a household
 // that is subscribed, or has a payment on its way, is told so with the way to billing; a member
@@ -37,7 +39,7 @@
 // nothing is *conflicted* or *rejected*; *absent* is the neutral screen for everybody but an
 // owner; and *read-only* changes nothing here, subscribing being how a household that takes no
 // writes takes them again (FR-BI1).
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { readState, useNoWithdrawal } from '../account/common.ts'
@@ -47,7 +49,12 @@ import { problemIn, unwrap } from '../api/problem.ts'
 import { askedNow } from '../api/query.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
-import { useReread, useSubscription, type Subscription } from '../household/data.ts'
+import {
+  subscriptionQuery,
+  useReread,
+  useSubscription,
+  type Subscription,
+} from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { HouseholdSettingsPage, Section } from '../household/settings/Page.tsx'
 import { isUnverified, Unverified, useMarkUnverified } from '../household/Unverified.tsx'
@@ -121,6 +128,7 @@ function Paying({ subscription }: { readonly subscription: Subscription }) {
   const t = useTranslate()
   const format = useFormat()
   const api = useApi()
+  const queries = useQueryClient()
   const navigate = useNavigate()
   const toast = useToast()
   const me = useMe()
@@ -174,25 +182,35 @@ function Paying({ subscription }: { readonly subscription: Subscription }) {
     },
   })
   // The processor took the payment: the server is asked again, which reads the processor
-  // itself and settles the household where it is paid.
+  // itself and settles the household where it is paid. Its answer does not say which it is:
+  // `already_subscribed` is a household whose payment went through, and also one whose bank
+  // debit is on its way and has not cleared, the server making no second subscription beside
+  // either. So the subscription is read, and what is said is what it reads.
   const settle = useMutation({
     ...askedNow,
-    mutationFn: async (interval: Interval) => {
-      // A secret answered again says the payment is on its way and not through. It is for no
-      // form, and is kept nowhere.
-      unwrap(await subscribe(interval))
+    /** Whether the household is subscribed: the payment went through. */
+    mutationFn: async (interval: Interval): Promise<boolean> => {
+      try {
+        // A secret answered again says the payment is on its way and not through. It is for no
+        // form, and is kept nowhere.
+        unwrap(await subscribe(interval))
+        return false
+      } catch (error) {
+        if (problemIn(error)?.code !== 'already_subscribed') throw error
+      }
+      const stands = await queries.query({ ...subscriptionQuery(api, id), staleTime: 0 })
+      return stands.interval !== null
     },
-    onSuccess: () => {
-      toast({ message: t('billing.subscribe.sent', { household: name }) })
-    },
-    onError: (error) => {
+    onSuccess: (paid) => {
       toast({
-        message:
-          problemIn(error)?.code === 'already_subscribed'
-            ? t('billing.subscribe.done', { household: name })
-            : // Whatever became of asking, the processor has the payment: billing says how it stands.
-              t('billing.subscribe.sent', { household: name }),
+        message: paid
+          ? t('billing.subscribe.done', { household: name })
+          : t('billing.subscribe.sent', { household: name }),
       })
+    },
+    onError: () => {
+      // Whatever became of asking, the processor has the payment: billing says how it stands.
+      toast({ message: t('billing.subscribe.sent', { household: name }) })
     },
     onSettled: () => {
       void reread()

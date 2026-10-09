@@ -176,6 +176,34 @@ describe('subscribing', () => {
     })
   })
 
+  it('says a payment was sent, and not that it went through, where a bank debit is on its way', async () => {
+    const server = inTrial()
+    let asked = 0
+    server.on(subscribing, () => {
+      asked += 1
+      if (asked === 1) return Response.json(intent('payment'))
+      // The server makes no second subscription beside a debit that has not cleared, and answers
+      // as it does of a household that is paid for: the subscription says which it is.
+      server.subscription = trial({ payment_pending: true })
+      return problem(409, 'already_subscribed')
+    })
+    const { user, router } = await toPayment(server)
+    const read = server.to(reading).length
+    await user.click(await screen.findByRole('button', { name: money('Pay EUR 59.88 for a year') }))
+
+    expect(
+      await screen.findByText(
+        'The payment was sent to the payment processor. Tilcerovi is subscribed once the processor says it went through, and billing shows how it stands.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/The payment went through\.$/)).not.toBeInTheDocument()
+    // What was said is what the subscription read after the answer.
+    expect(server.to(reading).length).toBeGreaterThan(read)
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.billing(home))
+    })
+  })
+
   it('says a payment is on its way where the server answers a secret again, and keeps none of it', async () => {
     const server = inTrial()
     server.on(subscribing, () => Response.json(intent('payment')))
