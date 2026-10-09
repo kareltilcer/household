@@ -2,7 +2,7 @@ module github.com/kareltilcer/household/server
 
 go 1.26.0
 
-toolchain go1.26.8
+toolchain go1.26.9
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0

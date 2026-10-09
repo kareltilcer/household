@@ -8,7 +8,7 @@
 #
 # Run it with no route out: a document may name remote resources, which LibreOffice would fetch.
 
-FROM golang:1.26.8-trixie AS build
+FROM golang:1.26.9-trixie AS build
 WORKDIR /src
 # The modules server/go.mod replaces with directories beside it: their go.mod is all the build reads.
 COPY docs/api/go.mod docs/api/
