@@ -313,6 +313,73 @@ describe('the providers on the sign-in screen', () => {
     expect(vi.mocked(startProvider).mock.calls.length - before).toBe(2)
   })
 
+  // Put away while it is on its way, a sign-in's control would be busy no longer and take a
+  // second press, and a start's refusal would be said nowhere.
+  it('take no press while a sign-in is on its way, which is sent once', async () => {
+    const user = userEvent.setup()
+    const backend = serve()
+    backend.on('GET /auth/oauth', () => Response.json({ providers: ['google'] }))
+    const answer = pending()
+    backend.on('POST /auth/login', () => answer.response)
+    open(paths.signIn.path, { backend })
+    const google = await screen.findByRole('button', { name: 'Continue with Google' })
+    const before = vi.mocked(startProvider).mock.calls.length
+    await signIn(user)
+    const button = screen.getByRole('button', { name: 'Sign in' })
+    await waitFor(() => {
+      expect(button).toHaveAttribute('aria-busy', 'true')
+    })
+    expect(google).toHaveAttribute('aria-disabled', 'true')
+    await user.click(google)
+    expect(vi.mocked(startProvider).mock.calls.length - before).toBe(0)
+    // The sign-in on its way is its control's still, and takes no second press.
+    expect(button).toHaveAttribute('aria-busy', 'true')
+    await user.click(button)
+    expect(backend.to('POST /auth/login')).toHaveLength(1)
+
+    answer.answer(problem(401, 'invalid_credentials'))
+    await screen.findByRole('alert')
+    expect(google).not.toHaveAttribute('aria-disabled')
+  })
+
+  it('hold the form and each other while a flow is being started, and say why it could not be', async () => {
+    const user = userEvent.setup()
+    let fail: (reason: Error) => void = () => undefined
+    vi.mocked(startProvider).mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          fail = reject
+        }),
+    )
+    const backend = serve()
+    backend.on('GET /auth/oauth', () => Response.json({ providers: ['google', 'apple'] }))
+    backend.on('POST /auth/login', () => problem(401, 'invalid_credentials'))
+    open(paths.signIn.path, { backend })
+    const google = await screen.findByRole('button', { name: 'Continue with Google' })
+    const apple = screen.getByRole('button', { name: 'Continue with Apple' })
+    const before = vi.mocked(startProvider).mock.calls.length
+    await user.click(google)
+    await waitFor(() => {
+      expect(google).toHaveAttribute('aria-busy', 'true')
+    })
+    expect(apple).toHaveAttribute('aria-disabled', 'true')
+    await user.click(apple)
+    // Asked by its button and by Enter in a field, the form sends nothing over the start.
+    await signIn(user)
+    await user.type(screen.getByLabelText('Password'), '{Enter}')
+    expect(backend.to('POST /auth/login')).toHaveLength(0)
+    expect(vi.mocked(startProvider).mock.calls.length - before).toBe(1)
+    expect(google).toHaveAttribute('aria-busy', 'true')
+
+    fail(new Error('no connection'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^We couldn’t reach Household\./)
+    // Answered, the form is a way in again.
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => {
+      expect(backend.to('POST /auth/login')).toHaveLength(1)
+    })
+  })
+
   it('say why a flow could not be started', async () => {
     const user = userEvent.setup()
     vi.mocked(startProvider).mockRejectedValueOnce(new Error('no connection'))

@@ -371,6 +371,74 @@ describe('Google and Apple', () => {
     )
   })
 
+  // Put away while it is on its way, a disconnection's control would be busy no longer, and a
+  // refusal of it would be said nowhere.
+  it('take no press while one is being disconnected, and say what became of it', async () => {
+    const server = createServer({ ...jana, credentials: ['google'] })
+    configured(server, ['google', 'apple'])
+    let refuse: () => void = () => undefined
+    server.on(
+      'DELETE /auth/oauth/google',
+      () =>
+        new Promise<Response>((resolve) => {
+          refuse = () => {
+            resolve(problem(409, 'only_credential'))
+          }
+        }),
+    )
+    const { user } = await security(server)
+    const disconnect = await screen.findByRole('button', { name: 'Disconnect Google' })
+    const connect = screen.getByRole('button', { name: 'Connect Apple' })
+    await user.click(disconnect)
+    await waitFor(() => {
+      expect(server.to('DELETE /auth/oauth/google')).toHaveLength(1)
+    })
+    expect(disconnect).toHaveAttribute('aria-busy', 'true')
+    expect(connect).toHaveAttribute('aria-disabled', 'true')
+    await user.click(connect)
+    await user.click(disconnect)
+    expect(startProvider).not.toHaveBeenCalled()
+    expect(disconnect).toHaveAttribute('aria-busy', 'true')
+
+    refuse()
+    expect(
+      await screen.findByText(
+        'Google is the only way you sign in, so it can’t be disconnected. Set a password first: a password reset sets one.',
+      ),
+    ).toBeInTheDocument()
+    expect(server.to('DELETE /auth/oauth/google')).toHaveLength(1)
+    // Answered, the other is there to be pressed.
+    expect(connect).not.toHaveAttribute('aria-disabled')
+  })
+
+  it('take no press while a link is being begun, and say why it could not be', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google'] })
+    configured(server, ['google', 'apple'])
+    let fail: (reason: Error) => void = () => undefined
+    vi.mocked(startProvider).mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          fail = reject
+        }),
+    )
+    const { user } = await security(server)
+    const connect = await screen.findByRole('button', { name: 'Connect Apple' })
+    const disconnect = screen.getByRole('button', { name: 'Disconnect Google' })
+    await user.click(connect)
+    await waitFor(() => {
+      expect(connect).toHaveAttribute('aria-busy', 'true')
+    })
+    expect(disconnect).toHaveAttribute('aria-disabled', 'true')
+    await user.click(disconnect)
+    expect(server.to('DELETE /auth/oauth/google')).toHaveLength(0)
+    expect(connect).toHaveAttribute('aria-busy', 'true')
+
+    fail(new Error('no connection'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^We couldn’t reach Household\./)
+    expect(startProvider).toHaveBeenCalledTimes(1)
+    expect(disconnect).not.toHaveAttribute('aria-disabled')
+  })
+
   it('are said not to have been read, and said again where asking again comes to nothing', async () => {
     const server = createServer()
     // A server that cannot be reached, each request failing when the test says it has.

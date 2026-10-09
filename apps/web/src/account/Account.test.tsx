@@ -231,6 +231,119 @@ describe('the account screen', () => {
     expect(screen.getByRole('button', { name: 'Choose a picture' })).not.toHaveFocus()
   })
 
+  // Put away while it is on its way, a write's control would be busy no longer and take a second
+  // press, and a refusal of it would be said nowhere.
+  it('takes no press to remove a picture while one is being sent, and says what became of it', async () => {
+    const server = createServer({ ...jana, avatar_url: `${origin}/files/picture` })
+    const sent = `${origin}/files/sent`
+    let answer: () => void = () => undefined
+    server.on(
+      'PUT /me/avatar',
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = () => {
+            server.me = { ...server.me, avatar_url: sent }
+            resolve(Response.json(server.me))
+          }
+        }),
+    )
+    server.on('PATCH /me', () => {
+      server.me = { ...server.me, avatar_url: null }
+      return Response.json(server.me)
+    })
+    vi.stubGlobal(
+      'FormData',
+      class {
+        set() {
+          // The parts are another test's to read.
+        }
+      },
+    )
+    const { user, container } = await account(server)
+    const chooser = container.querySelector<HTMLInputElement>('input[type="file"]')
+    if (chooser === null) throw new Error('no file input')
+    const change = screen.getByRole('button', { name: 'Change picture' })
+    const remove = screen.getByRole('button', { name: 'Remove picture' })
+
+    fireEvent.change(chooser, {
+      target: { files: [new File(['picture'], 'me.png', { type: 'image/png' })] },
+    })
+    await waitFor(() => {
+      expect(server.to('PUT /me/avatar')).toHaveLength(1)
+    })
+    expect(change).toHaveAttribute('aria-busy', 'true')
+    expect(remove).toHaveAttribute('aria-disabled', 'true')
+    await user.click(remove)
+    // The picture on its way is its control's still, and nothing was asked over it.
+    expect(change).toHaveAttribute('aria-busy', 'true')
+    expect(server.to('PATCH /me')).toHaveLength(0)
+
+    answer()
+    expect(await screen.findByText('Your picture is saved.')).toBeInTheDocument()
+    expect(container.querySelector('img')).toHaveAttribute('src', sent)
+    expect(change).not.toHaveAttribute('aria-busy')
+    // Answered, it is there to be removed, and is removed by one request.
+    expect(remove).not.toHaveAttribute('aria-disabled')
+    await user.click(remove)
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Remove picture' })).not.toBeInTheDocument()
+    })
+    expect(server.to('PUT /me/avatar')).toHaveLength(1)
+    expect(server.to('PATCH /me')).toHaveLength(1)
+  })
+
+  it('opens no chooser while a picture is being removed, and says a removal that was refused', async () => {
+    const server = createServer({ ...jana, avatar_url: `${origin}/files/picture` })
+    let refuse: () => void = () => undefined
+    server.on(
+      'PATCH /me',
+      () =>
+        new Promise<Response>((resolve) => {
+          refuse = () => {
+            resolve(problem(500, 'internal'))
+          }
+        }),
+    )
+    server.on('PUT /me/avatar', () => Response.json(server.me))
+    vi.stubGlobal(
+      'FormData',
+      class {
+        set() {
+          // The parts are another test's to read.
+        }
+      },
+    )
+    const { user, container } = await account(server)
+    const chooser = container.querySelector<HTMLInputElement>('input[type="file"]')
+    if (chooser === null) throw new Error('no file input')
+    const opened = vi.spyOn(chooser, 'click')
+    const change = screen.getByRole('button', { name: 'Change picture' })
+    const remove = screen.getByRole('button', { name: 'Remove picture' })
+
+    await user.click(remove)
+    await waitFor(() => {
+      expect(server.to('PATCH /me')).toHaveLength(1)
+    })
+    expect(remove).toHaveAttribute('aria-busy', 'true')
+    expect(change).toHaveAttribute('aria-disabled', 'true')
+    await user.click(change)
+    expect(opened).not.toHaveBeenCalled()
+
+    // A file that arrives all the same is sent, and puts nothing away: the removal is its
+    // control's until it is answered, and its refusal is said.
+    fireEvent.change(chooser, {
+      target: { files: [new File(['picture'], 'me.png', { type: 'image/png' })] },
+    })
+    await waitFor(() => {
+      expect(server.to('PUT /me/avatar')).toHaveLength(1)
+    })
+    expect(remove).toHaveAttribute('aria-busy', 'true')
+    refuse()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong at our end\./)
+    expect(remove).not.toHaveAttribute('aria-busy')
+    expect(server.to('PATCH /me')).toHaveLength(1)
+  })
+
   it('names each language in its own, changes the words, and tells the account', async () => {
     const server = createServer()
     server.on('PATCH /me', async (request) => {

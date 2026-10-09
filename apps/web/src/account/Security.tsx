@@ -315,6 +315,11 @@ function SignInWith({ me }: { readonly me: Me }) {
 
   const linked = new Set<string>(me.credentials ?? [])
   const only = problemIn(disconnect.error)?.code === 'only_credential'
+  // One of them at a time: while a start or a disconnection is on its way no other control here
+  // takes a press, so neither is put away, nor another sent in its place, before it is answered.
+  // A start that was answered holds nothing: the page is leaving, and where it did not, a press
+  // here is what puts its control back.
+  const asking = connect.isPending || disconnect.isPending
   return (
     <Section title={t('account.security.providers.title')}>
       <List label={t('account.security.providers.title')}>
@@ -332,6 +337,7 @@ function SignInWith({ me }: { readonly me: Me }) {
                     </span>
                     <Button
                       loading={disconnect.isPending && disconnect.variables === provider}
+                      aria-disabled={asking}
                       onClick={() => {
                         connect.reset()
                         disconnect.mutate(provider)
@@ -351,6 +357,7 @@ function SignInWith({ me }: { readonly me: Me }) {
                     loading={
                       (connect.isPending || connect.isSuccess) && connect.variables === provider
                     }
+                    aria-disabled={asking}
                     onClick={() => {
                       disconnect.reset()
                       connect.mutate(provider)
