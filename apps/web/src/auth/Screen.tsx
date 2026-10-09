@@ -49,8 +49,9 @@ export function Notices({ children }: { readonly children: ReactNode }) {
 export interface FormProps {
   readonly onSubmit: () => void
   /**
-   * The last submission is still on its way: another is not sent after it. A busy button takes
-   * no press, and Enter in a field asks as well, by a way of its own.
+   * The last submission is still on its way, or another write that a submission would put away,
+   * a provider's start on the sign-in: nothing is sent after it. A busy button takes no press,
+   * and Enter in a field asks as well, by a way of its own.
    */
   readonly busy?: boolean
   /**

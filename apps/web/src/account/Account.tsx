@@ -216,13 +216,19 @@ function Picture({ me }: { readonly me: Me }) {
               const file = event.currentTarget.files?.[0]
               // Chosen again, the same file is a change again.
               event.currentTarget.value = ''
-              remove.reset()
+              // What a removal was refused with is said no longer. One on its way is left to be
+              // answered: no press opens the chooser while it is, and a file that arrives all the
+              // same puts nothing away.
+              if (!remove.isPending) remove.reset()
               if (file !== undefined) upload.mutate(file)
             }}
           />
+          {/* One write of the picture at a time: while either is on its way the other's control
+              takes no press, so neither is put away before it is answered. */}
           <Button
             ref={choose}
             loading={upload.isPending}
+            aria-disabled={remove.isPending}
             onClick={() => {
               chooser.current?.click()
             }}
@@ -233,6 +239,7 @@ function Picture({ me }: { readonly me: Me }) {
             <Button
               variant="ghost"
               loading={remove.isPending}
+              aria-disabled={upload.isPending}
               onClick={(event) => {
                 const pressed = event.currentTarget
                 upload.reset()

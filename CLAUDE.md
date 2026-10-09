@@ -257,8 +257,15 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   ([D-168](docs/prd/09-decisions.md)), once their list of households has been read again: a kept
   list that names none is not gone by (`app/Home.tsx`). A focus that a control took with it as
   it left is put back through `refocus` (`account/common.ts`). A write on its way keeps its
-  control busy until it is answered: its mutation is not `reset()` while it is pending, and rows
-  that share one say for themselves which of them is asked. The page an invitation's link opens
+  control busy until it is answered: its mutation is not `reset()` while it is pending, so two
+  controls whose presses each `reset()` the other's mutation, where a refusal is read off the
+  mutation itself, take no press while the other's write is on its way (`aria-disabled`), and
+  rows that share one say for themselves which of them is asked. A control that saves as it is
+  changed is no busy control: a select's later choice takes an earlier save's place (the
+  language), and a switch takes another change while one is on its way, sent beside it, what
+  either is refused with kept beside the mutation (`account/Notifications.tsx`); and a page the
+  browser kept and shows again puts a provider's start back whatever became of it
+  (`useShownAgain`). The page an invitation's link opens
   is begun again for a link that arrives while it is drawn, as the pages of `auth/` that read a
   fragment are: its screen is keyed by the `arrival` that `useFragment` counts, and the link it
   read already arrives as any other. What a screen keyed so reads through the query client is

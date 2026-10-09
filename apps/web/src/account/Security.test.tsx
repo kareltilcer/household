@@ -339,6 +339,31 @@ describe('Google and Apple', () => {
     expect(startProvider).toHaveBeenCalledTimes(2)
   })
 
+  // Shown again with its start still on its way, the page cannot know what became of it: it is
+  // put back all the same, so that no row is left busy, or held, for an answer that may not come.
+  it('take a press again on a page shown again with a link’s start still on its way', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google'] })
+    configured(server, ['google', 'apple'])
+    vi.mocked(startProvider).mockImplementationOnce(() => new Promise<void>(() => undefined))
+    const { user } = await security(server)
+    const connect = await screen.findByRole('button', { name: 'Connect Apple' })
+    const disconnect = screen.getByRole('button', { name: 'Disconnect Google' })
+    await user.click(connect)
+    await waitFor(() => {
+      expect(connect).toHaveAttribute('aria-busy', 'true')
+    })
+    expect(disconnect).toHaveAttribute('aria-disabled', 'true')
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    })
+    await waitFor(() => {
+      expect(connect).not.toHaveAttribute('aria-busy')
+    })
+    expect(disconnect).not.toHaveAttribute('aria-disabled')
+    await user.click(connect)
+    expect(startProvider).toHaveBeenCalledTimes(2)
+  })
+
   it('disconnect one that is connected, and say so', async () => {
     const server = createServer({ ...jana, credentials: ['password', 'google'] })
     configured(server, ['google', 'apple'])
@@ -369,6 +394,160 @@ describe('Google and Apple', () => {
       'href',
       '/reset',
     )
+  })
+
+  // Put away while it is on its way, a disconnection's control would be busy no longer, and a
+  // refusal of it would be said nowhere.
+  it('take no press while one is being disconnected, and say what became of it', async () => {
+    const server = createServer({ ...jana, credentials: ['google'] })
+    configured(server, ['google', 'apple'])
+    let refuse: () => void = () => undefined
+    server.on(
+      'DELETE /auth/oauth/google',
+      () =>
+        new Promise<Response>((resolve) => {
+          refuse = () => {
+            resolve(problem(409, 'only_credential'))
+          }
+        }),
+    )
+    const { user } = await security(server)
+    const disconnect = await screen.findByRole('button', { name: 'Disconnect Google' })
+    const connect = screen.getByRole('button', { name: 'Connect Apple' })
+    await user.click(disconnect)
+    await waitFor(() => {
+      expect(server.to('DELETE /auth/oauth/google')).toHaveLength(1)
+    })
+    expect(disconnect).toHaveAttribute('aria-busy', 'true')
+    expect(connect).toHaveAttribute('aria-disabled', 'true')
+    await user.click(connect)
+    await user.click(disconnect)
+    expect(startProvider).not.toHaveBeenCalled()
+    expect(disconnect).toHaveAttribute('aria-busy', 'true')
+
+    refuse()
+    expect(
+      await screen.findByText(
+        'Google is the only way you sign in, so it can’t be disconnected. Set a password first: a password reset sets one.',
+      ),
+    ).toBeInTheDocument()
+    expect(server.to('DELETE /auth/oauth/google')).toHaveLength(1)
+    // Answered, the other is there to be pressed.
+    expect(connect).not.toHaveAttribute('aria-disabled')
+  })
+
+  it('take no press while a link is being begun, and say why it could not be', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google'] })
+    configured(server, ['google', 'apple'])
+    let fail: (reason: Error) => void = () => undefined
+    vi.mocked(startProvider).mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          fail = reject
+        }),
+    )
+    const { user } = await security(server)
+    const connect = await screen.findByRole('button', { name: 'Connect Apple' })
+    const disconnect = screen.getByRole('button', { name: 'Disconnect Google' })
+    await user.click(connect)
+    await waitFor(() => {
+      expect(connect).toHaveAttribute('aria-busy', 'true')
+    })
+    expect(disconnect).toHaveAttribute('aria-disabled', 'true')
+    await user.click(disconnect)
+    expect(server.to('DELETE /auth/oauth/google')).toHaveLength(0)
+    expect(connect).toHaveAttribute('aria-busy', 'true')
+
+    fail(new Error('no connection'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^We couldn’t reach Household\./)
+    expect(startProvider).toHaveBeenCalledTimes(1)
+    expect(disconnect).not.toHaveAttribute('aria-disabled')
+  })
+
+  // The rows share one disconnection and one start. A second of the same kind, sent from another
+  // row in the place of the first, would leave the first one's row busy no longer and its
+  // refusal said nowhere.
+  it('send no second disconnection in the place of one on its way', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google', 'apple'] })
+    configured(server, ['google', 'apple'])
+    let refuse: () => void = () => undefined
+    server.on(
+      'DELETE /auth/oauth/google',
+      () =>
+        new Promise<Response>((resolve) => {
+          refuse = () => {
+            resolve(problem(500, 'internal'))
+          }
+        }),
+    )
+    const { user } = await security(server)
+    const google = await screen.findByRole('button', { name: 'Disconnect Google' })
+    const apple = screen.getByRole('button', { name: 'Disconnect Apple' })
+    await user.click(google)
+    await waitFor(() => {
+      expect(server.to('DELETE /auth/oauth/google')).toHaveLength(1)
+    })
+    expect(apple).toHaveAttribute('aria-disabled', 'true')
+    expect(apple).not.toHaveAttribute('aria-busy')
+    await user.click(apple)
+    expect(server.to('DELETE /auth/oauth/apple')).toHaveLength(0)
+    expect(google).toHaveAttribute('aria-busy', 'true')
+
+    refuse()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong at our end\./)
+    expect(apple).not.toHaveAttribute('aria-disabled')
+  })
+
+  it('begin no second link in the place of one being begun', async () => {
+    const server = createServer()
+    configured(server, ['google', 'apple'])
+    let fail: (reason: Error) => void = () => undefined
+    vi.mocked(startProvider).mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          fail = reject
+        }),
+    )
+    const { user } = await security(server)
+    const google = await screen.findByRole('button', { name: 'Connect Google' })
+    const apple = screen.getByRole('button', { name: 'Connect Apple' })
+    await user.click(google)
+    await waitFor(() => {
+      expect(google).toHaveAttribute('aria-busy', 'true')
+    })
+    expect(apple).toHaveAttribute('aria-disabled', 'true')
+    expect(apple).not.toHaveAttribute('aria-busy')
+    await user.click(apple)
+    expect(startProvider).toHaveBeenCalledTimes(1)
+    expect(google).toHaveAttribute('aria-busy', 'true')
+
+    fail(new Error('no connection'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^We couldn’t reach Household\./)
+    expect(apple).not.toHaveAttribute('aria-disabled')
+  })
+
+  // The page is leaving for the provider's. Where it did not after all, a navigation stopped,
+  // no other row may be held for a start that has nothing left to answer.
+  it('hold nothing once a link’s start is answered', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google'] })
+    configured(server, ['google', 'apple'])
+    server.on('DELETE /auth/oauth/google', () => {
+      server.me = { ...server.me, credentials: ['password'] }
+      return noContent()
+    })
+    const { user } = await security(server)
+    const connect = await screen.findByRole('button', { name: 'Connect Apple' })
+    const disconnect = screen.getByRole('button', { name: 'Disconnect Google' })
+    await user.click(connect)
+    // Its own control stays busy, and the other is there to be pressed.
+    await waitFor(() => {
+      expect(disconnect).not.toHaveAttribute('aria-disabled')
+    })
+    expect(connect).toHaveAttribute('aria-busy', 'true')
+    await user.click(disconnect)
+    expect(
+      await screen.findByText('Google is disconnected and no longer signs you in.'),
+    ).toBeInTheDocument()
   })
 
   it('are said not to have been read, and said again where asking again comes to nothing', async () => {

@@ -33,6 +33,32 @@ async function account(server: Server = createServer()) {
   return opened
 }
 
+/**
+ * The form a browser would send, as far as a test needs it: which parts it was given. The test
+ * environment's own `Request` cannot carry jsdom's form with a file in it.
+ */
+function formParts(): (readonly [string, unknown])[] {
+  const parts: (readonly [string, unknown])[] = []
+  vi.stubGlobal(
+    'FormData',
+    class {
+      set(name: string, value: unknown) {
+        parts.push([name, value])
+      }
+    },
+  )
+  return parts
+}
+
+const pictureFile = () => new File(['picture'], 'me.png', { type: 'image/png' })
+
+/** The chooser no member sees, which a test hands a file as the browser would. */
+function chooserIn(container: HTMLElement): HTMLInputElement {
+  const chooser = container.querySelector<HTMLInputElement>('input[type="file"]')
+  if (chooser === null) throw new Error('no file input')
+  return chooser
+}
+
 describe('the account screen', () => {
   it('is its one title and a section for each thing an account has', async () => {
     await account()
@@ -141,21 +167,10 @@ describe('the account screen', () => {
       server.me = { ...server.me, avatar_url: null }
       return Response.json(server.me)
     })
-    // The form a browser would send, as far as a test needs it: which parts it was given. The
-    // test environment's own `Request` cannot carry jsdom's form with a file in it.
-    const parts: (readonly [string, unknown])[] = []
-    vi.stubGlobal(
-      'FormData',
-      class {
-        set(name: string, value: unknown) {
-          parts.push([name, value])
-        }
-      },
-    )
+    const parts = formParts()
     const { user, container } = await account(server)
-    const chooser = container.querySelector<HTMLInputElement>('input[type="file"]')
-    if (chooser === null) throw new Error('no file input')
-    const file = new File(['picture'], 'me.png', { type: 'image/png' })
+    const chooser = chooserIn(container)
+    const file = pictureFile()
 
     fireEvent.change(chooser, { target: { files: [file] } })
     const remove = await screen.findByRole('button', { name: 'Remove picture' })
@@ -231,6 +246,129 @@ describe('the account screen', () => {
     expect(screen.getByRole('button', { name: 'Choose a picture' })).not.toHaveFocus()
   })
 
+  // Put away while it is on its way, a write's control would be busy no longer and take a second
+  // press, and a refusal of it would be said nowhere.
+  it('takes no press to remove a picture while one is being sent, and says what became of it', async () => {
+    const server = createServer({ ...jana, avatar_url: `${origin}/files/picture` })
+    const sent = `${origin}/files/sent`
+    let answer: () => void = () => undefined
+    server.on(
+      'PUT /me/avatar',
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = () => {
+            server.me = { ...server.me, avatar_url: sent }
+            resolve(Response.json(server.me))
+          }
+        }),
+    )
+    server.on('PATCH /me', () => {
+      server.me = { ...server.me, avatar_url: null }
+      return Response.json(server.me)
+    })
+    formParts()
+    const { user, container } = await account(server)
+    const change = screen.getByRole('button', { name: 'Change picture' })
+    const remove = screen.getByRole('button', { name: 'Remove picture' })
+
+    fireEvent.change(chooserIn(container), { target: { files: [pictureFile()] } })
+    await waitFor(() => {
+      expect(server.to('PUT /me/avatar')).toHaveLength(1)
+    })
+    expect(change).toHaveAttribute('aria-busy', 'true')
+    expect(remove).toHaveAttribute('aria-disabled', 'true')
+    await user.click(remove)
+    // The picture on its way is its control's still, and nothing was asked over it.
+    expect(change).toHaveAttribute('aria-busy', 'true')
+    expect(server.to('PATCH /me')).toHaveLength(0)
+
+    answer()
+    expect(await screen.findByText('Your picture is saved.')).toBeInTheDocument()
+    expect(container.querySelector('img')).toHaveAttribute('src', sent)
+    expect(change).not.toHaveAttribute('aria-busy')
+    // Answered, it is there to be removed, and is removed by one request.
+    expect(remove).not.toHaveAttribute('aria-disabled')
+    await user.click(remove)
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Remove picture' })).not.toBeInTheDocument()
+    })
+    expect(server.to('PUT /me/avatar')).toHaveLength(1)
+    expect(server.to('PATCH /me')).toHaveLength(1)
+  })
+
+  /** A removal the test refuses when it chooses to, for a member who has a picture. */
+  function removing() {
+    const server = createServer({ ...jana, avatar_url: `${origin}/files/picture` })
+    let refuse: () => void = () => undefined
+    server.on(
+      'PATCH /me',
+      () =>
+        new Promise<Response>((resolve) => {
+          refuse = () => {
+            resolve(problem(500, 'internal'))
+          }
+        }),
+    )
+    return {
+      server,
+      refuse: () => {
+        refuse()
+      },
+    }
+  }
+
+  it('opens no chooser while a picture is being removed, and says a removal that was refused', async () => {
+    const { server, refuse } = removing()
+    const { user, container } = await account(server)
+    const opened = vi.spyOn(chooserIn(container), 'click')
+    const change = screen.getByRole('button', { name: 'Change picture' })
+    const remove = screen.getByRole('button', { name: 'Remove picture' })
+
+    await user.click(remove)
+    await waitFor(() => {
+      expect(server.to('PATCH /me')).toHaveLength(1)
+    })
+    expect(remove).toHaveAttribute('aria-busy', 'true')
+    expect(change).toHaveAttribute('aria-disabled', 'true')
+    await user.click(change)
+    expect(opened).not.toHaveBeenCalled()
+
+    refuse()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong at our end\./)
+    expect(remove).not.toHaveAttribute('aria-busy')
+    // Answered, the chooser opens at a press again.
+    expect(change).not.toHaveAttribute('aria-disabled')
+    await user.click(change)
+    expect(opened).toHaveBeenCalledTimes(1)
+    expect(server.to('PATCH /me')).toHaveLength(1)
+    expect(server.to('PUT /me/avatar')).toHaveLength(0)
+  })
+
+  // No press hands the chooser a file while a removal is on its way: the control that opens it
+  // takes none. The chooser's own event is a step from that press, and holds to the rule itself.
+  it('leaves a removal on its way to be answered, whatever hands the chooser a file meanwhile', async () => {
+    const { server, refuse } = removing()
+    server.on('PUT /me/avatar', () => Response.json(server.me))
+    formParts()
+    const { user, container } = await account(server)
+    const remove = screen.getByRole('button', { name: 'Remove picture' })
+
+    await user.click(remove)
+    await waitFor(() => {
+      expect(server.to('PATCH /me')).toHaveLength(1)
+    })
+    fireEvent.change(chooserIn(container), { target: { files: [pictureFile()] } })
+    await waitFor(() => {
+      expect(server.to('PUT /me/avatar')).toHaveLength(1)
+    })
+    // The removal is its control's until it is answered, and its refusal is said.
+    expect(remove).toHaveAttribute('aria-busy', 'true')
+    refuse()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong at our end\./)
+    expect(remove).not.toHaveAttribute('aria-busy')
+    expect(server.to('PATCH /me')).toHaveLength(1)
+  })
+
   it('names each language in its own, changes the words, and tells the account', async () => {
     const server = createServer()
     server.on('PATCH /me', async (request) => {
@@ -287,6 +425,63 @@ describe('the account screen', () => {
     expect(server.to('PATCH /me')).toHaveLength(1)
     expect(await server.body('PATCH /me')).toEqual({ locale: 'pl' })
     expect(document.documentElement).toHaveAttribute('lang', 'pl')
+  })
+
+  // The one save a later choice puts away while it is on its way, and means to: the select is no
+  // busy control, and what becomes of the earlier save is no word on the choice made since.
+  it('keeps a language chosen over one still being saved, whatever becomes of that save', async () => {
+    // Czech this page holds, and German is still to be fetched.
+    dropCatalogs()
+    holdCatalog('en', catalogs.en)
+    holdCatalog('cs', catalogs.cs)
+    let arrive: (catalog: Catalog) => void = () => undefined
+    vi.mocked(fetchCatalog).mockImplementationOnce(
+      () =>
+        new Promise<Catalog>((resolve) => {
+          arrive = resolve
+        }),
+    )
+    const server = createServer()
+    let refuse: () => void = () => undefined
+    server.on(
+      'PATCH /me',
+      () =>
+        new Promise<Response>((resolve) => {
+          refuse = () => {
+            resolve(problem(500, 'internal'))
+          }
+        }),
+    )
+    const { user } = await account(server)
+    const language = screen.getByRole('combobox', { name: 'Language' })
+    await user.selectOptions(language, 'cs')
+    await waitFor(() => {
+      expect(server.to('PATCH /me')).toHaveLength(1)
+    })
+    await user.selectOptions(language, 'de')
+    refuse()
+    // Long enough for the refusal to be read and whatever follows it to have followed.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    // The save that was put away says nothing, and puts nothing back under the later choice.
+    expect(language).toHaveValue('de')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Váš účet' })).toBeInTheDocument()
+
+    server.on('PATCH /me', async (request) => {
+      const change = (await request.json()) as { locale: string }
+      server.me = { ...server.me, locale: change.locale }
+      return Response.json(server.me)
+    })
+    await act(async () => {
+      arrive(catalogs.de)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Ihr Konto' })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(server.to('PATCH /me')).toHaveLength(2)
+    })
+    expect(await server.body('PATCH /me')).toEqual({ locale: 'de' })
+    expect(language).toHaveValue('de')
   })
 
   it('puts the language back where the account could not be told', async () => {

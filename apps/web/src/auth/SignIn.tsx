@@ -128,6 +128,12 @@ export function SignIn() {
   }
   const limited = problemIn(refusal)?.status === 429
 
+  // One way in at a time: while a sign-in or a start is on its way the form sends nothing and no
+  // provider's control takes a press, so neither is put away, nor another sent in its place,
+  // before it is answered. A start that was answered holds nothing: the page is leaving, and
+  // where it did not, the form is still a way in.
+  const asking = signIn.isPending || start.isPending
+
   const notice = noticeIn(location.state)
   return (
     <Screen title={t('auth.sign_in.title')} lede={t('auth.sign_in.lede')}>
@@ -154,7 +160,7 @@ export function SignIn() {
           </Banner>
         )}
       </Notices>
-      <Form onSubmit={submit} busy={signIn.isPending} refused={faults ?? signIn.error}>
+      <Form onSubmit={submit} busy={asking} refused={faults ?? signIn.error}>
         <EmailField value={email} onChange={setEmail} fault={emailFault} autoComplete="username" />
         <PasswordField
           label={t('auth.password.label')}
@@ -165,7 +171,12 @@ export function SignIn() {
           }}
           error={passwordFault ? t('auth.password.required') : undefined}
         />
-        <Button type="submit" variant="primary" loading={signIn.isPending}>
+        <Button
+          type="submit"
+          variant="primary"
+          loading={signIn.isPending}
+          aria-disabled={start.isPending}
+        >
           {t('auth.sign_in.submit')}
         </Button>
       </Form>
@@ -179,6 +190,7 @@ export function SignIn() {
                 // It stays busy once the start is answered: the page is leaving for the
                 // provider's, and is put back where it is shown again from there.
                 loading={start.variables === provider && (start.isPending || start.isSuccess)}
+                aria-disabled={asking}
                 onClick={() => {
                   signIn.reset()
                   setFaults(undefined)

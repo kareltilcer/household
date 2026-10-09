@@ -149,7 +149,13 @@ returns (ADR 0025), which is what a household's queued write wants and no sign-i
 once (`api/query.ts`, `askedNow`) it fails at once, and its screen says that the server could not
 be reached and that nothing was changed. A provider's control stays busy once its start is
 answered, the page being on its way to the provider's, and is put back where the browser shows
-that page again as it kept it, for its Back button (`auth/provider.ts`).
+that page again as it kept it, for its Back button (`auth/provider.ts`). Where a press on one
+control puts away what another's write was refused with, and the mutation with it (`reset()`),
+neither takes a press while the other's write is on its way: while a sign-in or a start is on
+its way the form sends nothing and no provider's control takes a press, and the same holds of
+the two controls of a member's own picture and of the providers' rows on an account, so that no
+write is put away, nor another sent in its place, before it is answered. A start that was
+answered holds nothing, the page being on its way.
 
 **The service worker shows a Web Push and does nothing else.** The build writes it as one file
 at the origin's root (`build/pushWorker.ts`), part of the build's id: it handles `push` and
@@ -261,6 +267,7 @@ every other console error still fails its test.
 | A link's page begun again only for a token other than the one it read last | Opening a link again would then come to one thing loaded and another pasted where its page stands: nothing, though what the page says may have passed since, an answer that never came or an address since freed. Each arrival begins it, and the server says what the link is good for now |
 | The document loaded again for a fragment that arrives | A load reads the address, so the token would stay in it across the load, in the entry and the bar it is taken out of, or wait in storage for the page that follows |
 | A provider's control busy only while its start is asked, and idle again once it is answered | The page is on its way to the provider's for as long as that page takes to answer, and a control idle meanwhile takes a second press, which begins a second flow. It stays busy, and a page the browser kept and shows again, back from the provider's, puts its start back |
+| A picture's removal pressed while its upload is on its way, a provider disconnected while another is being connected, or a provider chosen while a sign-in is on its way, each sent beside the first, as item 25 first had them, the press putting the first one's refusal away | Put away while it was pending, the first write's control was busy no longer and took a second press, and what it was refused with was said nowhere. Left alone and the second still sent, as the form of a member's levels leaves a save (ADR 0027), two writes of one thing are on their way together: which of them the server took last is not the order their answers come in, and two refusals want two sentences where the picture and the sign-in have the place for one. Held, as an invitation's two answers hold each other, there is one write to answer and one answer to say. A start that was answered is not held for: where the page did not leave after all, the form and the other controls are the way on |
 | The file of recovery codes let go of in the press that hands it over, or by a timer after it | A browser may begin reading the file only once the press has returned, and how long after is its own affair. It is let go of with the screen that showed the codes |
 | The answer to an earlier save of a language kept from the account, once a later one is chosen | Two languages chosen within one round trip show the first again for as long as the second's save takes, and end in the second, on the page and in the account. Keeping the first answer from the account is a second word on which answer counts, with the second's failure to put right beside it, where the server holds the first and the page was never told. A flicker that ends where it should is less than that |
 | A catalog that failed to load imported again when the connection is back | Chromium keeps an import that failed and answers the next one of the same file with that failure, asking the network nothing: the page stayed blank until it was reloaded by hand. The page is loaded again, which asks for every file of its own anew, and a language chosen later says to reload |
