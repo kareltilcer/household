@@ -11,10 +11,12 @@
 // open; and a tab that does not hold the household's replica says so, and what to do, since one
 // tab keeps it at a time (ReplicaProvider.tsx). In sync is the absence of an indicator, so the
 // empty state teaches nothing: it is one calm sentence. In a household that does not write the
-// list is read and nothing in it is answered (FR-BI2): a conflict and a refused change still
-// open their panels, which draw no control, and both wait as they are until the household
-// writes again. A merge asks nothing, and is put away there as anywhere: that is the member's
-// own note that they have seen it, and gives no change up.
+// list is read and nothing in it is sent (FR-BI2): a conflict and a refused change still open
+// their panels, the conflict's with neither answer and the refused change's with the one that
+// gives it up, which is this browser's own and asks nothing of the server, and what is not
+// given up waits as it is until the household writes again. A merge asks nothing, and is put
+// away there as anywhere: that is the member's own note that they have seen it, and gives no
+// change up.
 import type { RecordedOutcome } from '@household/sync'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { usePageTitle } from '../app/title.ts'

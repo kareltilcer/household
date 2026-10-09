@@ -1665,7 +1665,7 @@
   "sync.rejected.edit": "Edytuj",
   "sync.rejected.kept": "Twoja zmiana nie przepadła. Zostaje w tej przeglądarce, dopóki nie zdecydujesz, co z nią zrobić.",
   "sync.rejected.neighbour": "Sąsiedni wpis",
-  "sync.rejected.readonly": "Tego gospodarstwa domowego nie można teraz zmieniać. Co z tym zrobić, zdecydujesz, gdy znów będzie można.",
+  "sync.rejected.readonly": "Tego gospodarstwa domowego nie można teraz zmieniać. Możesz odrzucić tę zmianę już teraz albo zdecydować, co z nią zrobić, gdy gospodarstwo znów będzie można zmieniać.",
   "sync.rejected.reason.entitlement_read_only": "To gospodarstwo domowe jest teraz tylko do odczytu, więc ta zmiana nie została zapisana. Nie przepadła: zostaje w tej przeglądarce i wyśle się sama, gdy gospodarstwo znów będzie można zmieniać.",
   "sync.rejected.reason.entitlement_restricted": "Właściciel ograniczył zmiany w tym gospodarstwie domowym, więc ta zmiana nie została zapisana. Nie przepadła: zostaje w tej przeglądarce i wyśle się sama, gdy ograniczenie zostanie zniesione.",
   "sync.rejected.reason.fair_use_ceiling": "Ta część gospodarstwa domowego zawiera już tyle wpisów, ile może, więc ten nie został dodany. Usuń te, których już nie potrzebujesz, i spróbuj ponownie.",

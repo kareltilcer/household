@@ -1665,7 +1665,7 @@
   "sync.rejected.edit": "Bearbeiten",
   "sync.rejected.kept": "Ihre Änderung ist nicht verloren. Sie bleibt in diesem Browser, bis Sie entscheiden, was damit geschehen soll.",
   "sync.rejected.neighbour": "Der benachbarte Eintrag",
-  "sync.rejected.readonly": "Dieser Haushalt kann gerade nicht geändert werden. Was damit geschieht, entscheiden Sie, sobald es wieder geht.",
+  "sync.rejected.readonly": "Dieser Haushalt kann gerade nicht geändert werden. Sie können diese Änderung jetzt verwerfen oder entscheiden, was damit geschehen soll, sobald der Haushalt wieder geändert werden kann.",
   "sync.rejected.reason.entitlement_read_only": "Dieser Haushalt ist gerade schreibgeschützt, daher wurde diese Änderung nicht gespeichert. Sie ist nicht verloren: Sie bleibt in diesem Browser und wird von selbst gesendet, sobald der Haushalt wieder geändert werden kann.",
   "sync.rejected.reason.entitlement_restricted": "Ein Inhaber hat Änderungen an diesem Haushalt eingeschränkt, daher wurde diese Änderung nicht gespeichert. Sie ist nicht verloren: Sie bleibt in diesem Browser und wird von selbst gesendet, sobald die Einschränkung aufgehoben ist.",
   "sync.rejected.reason.fair_use_ceiling": "Dieser Teil des Haushalts enthält bereits so viele Einträge, wie er aufnehmen kann, daher wurde dieser nicht hinzugefügt. Entfernen Sie einige, die Sie nicht mehr brauchen, und versuchen Sie es dann erneut.",

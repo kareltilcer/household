@@ -62,7 +62,7 @@ const words = {
   neighbour: 'The entry next to it',
   kept: 'Your change isn’t lost. It stays in this browser until you decide what to do with it.',
   waits:
-    'This household can’t be changed right now. You can decide what to do with this once it can.',
+    'This household can’t be changed right now. You can discard this change now, or decide what to do with it once the household can be changed again.',
   shopping: 'Shopping',
   entered: 'What you entered',
   saved: 'What is saved now',
@@ -411,10 +411,11 @@ describe('a change that was not accepted', () => {
     expect(router.state.location.pathname).toBe(paths.devSync.path)
   })
 
-  // Sending it again and giving it up are one choice, and with the first taken away it is none:
-  // the change stays where it is kept until the household writes again.
+  // Sending a change again and editing it are writes, which a household that does not write
+  // refuses: both are absent. Giving it up is this browser's own and asks nothing of the server,
+  // so it stays (FR-BI2).
   it.each(rejections.map((entry) => [entry.code ?? '', entry] as const))(
-    'reads and does not answer in a household that does not write: %s',
+    'offers only to give it up in a household that does not write: %s',
     (code, outcome) => {
       const { stand } = drawRejected(outcome, { writes: false })
       const panel = screen.getByRole('dialog')
@@ -424,14 +425,37 @@ describe('a change that was not accepted', () => {
       expect(version(words.yours)).toBeVisible()
       expect(screen.queryByRole('button', { name: words.retry })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: words.edit })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: words.discard })).not.toBeInTheDocument()
-      // Its one control closes it. Absent, not disabled.
-      expect(within(panel).getAllByRole('button')).toHaveLength(1)
+      expect(within(panel).getByRole('button', { name: words.discard })).toBeVisible()
+      // The control that closes it, and the one that gives the change up. Absent, not disabled.
+      expect(within(panel).getAllByRole('button')).toHaveLength(2)
       expect(document.querySelector(':disabled, [aria-disabled="true"]')).toBeNull()
       // A change that is held says in its own sentence that it goes by itself; any other says
-      // that what becomes of it is decided once the household writes.
+      // what can be done with it now, and that the rest waits for a household that writes.
       expect(within(panel).queryByText(words.waits) !== null).toBe(!rejection.held)
       expect(stand.asked).toEqual([])
+    },
+  )
+
+  // A change held for a household that does not write is sent by the replica itself once it
+  // writes again, which may be months on: its member declines that while it waits, or never can.
+  it.each(['entitlement_read_only', 'entitlement_restricted', 'validation_failed'])(
+    'gives a change up in a household that does not write, after the confirmation that names it: %s',
+    async (code) => {
+      const outcome = rejectionWith(code)
+      const { stand, onClose } = drawRejected(outcome, { writes: false })
+      await userEvent.click(screen.getByRole('button', { name: words.discard }))
+      const confirmation = screen.getByRole('dialog', { name: words.discardTitle })
+      expect(confirmation).toHaveAccessibleDescription(words.discardBody)
+      // The safe choice first, and it changes nothing.
+      await userEvent.click(within(confirmation).getByRole('button', { name: words.keepIt }))
+      expect(screen.queryByRole('dialog', { name: words.discardTitle })).not.toBeInTheDocument()
+      expect(stand.asked).toEqual([])
+
+      await userEvent.click(screen.getByRole('button', { name: words.discard }))
+      await userEvent.click(screen.getByRole('button', { name: words.discardIt }))
+      expect(stand.asked).toEqual([`discard:${outcome.mutation_id}`])
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(await screen.findByText(words.discarded)).toBeVisible()
     },
   )
 

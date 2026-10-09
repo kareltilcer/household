@@ -1665,7 +1665,7 @@
   "sync.rejected.edit": "Upravit",
   "sync.rejected.kept": "Vaše změna se neztratila. Zůstává v tomto prohlížeči, dokud nerozhodnete, co s ní.",
   "sync.rejected.neighbour": "Sousední záznam",
-  "sync.rejected.readonly": "Tuto domácnost teď nelze měnit. Co s tím, rozhodnete, až to půjde.",
+  "sync.rejected.readonly": "Tuto domácnost teď nelze měnit. Tuto změnu můžete zahodit hned, nebo se rozhodnout, co s ní, až domácnost půjde zase měnit.",
   "sync.rejected.reason.entitlement_read_only": "Tato domácnost je teď jen ke čtení, takže se tato změna neuložila. Neztratila se: zůstává v tomto prohlížeči a sama se odešle, jakmile domácnost zase půjde měnit.",
   "sync.rejected.reason.entitlement_restricted": "Vlastník omezil změny v této domácnosti, takže se tato změna neuložila. Neztratila se: zůstává v tomto prohlížeči a sama se odešle, jakmile bude omezení zrušeno.",
   "sync.rejected.reason.fair_use_ceiling": "Tato část domácnosti už obsahuje tolik záznamů, kolik může, takže tento se nepřidal. Odstraňte ty, které už nepotřebujete, a zkuste to znovu.",

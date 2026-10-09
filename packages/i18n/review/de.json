@@ -1665,7 +1665,7 @@
   "sync.rejected.edit": "Edit",
   "sync.rejected.kept": "Your change isn’t lost. It stays in this browser until you decide what to do with it.",
   "sync.rejected.neighbour": "The entry next to it",
-  "sync.rejected.readonly": "This household can’t be changed right now. You can decide what to do with this once it can.",
+  "sync.rejected.readonly": "This household can’t be changed right now. You can discard this change now, or decide what to do with it once the household can be changed again.",
   "sync.rejected.reason.entitlement_read_only": "This household is read-only right now, so this change wasn’t saved. It isn’t lost: it is kept in this browser and sent by itself once the household can be changed again.",
   "sync.rejected.reason.entitlement_restricted": "An owner has restricted changes to this household, so this change wasn’t saved. It isn’t lost: it is kept in this browser and sent by itself once the restriction is lifted.",
   "sync.rejected.reason.fair_use_ceiling": "This part of the household already holds as many entries as it can, so this one wasn’t added. Remove some you no longer need, then try again.",
