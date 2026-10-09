@@ -29,7 +29,10 @@ step in the mode the environment uses.
 
 1. **The account** is the EU entity's, with EU data processing (PRD 04 §6). Turn on the payment
    methods PRD 04 §6 names: cards, SEPA Direct Debit, Apple Pay and Google Pay. Register the web
-   client's domain for Apple Pay.
+   client's domain for Apple Pay. Turn **Link** off among the payment methods: the web's policy
+   admits Stripe's own script, frames and API and nothing of `link.com`, so with Link on the
+   payment form asks for a frame the page refuses
+   ([ADR 0028](../adr/0028-the-catalog-in-parts-the-payment-form-the-entitlement-in-the-shell-and-what-a-household-shows-of-its-data.md)).
 2. **Two products**: the plan, and a storage block. For each currency in PRD 04 §1 make three prices,
    tax-inclusive:
    - the plan, recurring yearly (EUR 59.88, GBP 53.88);

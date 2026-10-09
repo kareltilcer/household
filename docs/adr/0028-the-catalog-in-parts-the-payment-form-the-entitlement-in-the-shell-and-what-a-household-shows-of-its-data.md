@@ -107,6 +107,68 @@ failed). It delivers its own webhooks, signed, and answers an act once the API h
 event the act causes, so the household's row is settled by the time a spec reads it. The suite's
 API is the deployed adapter, stripe-go and the signature check with it.
 
+**The payment form is the processor's own, and one file of the app calls it**
+(`billing/stripe.ts`, `billing/PaymentForm.tsx`). The policy (`build/csp.ts`) admits Stripe's
+script (`script-src`), its frames (a new `frame-src`) and its API (`connect-src`), which is what
+Stripe states its script needs, and nothing of Stripe's in any other directive. The script is
+fetched by `@stripe/stripe-js`'s loader when a payment form is first drawn, and by no other
+page; the form is Stripe's Payment Element, mounted into a node the component owns and
+destroyed with it, its look given from the computed values of the app's semantic tokens where
+it stands, and its language the app's. It is drawn in the page, where its control stood, and
+never in a dialog or a sheet: Stripe draws a bank's challenge over the page from its own
+script, and a modal `<dialog>` would stand above that and hold it inert. A refusal Stripe
+resolves with is said in the app's words by its type, never by Stripe's own message.
+
+**A secret is asked for by a press and kept in the screen's state alone.** Subscribing,
+replacing the method and accepting billing each make something at the processor, so none is
+asked as a screen opens; what is answered is no query, is kept by no cache (`gcTime: 0` on the
+three mutations) and is in no storage. What Stripe adds to the address on a return from a
+bank's page is taken out of the address before anything is drawn, and nothing is believed from
+it: the screen reads the subscription.
+
+**A payment is believed when the server says so.** The server moves a household on the
+processor's word alone (D-131, D-134). After Stripe resolves a payment with no error, the
+screen asks `postBillingSubscription` again: the server reads the processor itself there, and
+its `409 already_subscribed` is the payment taken and the household settled, where a secret
+answered again is a payment not yet made, a bank debit on its way among them. The same `409`
+on the first ask is a household subscribed already, by a credit or in another tab, and is no
+error. A card confirmed for a method's replacement or for taking billing over has no such
+question to ask: the screen reads the subscription again a bounded number of times
+(`billing/cadence.ts`) and says that the processor has confirmed it once the read shows it, and
+otherwise that it has not said yet.
+
+**The entitlement is said in the shell, from the household's own answer** (D-180).
+`shell/EntitlementBanner.tsx` draws one banner under the offline bar's place
+(`shell/HouseholdBars.tsx`) for the state `useHousehold().entitlement` resolves, to the reader
+it is drawn for: the payer, another owner, or a member, who is who being read off the members
+(`useReader`, `household/data.ts`). It reads no billing and names no price. The settings'
+frame, which said that a household takes no writes, says only whose changing what is there is.
+In a household that takes no writes the offline bar promises nothing of a change, the conflict
+panel draws no answer, and the refused-change panel keeps *Discard*.
+
+**A suspended household is the lockout, decided by a list read since** (`shell/Lockout.tsx`,
+`shell/HouseholdShell.tsx`). Where a household's address answers `404`, the member's list of
+households is read again, and only that answer decides between the lockout, where the list
+names the household suspended, and *not available*: what this browser kept of the list is not
+gone by.
+
+**An export is downloaded by a navigation, after its job is read again** (`privacy/ExportList.tsx`).
+A job's link is good for minutes and each read renews it, and the policy's `connect-src` does
+not admit the object store: *Download* reads the job and then leaves for its `download_url`,
+which answers an attachment, so the page stays. While a job waits or is being made its list is
+read again on an interval that stops once nothing is on its way. The household's exports and
+the account's own are one list drawn over two sources, and the privacy centre, which is the
+account's, reads no word of the household's part.
+
+**Sync health is the reader's own replicas, and reports its own browser as it opens** (D-177,
+D-181; `health/SyncHealth.tsx`). This browser's row is drawn from the replica itself, live, and
+every other from its last report; the screen has this browser report once as it opens, where it
+has caught up, holds nothing queued and the household takes writes. The diagnostic bundle
+(`health/bundle.ts`) is composed from that state and the last outcomes projected to their id,
+entity type, operation, outcome, code and time; it is drawn part by part and as the very text
+that is sent, and its id is made anew whenever a part is taken out or put back, so that a
+bundle sent again is the one last read.
+
 **FR-HH4 follows the server** (D-174): the payer's refusal on the screens that leave a
 household, remove a member and change a role leads to the hand-over of billing, and says that
 cancelling does not stand in for it.
@@ -139,6 +201,21 @@ cancelling does not stand in for it.
 | A word that is no catalog's bracketed and padded under the pseudo-locale, as a message is | To be so it was read as a message, and what the server gave, an archive's own name for an entry, may hold a brace. Data is accented letter for letter and nothing more (`useData`), which is all the pass asks of it: it tells data from a word nobody translated. A day's name and a language's lose their padding there |
 | A size under a thousand bytes said in bytes, and billing's sizes in gigabytes whatever they hold | `Intl` writes a byte as an English word in whichever language is shown. Sizes are said by one formatter (`format.bytes`), in the largest unit of those storage is sold in that the size fills, so that the storage screen and the billing screen say one figure in one way |
 | The refused-change panel with no control at all in a household that takes no writes | A change that was not accepted is this browser's own, and giving it up asks nothing of the server. FR-BI2 has held changes offered for replay, and an offer that cannot be declined is none: the replica sends a held change by itself once the household writes again, which may be months on, and its member must be able to say no before then. So *Retry* and *Edit* are absent there, being writes, and *Discard* stays, with a sentence that says which is which. The conflict's panel draws neither answer: choosing either version is a write |
+| A card taken in the app's own fields, as the prototype draws it | Card data never reaches Household (04 §6, D-131): the processor's form is the requirement, and the policy is widened for it and for nothing else |
+| `@stripe/react-stripe-js` round the payment form | A provider and a context for one element mounted in one component. The loader alone is what is needed, and it fetches Stripe's script when a form is first drawn |
+| The payment form in a sheet or a dialog, the method's replacement among them | Stripe draws a bank's 3-D Secure challenge over the page from its own script, and the platform's modal `<dialog>` is above everything outside it and holds it inert (ADR 0025): the challenge could not be answered. The form is drawn where its control stood |
+| A payment said to have gone through once Stripe's script resolves it | The household is moved by the processor's word to the server (D-134), which the page cannot see: said earlier, a member is told they are subscribed in a household that still reads as on trial. The second ask of `postBillingSubscription` is the server's own reading of the processor, and its answer is what is said |
+| A secret asked for as the screen opens, so that the form is there at once | Each ask makes an unpaid subscription or a setup intent at the processor, for a member who only came to read the price |
+| A return from a bank's page read from what Stripe put in the address, or subscribing asked again there | The address is whoever opened it's to write, and it holds a secret: it is taken out and nothing of it is believed. Asking again with no press would make a subscription and a secret nobody pressed for. The subscription is read |
+| The subscription read again without bound after a card is confirmed | A webhook that never comes (the runbook has the case) would keep a screen asking for as long as it is open. A bounded while, then the sentence that the processor has not said yet, and the screen as the server has it |
+| Stripe's own message shown for a refusal | It is the processor's sentence in the processor's wording, and a client switches on a refusal's kind, never on its text. The Payment Element shows a field's own error itself |
+| The banner's price read from billing, or one banner for every reader | D-180 |
+| The lockout drawn from the list of households this browser kept | A kept list that names a household suspended would lock a member out of one whose suspension was lifted, and one that does not would say *not available* of a suspended one: the `404` is read against a list asked for since |
+| An export downloaded by `fetch` and saved by the page | The policy's `connect-src` does not admit the object store, and need not: the link answers an attachment, which a navigation saves and the page survives |
+| An export's link kept from the list's read and used when *Download* is pressed | It is good for minutes, and a list read an hour ago has one that has run out: each read renews it, so the job is read as the press is made |
+| One job read again while it is made, and not the list | Two reads to keep in step where one covers every row, and a job asked for in another tab is then seen too |
+| The bundle's id kept for the visit whatever is taken out of it | The server keeps a bundle once by its id: a bundle sent, then sent again with a part taken out, would be kept as first sent, with the part its member took out |
+| Sync health reporting again after a re-download is asked of this browser, so that it begins at once | One more report for a wait of minutes that every other device has too, and a second rule for one row |
 
 ## Consequences
 
@@ -151,6 +228,14 @@ cancelling does not stand in for it.
   first time a screen needs it, once in each language held.
 - `HOUSEHOLD_STRIPE_API_URL` is refused outside development; the first payment in Stripe's test
   mode, with Stripe's own script and frame in a browser, is **item 30**'s, on staging.
+- The policy admits Stripe's script, frames and API and no other origin of a payment method's:
+  Link, which the Payment Element draws in frames of `link.com` where the processor's dashboard
+  has it among the payment methods, is refused. It is kept off there (the billing runbook), or
+  the policy is widened for it in a pull request that says so. Once a payment form has been
+  drawn, Stripe's script stays in the page for as long as the tab lives. Stripe states that its
+  script does not support a cross-origin isolated page: whoever serves the app sends no
+  `Cross-Origin-Embedder-Policy` that would make it one (the replica's SQLite does not ask for
+  one).
 - A client is listed among a household's once it has reported: the mobile replica's `fetch` must
   name the app in `Household-Client` (**item 28**), or its clients read with no type and no
   version.
