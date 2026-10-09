@@ -156,6 +156,54 @@ describe('the household switcher', () => {
     expect(onSwitch).toHaveBeenCalledExactlyOnceWith(others[0]?.id)
   })
 
+  // The household that is open is named as the others are: its word beside the member's role.
+  it('names the household that is open with its state in a word, where something is held back', () => {
+    const lapsed: Household = { ...held, entitlement: { state: 'read_only', can_write: false } }
+    inShell(<SwitcherView household={lapsed} others={[]} failed={false} onSwitch={vi.fn()} />)
+    expect(screen.getByText('Owner · read-only')).toBeInTheDocument()
+  })
+
+  // A payment that failed holds nothing back, and is its owners' alone to know (PRD 04 §6).
+  it.each(['trialing', 'active', 'past_due'] as const)(
+    'names a household that is %s with no word, open or listed',
+    async (state) => {
+      const other: HouseholdSummary = {
+        id: '01900000-0000-7000-8000-0000000000a2',
+        name: 'Chata Vysočina',
+        my_role: 'member',
+        entitlement: { state },
+      }
+      inShell(
+        <SwitcherView
+          household={{ ...held, entitlement: { state } }}
+          others={[other]}
+          failed={false}
+          onSwitch={vi.fn()}
+        />,
+      )
+      expect(screen.getByText('Owner')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: /^Switch household/ }))
+      expect(screen.getByRole('menuitem')).toHaveTextContent(/^Chata Vysočina · Member$/)
+    },
+  )
+
+  it('lists a household the platform suspended, with its word, and can be asked to open it', async () => {
+    const onSwitch = vi.fn()
+    const suspended: HouseholdSummary = {
+      id: '01900000-0000-7000-8000-0000000000a4',
+      name: 'Srub Šumava',
+      my_role: 'owner',
+      entitlement: { state: 'suspended', suspended_at: '2026-09-09T12:02:00Z' },
+    }
+    inShell(
+      <SwitcherView household={held} others={[suspended]} failed={false} onSwitch={onSwitch} />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /^Switch household/ }))
+    // Its address draws its lockout (Lockout.tsx): entering it is how a member reads why.
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Srub Šumava · Owner · suspended' }))
+    expect(onSwitch).toHaveBeenCalledExactlyOnceWith(suspended.id)
+  })
+
   it('says the other households could not be read, and still names the one that is open', () => {
     inShell(<SwitcherView household={held} others={[]} failed onSwitch={vi.fn()} />)
     expect(screen.getByText('Tilcerovi')).toBeInTheDocument()

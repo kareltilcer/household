@@ -10,8 +10,10 @@
 // *Keep mine* writes the member's change again against the row as it now stands (`retry`), and
 // *Keep theirs* gives it up (`discard`): both are this browser's own writes (decide.tsx). There
 // is no third control for a value that is neither. That is the row's own editor, which the panel
-// leads to where the row's module gives its address. In a household that does not write, the
-// member's version cannot be sent, so only the other can be kept, and the panel says why.
+// leads to where the row's module gives its address. In a household that does not write the
+// panel reads and does not answer (FR-BI2): the member's version could not be sent, and a
+// question with one of its two answers taken away is no question, so neither control is drawn,
+// the panel says why, and the conflict waits as it is until the household writes again.
 import type { RecordedOutcome, Replica } from '@household/sync'
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router'
@@ -80,56 +82,52 @@ function ConflictSheet({ outcome, replica, onClose, setting, describers }: OpenP
     },
   ]
   const { address, name } = reading
-  // The member's version is sent again only where it can be: by a household that writes, of a
-  // row this browser still holds.
-  const mine = setting.writes && trouble !== 'nothing'
+  // The member's version is sent again only where it can be: of a row this browser still holds.
+  const mine = trouble !== 'nothing'
+  // Absent, and not disabled, in a household that does not write: nothing is answered there.
+  const answers = !setting.writes ? undefined : (
+    <>
+      {mine ? (
+        <Button
+          loading={busy === 'mine'}
+          aria-disabled={busy === 'theirs'}
+          onClick={() => {
+            decide(
+              'mine',
+              () => replica.retry(outcome.mutation_id),
+              () => {
+                onClose()
+                toast({ message: t('sync.conflict.kept_mine', { name }) })
+              },
+            )
+          }}
+        >
+          {t('sync.conflict.keep_mine')}
+        </Button>
+      ) : null}
+      <Button
+        loading={busy === 'theirs'}
+        aria-disabled={busy === 'mine'}
+        onClick={() => {
+          decide(
+            'theirs',
+            async () => {
+              await replica.discard(outcome.mutation_id)
+              return true
+            },
+            () => {
+              onClose()
+              toast({ message: t('sync.conflict.kept_theirs', { name }) })
+            },
+          )
+        }}
+      >
+        {t('sync.conflict.keep_theirs')}
+      </Button>
+    </>
+  )
   return (
-    <Sheet
-      open
-      onClose={onClose}
-      title={name}
-      actions={
-        <>
-          {mine ? (
-            <Button
-              loading={busy === 'mine'}
-              aria-disabled={busy === 'theirs'}
-              onClick={() => {
-                decide(
-                  'mine',
-                  () => replica.retry(outcome.mutation_id),
-                  () => {
-                    onClose()
-                    toast({ message: t('sync.conflict.kept_mine', { name }) })
-                  },
-                )
-              }}
-            >
-              {t('sync.conflict.keep_mine')}
-            </Button>
-          ) : null}
-          <Button
-            loading={busy === 'theirs'}
-            aria-disabled={busy === 'mine'}
-            onClick={() => {
-              decide(
-                'theirs',
-                async () => {
-                  await replica.discard(outcome.mutation_id)
-                  return true
-                },
-                () => {
-                  onClose()
-                  toast({ message: t('sync.conflict.kept_theirs', { name }) })
-                },
-              )
-            }}
-          >
-            {t('sync.conflict.keep_theirs')}
-          </Button>
-        </>
-      }
-    >
+    <Sheet open onClose={onClose} title={name} actions={answers}>
       <div className={styles.status}>
         {reading.module === undefined ? null : <ModuleChip module={reading.module} />}
         <StatusMark status="conflict" />

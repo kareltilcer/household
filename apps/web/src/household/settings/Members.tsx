@@ -21,7 +21,8 @@
 // read* where nothing is kept and the read failed or waits for a connection, and the list as
 // this browser kept it. *Empty* is a household of one: its member's own row, and under it what
 // inviting somebody takes. *Populated* is the list. *Read-only* is the list with the owner's two
-// actions absent, the settings' own note saying why (Page.tsx). *Absent* has nothing to be,
+// actions absent, the household's banner above the screen saying why
+// (shell/EntitlementBanner.tsx). *Absent* has nothing to be,
 // every member reading this screen. *Withdrawn* is a member removed while the screen is open,
 // which the shell answers for the whole household, a `404` on it drawing *not available*: the
 // screen has no state of its own for it. *Pending*, *syncing*, *conflicted* and *rejected* have

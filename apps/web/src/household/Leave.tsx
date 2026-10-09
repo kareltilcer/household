@@ -31,8 +31,10 @@
 // says it could not reach the server. Nothing waits *pending* or *syncing*: a membership ends on
 // the server or not at all (D-80), its control busy meanwhile. Nothing is *conflicted*, and a
 // refusal is no *rejected* change to settle later: it is drawn as what stands in the way.
-// Nothing is *absent* or *withdrawn*, no grant standing over leaving, and *read-only* changes
-// nothing: a household whose subscription lapsed is left like any other.
+// Nothing is *absent* or *withdrawn*, no grant standing over leaving. *Read-only* changes one
+// thing: leaving is taken by a household that takes no other write (FR-BI1), so a household
+// whose subscription lapsed is left like any other, but its last owner can make nobody an owner
+// there and invite nobody, and is told that in the place of a way that would lead to neither.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
@@ -53,7 +55,7 @@ import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import { useToast } from '../ui/Toast.tsx'
-import { useMembers, useReread } from './data.ts'
+import { useMembers, useReread, writes } from './data.ts'
 import { useHousehold } from './HouseholdContext.tsx'
 import { householdKey, householdsKey, type HouseholdSummary } from './households.ts'
 import { useTimeZone } from './timezone.ts'
@@ -258,8 +260,13 @@ function Leaving({ me }: { readonly me: Me }) {
                     <p className={styles.text}>{t('household.leave.last_owner.deleting')}</p>
                   ) : null}
                   {/* No way that could only lead to nobody: where the members can give no owner,
-                      the way on is to where one is invited. */}
-                  {onlyChildren ? (
+                      the way on is to where one is invited, and where the household takes no
+                      writes neither can be done, which is said. */}
+                  {!writes(household) ? (
+                    <p className={styles.text}>
+                      {t('household.leave.last_owner.held', { household: name })}
+                    </p>
+                  ) : onlyChildren ? (
                     <Link className={styles.link} to={inHousehold.invite(id)}>
                       {t('household.invite.title')}
                     </Link>

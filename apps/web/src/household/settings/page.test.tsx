@@ -97,21 +97,23 @@ describe('what every screen of household settings is set in', () => {
     ).toEqual(['Household', 'Members', 'Invitations', 'Modules', 'Storage', 'Data', 'Sync health'])
   })
 
-  it('says that a read-only household changes nothing, to its owner too', async () => {
+  // That a household takes no writes is the banner's to say, above every screen of it
+  // (shell/EntitlementBanner.tsx): the settings' own frame says it no second time, and not over
+  // the screens that still take a write, billing and the household's data among them.
+  it('says nothing of a household that takes no writes, to its owner', async () => {
     const server = createServer()
     server.household = {
       ...tilcerovi,
       entitlement: { state: 'read_only', can_write: false, can_upload: false },
     }
     open(inHousehold.settings(home), server)
-    expect(
-      await screen.findByText(
-        'Read-only: nothing here can be changed until the subscription resumes. Everything still reads.',
-      ),
-    ).toBeInTheDocument()
+    await sections()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Household' })).toBeInTheDocument()
+    expect(screen.queryByText(/read-only|restricted/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Changing it is for an owner/)).not.toBeInTheDocument()
   })
 
-  it('says that a restricted household waits for an owner to lift it', async () => {
+  it('tells a member of such a household what it tells one of any: that changing is an owner’s', async () => {
     const server = createServer(accountOf(petr))
     server.household = {
       ...readBy(memberOf(petr)),
@@ -120,8 +122,9 @@ describe('what every screen of household settings is set in', () => {
     open(inHousehold.settings(home), server)
     expect(
       await screen.findByText(
-        'Restricted: nothing here can be changed until an owner lifts it. Everything still reads.',
+        'You can read everything here. Changing it is for an owner: Jana Tilcerová.',
       ),
     ).toBeInTheDocument()
+    expect(screen.queryByText(/read-only|restricted/i)).not.toBeInTheDocument()
   })
 })

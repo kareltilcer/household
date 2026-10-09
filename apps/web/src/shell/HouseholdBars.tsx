@@ -9,11 +9,15 @@
 // every screen. A module's change is saved and sent when the connection returns. The household's
 // settings and leaving it are changed on the server or not at all (D-170; PRD 17, Sync): nothing
 // pressed there waits on the device, so on those screens the bar says that a change needs a
-// connection, and not that it is saved.
+// connection, and not that it is saved. Nor is it one thing for every household: one that takes
+// no writes keeps no change of its member's to send, so over its modules the bar says what is
+// read and promises nothing of a change, and so does the sentence that changes are not arriving.
 //
-// A household's entitlement banner is drawn here too, by item 27. The one thing this item does
-// with the household's state is tell the replica when the household writes again, so that what
-// it held for a household that did not is sent (ADR 0019).
+// Under the bar's place stands the household's entitlement banner (A-30, EntitlementBanner.tsx):
+// one at a time, and none for a household in good standing. The two say different things and
+// both may hold at once, a read-only household read with no connection, so the bar comes first
+// and the banner after it. And the replica is told here when the household writes again, so that
+// what it held for a household that did not is sent (ADR 0019).
 import { useEffect } from 'react'
 import { useLocation } from 'react-router'
 import { inHousehold } from '../app/paths.ts'
@@ -21,6 +25,7 @@ import { useHousehold } from '../household/HouseholdContext.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useReplica, useSync } from '../sync/ReplicaProvider.tsx'
 import { OfflineBar } from '../ui/Banner.tsx'
+import { EntitlementBanner } from './EntitlementBanner.tsx'
 
 /**
  * Whether `pathname` is `address` or an address under it: by whole segments, so that an address
@@ -53,13 +58,22 @@ export function HouseholdBars() {
   useEffect(() => {
     if (writes) replica?.resume()
   }, [replica, writes])
-  if (!online) {
-    return changesAtOnce(pathname, household.id) ? (
+  // One bar, in one place, whose sentence changes where it stands.
+  const bar = !online ? (
+    changesAtOnce(pathname, household.id) ? (
       <OfflineBar sentence={t('shell.offline.settings')} />
-    ) : (
+    ) : writes ? (
       <OfflineBar />
+    ) : (
+      <OfflineBar sentence={t('shell.offline.reading')} />
     )
-  }
-  if (receiving === false) return <OfflineBar sentence={t('sync.not_receiving')} />
-  return null
+  ) : receiving === false ? (
+    <OfflineBar sentence={writes ? t('sync.not_receiving') : t('shell.not_receiving.reading')} />
+  ) : null
+  return (
+    <>
+      {bar}
+      <EntitlementBanner />
+    </>
+  )
 }

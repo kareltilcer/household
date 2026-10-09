@@ -329,6 +329,37 @@ describe('leaving a household', () => {
     expect(await screen.findByText('You left Tilcerovi.')).toBeInTheDocument()
   })
 
+  // Leaving is taken there, and making somebody an owner and inviting somebody are not
+  // (FR-BI1): the way to either would lead to a screen that offers neither.
+  it.each([
+    ['somebody who could be made an owner', members],
+    [
+      'child profiles alone',
+      members.filter((each) => each.user_id === jana.id || each.role === 'child'),
+    ],
+  ])(
+    'tells the only owner of a household that takes no writes that a second owner has to wait, beside %s',
+    async (_company, company) => {
+      const server = createServer()
+      server.household = {
+        ...server.household,
+        entitlement: { state: 'restricted', can_write: false, can_upload: false },
+      }
+      server.members = company.map((each) =>
+        each.user_id === jana.id ? { ...each, is_billing_payer: false } : each,
+      )
+      await read(server)
+      expect(sections()).toEqual(['You are the only owner', 'What you leave behind'])
+      expect(
+        screen.getByText(
+          'That has to wait: nobody can be made an owner or invited while Tilcerovi can’t be changed.',
+        ),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('link')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    },
+  )
+
   it('tells a child profile that an owner removes it, and offers nothing', async () => {
     const server = createServer(accountOf(adam))
     await leave(server)

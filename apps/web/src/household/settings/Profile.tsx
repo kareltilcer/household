@@ -28,7 +28,8 @@
 // *Rejected* is a refusal said beside the field it is of, or under the form. *Withdrawn* is an
 // owner made a member while the screen was open: the controls leave when the household is read
 // again, and a change pressed before then is answered `403`, which is said on the page.
-// *Read-only* draws no control that changes anything, and the note above says why. *Empty* and
+// *Read-only* draws no control that changes anything, and the household's banner above the
+// screen says why (shell/EntitlementBanner.tsx). *Empty* and
 // *absent* have nothing to be: a household always has a name, a country and a currency, and
 // every member may read them.
 import { matchLocale } from '@household/i18n/lazy'

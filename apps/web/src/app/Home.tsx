@@ -6,8 +6,10 @@
 // is its own, its account.
 //
 // A household the platform suspended is passed over while the member is in one that opens
-// (D-162). The list still names it, for its lockout, and its own address answers `404` (D-115):
-// opened there, a member would be at a screen whose one way out leads back here.
+// (D-162). The list still names it, and its own address answers `404` (D-115) and draws its
+// lockout (shell/Lockout.tsx): a suspension is no reason to hold a member at a screen that
+// shows nothing, away from a household of theirs that works. A member in none but suspended
+// ones is opened at the first of them, where the lockout says what there is to say.
 import { Navigate } from 'react-router'
 import { lastHousehold, useHouseholds } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'

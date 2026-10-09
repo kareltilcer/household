@@ -1,9 +1,11 @@
 // What every screen of household settings is set in (PRD 17 §1 to §3; C-49 to C-51): the way
 // between its screens, the screen's one title, and under it what the member reading it should
-// know before anything else: that the household is read-only, or that changing what is here is
-// an owner's. That a change here needs a connection is the shell's to say, in the bar it draws
-// with none (shell/HouseholdBars.tsx): said here as well, it stood under a bar that said the
-// opposite.
+// know before anything else: that changing what is here is an owner's. That the household takes
+// no writes is the shell's to say, in the banner it draws above every screen of the household
+// (shell/EntitlementBanner.tsx), and so is that a change here needs a connection, in the bar it
+// draws with none (shell/HouseholdBars.tsx): said here as well, either stood under a sentence
+// that said it already, and over the screens the gate exempts, billing, the household's data
+// and its exports, it said that nothing could be changed where something can.
 //
 // Every member may open these screens, whatever they hold on household settings (D-167): the
 // profile, the members with what each holds, and the modules are every member's to read. What
@@ -93,8 +95,10 @@ function SettingsNavigation() {
 }
 
 /**
- * What a member should know of where they stand before they read on: one sentence, the first
- * that holds. Read in its place, and never announced: it was so when the screen opened.
+ * What a member should know of where they stand before they read on: that changing what is here
+ * is an owner's, to a member who is none. It holds whatever the household's state, which the
+ * banner above the screen says. Read in its place, and never announced: it was so when the
+ * screen opened.
  */
 function StandingNote() {
   const t = useTranslate()
@@ -102,25 +106,14 @@ function StandingNote() {
   const household = useHousehold()
   const standing = useStanding()
   const owners = useOwnerNames(household.id)
-  if (!standing.writes) {
-    return (
-      <Banner tone="warning">
-        {household.entitlement?.state === 'restricted'
-          ? t('household.settings.note.restricted')
-          : t('household.settings.note.read_only')}
-      </Banner>
-    )
-  }
-  if (!standing.owner) {
-    return (
-      <Banner tone="neutral">
-        {owners.length === 0
-          ? t('household.settings.note.owner_only')
-          : t('household.settings.note.owners', { owners: format.list(owners) })}
-      </Banner>
-    )
-  }
-  return null
+  if (standing.owner) return null
+  return (
+    <Banner tone="neutral">
+      {owners.length === 0
+        ? t('household.settings.note.owner_only')
+        : t('household.settings.note.owners', { owners: format.list(owners) })}
+    </Banner>
+  )
 }
 
 export interface HouseholdSettingsPageProps {

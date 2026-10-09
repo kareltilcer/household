@@ -27,7 +27,8 @@
 // is off, and asking for what it is already changes nothing. *Rejected* is a refusal, said in a
 // banner. *Withdrawn* is an owner made a member while the screen was open: the controls leave
 // when the household is read again, and a change pressed before then is answered `403`, which
-// is said. *Read-only* draws no control, and the note above the list says why.
+// is said. *Read-only* draws no control, and the household's banner above the screen says why
+// (shell/EntitlementBanner.tsx).
 import { ModuleIcon } from '@household/icons/web'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
