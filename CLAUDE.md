@@ -44,7 +44,7 @@ pnpm --filter @household/sync conformance      # the conformance suite against i
 pnpm --filter @household/sync conformance:web  # @household/sync's web replica in Chromium against it (Playwright)
 pnpm --filter @household/web build      # the web build a deployment serves (dist/www)
 pnpm --filter @household/web check      # that build held to its bundle budget, the policy and its own id
-pnpm --filter @household/web e2e        # builds it again with the dev-only routes (build:e2e), then Playwright against an API it starts itself: axe, the pseudo-locale pass, the policy, the critical paths (needs up, db:setup and up:sync; stop dev:api first)
+pnpm --filter @household/web e2e        # builds it again with the dev-only routes (build:e2e), then Playwright against an API and a stand-in for Stripe it starts itself: axe, the pseudo-locale pass, the policy, the critical paths (needs up, db:setup and up:sync; stop dev:api first)
 ```
 
 - **`pnpm run up`, never `pnpm up`.** `pnpm up` is pnpm's own `update` command and rewrites
@@ -84,7 +84,8 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   ([ADR 0024](docs/adr/0024-design-tokens-icons-and-the-illustration-kit.md)).
 - **Generated, never committed:** `packages/api/src/generated/` (the typed client, from
   `openapi.yaml`) and `packages/i18n/src/generated/` (message keys and arguments, from
-  `catalogs/en.json`). turbo writes them before every typecheck, lint and test; after a
+  `catalogs/en.json`, and each language's catalog in the parts a client fetches it in, with the
+  table of their imports, from the catalogs and `src/parts.ts`). turbo writes them before every typecheck, lint and test; after a
   contract or catalog change, `pnpm run gen` refreshes them for an editor. The Go ISO 4217
   table (`internal/platform/money/iso4217_gen.go`) is committed and generated from
   `packages/domain/src/iso4217.json`, and a test fails until it is regenerated.
@@ -198,7 +199,15 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   the first module written offline settles for what it has queued.
   The app holds one language at a time: `apps/web/src` imports `@household/i18n/lazy` and never
   the package's own entry, which holds all five catalogs, and ESLint fails the import
-  ([D-159](docs/prd/09-decisions.md)). A file of the app's own whose import failed is not
+  ([D-159](docs/prd/09-decisions.md)). It holds a language in parts
+  ([D-175](docs/prd/09-decisions.md)): a key's first segment is a line of
+  `packages/i18n/src/parts.ts`, the `app` part is fetched before a word is drawn, and every
+  other part with the screens whose route names it (`words`, on its line of `paths.ts`), beside
+  the screen's file, either failing being the screen's file failing. `src/i18n/words.test.ts`
+  reads the sources and fails a file the first download or a shell reaches that reads a word
+  outside `app`, a screen that reads a part its route does not name, and a route that names a
+  part its screen does not read; the first segments `activity`, `admin`, `email` and
+  `notification` are the server's alone, in no part. A file of the app's own whose import failed is not
   imported again, since a browser may answer the second import with the first one's failure: the
   page is loaded again, or the screen says to reload. The shell's module list is derived from the household's own
   answer and lists a module only where `src/modules/registry.ts` has its screens, which the
@@ -221,8 +230,11 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   replica opened again has synced and has not tried yet, and every retry is connecting. The policy admits three sources beside its own origin: for the replica,
   `'wasm-unsafe-eval'` and the sync service's origin in `connect-src`, and for a picture the
   object store's origin in `img-src`, both origins told to a build (`HOUSEHOLD_WEB_SYNC_ORIGIN`,
-  `HOUSEHOLD_WEB_FILES_ORIGIN`). The end-to-end suite starts the API itself on the development
-  services, each test a network of its own (`e2e/stack.ts`), and a member's routes are walked
+  `HOUSEHOLD_WEB_FILES_ORIGIN`). For the payment form it admits the processor's own, Stripe's
+  script and frames and its API (`processor`, `build/csp.ts`), which no build is told
+  ([ADR 0028](docs/adr/0028-the-catalog-in-parts-the-payment-form-the-entitlement-in-the-shell-and-what-a-household-shows-of-its-data.md)).
+  The end-to-end suite starts the API itself on the development
+  services, and a stand-in for Stripe beside it (`cmd/stripe-standin`), each test a network of its own (`e2e/stack.ts`), and a member's routes are walked
   signed in; what the suite names a person or a household holds no run of four plain letters,
   which the pseudo-locale pass takes for a word nobody translated. Every test starts in a browser
   that kept nothing, with a connection and every service answering: what a screen draws on a
@@ -294,6 +306,44 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   by no rule of its own. A control drawn as one word beside its hidden name (`RowAction`,
   `RowLink`, or by hand) holds that word in its name, together and in order, in all five
   languages, which the catalogs' own test holds each pair to (WCAG 2.5.3).
+- **A household's other settings, the entitlement and a member's own data on the web**
+  ([ADR 0028](docs/adr/0028-the-catalog-in-parts-the-payment-form-the-entitlement-in-the-shell-and-what-a-household-shows-of-its-data.md)).
+  The settings' navigation (`household/settings/Page.tsx`) lists storage for whoever holds at
+  least `view` on household settings, billing and the clients for owners, and the data screen
+  and sync health for every member ([D-177](docs/prd/09-decisions.md)); the address of a screen
+  its reader may not open draws *not available*. On these screens (`src/billing`,
+  `src/privacy`, `src/storage`, `src/health`) a control of an operation the gate exempts
+  (`entitlement.Exemptions`: billing's, an export, a deletion, a restriction) is drawn whatever
+  the household's state, for the payer on billing's and where `useStanding().owner` on the
+  others, and a control of a write it does not exempt, making an owner or a replica's
+  re-download, only where the household takes writes. The entitlement is said once, in the
+  shell: `shell/EntitlementBanner.tsx` draws one banner in `shell/HouseholdBars.tsx`, under the
+  offline bar's place, from `useHousehold().entitlement`, to its reader (`useReader`,
+  `household/data.ts`: the payer, another owner, a member), with no price and no read of
+  billing, a failed payment's for owners alone ([D-180](docs/prd/09-decisions.md)), and the
+  settings' frame says only whose changing what is there is. Where a household's address
+  answers `404`, `shell/HouseholdShell.tsx` reads the member's list of households again and
+  draws the lockout (`shell/Lockout.tsx`) only where that answer names the household suspended.
+  `billing/stripe.ts` is the one file that calls the processor's script, which is fetched when
+  a payment form is first drawn, and the form (`billing/PaymentForm.tsx`) is drawn in the page
+  and never in a dialog, which would stand above a bank's challenge. On billing's screens a
+  secret is asked for by a press and kept in the screen's state alone; what the processor adds
+  to an address on a return is taken out of it and nothing of it believed; and a payment is
+  said to have gone through when the server says so: subscribing asks `postBillingSubscription`
+  again once the processor's script has resolved, and its `409 already_subscribed` is the
+  payment taken ([D-131](docs/prd/09-decisions.md)). An export's *Download*
+  (`privacy/ExportList.tsx`) reads its job again and leaves for the link that answer carries, a
+  navigation and never a `fetch`, the policy admitting none of the object store. The privacy
+  centre (`privacy/Privacy.tsx`) is the account's and its route names no part of the
+  household's words: what a household's screens and an account's share, and that reads no
+  household word, is in `account/common.ts`. A size is said by `format.bytes`
+  (`i18n/format.ts`), in no unit smaller than the kilobyte: `Intl` writes a byte as an English
+  word in every language. Sync health (`health/SyncHealth.tsx`) is its reader's own replicas,
+  this browser's drawn from the replica itself and reported as the screen opens
+  (`useReportOnOpen`, `health/data.ts`), and a diagnostic bundle (`health/bundle.ts`) holds the
+  replica's state and no value a member typed ([D-181](docs/prd/09-decisions.md)). In a
+  household that takes no writes the conflict panel draws no answer and the refused-change
+  panel keeps *Discard* (`sync/ConflictResolver.tsx`, `sync/RejectedResolver.tsx`).
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).
@@ -343,7 +393,10 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   and its count of the mutations a household pushed in a day (`sync_usage`,
   [ADR 0018](docs/adr/0018-sync-engine-ii-versions-visibility-audiences-and-the-feed.md)); and each
   replica's last report of itself (`sync_replicas`), which leaves with its member's membership
-  ([ADR 0019](docs/adr/0019-the-sync-client-library.md)).
+  ([ADR 0019](docs/adr/0019-the-sync-client-library.md)), and which keeps the client that sent
+  it, as `Household-Client` named it: an owner reads the household's clients and their versions
+  off those rows (`getClients`), never off the accounts' devices and sessions, which are no
+  household's ([ADR 0028](docs/adr/0028-the-catalog-in-parts-the-payment-form-the-entitlement-in-the-shell-and-what-a-household-shows-of-its-data.md)).
   The household surface (`internal/platform/household`) is `admin`, a module the platform
   serves itself: it writes through `mutation.Apply` with the actions and entities
   `module.PlatformModule` declares, and holds a household its caller is not yet in, creating
@@ -369,7 +422,12 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   Storage is billed by the calendar month, UTC's, from `storage.Allowance.Blocks` over the daily
   samples, whose arithmetic `vectors/storage.json` holds both sides to. A test asks `billingtest`'s
   stand-in, never Stripe ([ADR 0020](docs/adr/0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md),
-  [runbook](docs/runbooks/billing.md)).
+  [runbook](docs/runbooks/billing.md)). The web's end-to-end suite pays against the same stand-in,
+  served as a process (`cmd/stripe-standin`, the suite's alone and never deployed), which the API
+  it starts is told to ask through `HOUSEHOLD_STRIPE_API_URL`: a setting only development may
+  hold, over `http` on the loopback alone and with test-mode keys alone, which stops any other
+  deployment from starting. The stand-in delivers Stripe's webhooks itself, and a request to it
+  is answered once the household's row is settled ([D-176](docs/prd/09-decisions.md)).
 - **Notifications** go through `internal/platform/notify`: a module tells a member something by
   queueing a `notify.Notification` in its mutation's transaction (`Queue`), a catalog key and
   arguments, its category, the module whose view the recipient must hold and, for a private item, its
@@ -419,6 +477,9 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   tables. Garden's, the crop catalog and the climate profiles, is `internal/modules/garden/catalog`,
   where a timing is days from a frost date and never a calendar date
   ([ADR 0023](docs/adr/0023-the-crop-catalogs-source-the-reference-set-hook-and-the-climate-dataset.md)).
+  A country's supervisory authority, its name in the five languages and the `https` address of
+  its complaints page, is a field of its profile and no words of a client's
+  ([D-179](docs/prd/09-decisions.md)).
 - **Errors** are RFC 9457 problem documents. Clients switch on `code` (the `ProblemCode`
   enum), never on `detail`.
 - **Concurrency and retries**: `version` travels as an `ETag` and returns in `If-Match`
