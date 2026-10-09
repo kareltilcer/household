@@ -270,7 +270,7 @@ Beyond the first-run empty state, three others need designing and are frequently
 | Remove a member | What happens to their content: household content stays, their **private root** is deleted after a 30-day export window |
 | Delete the household | Type the name. All members notified. **30-day reversible window** |
 | Delete an account | The four situations are resolved and stated **before** anything happens: sole owner with no members · sole owner with members (**blocked**, with both unblocking options offered) · ordinary member · billing payer |
-| Leave a household | The two refusals name what unblocks them: `last_owner` → promote someone; `billing_payer` → hand over billing or cancel. **A payer who is also the last owner hits both, and the flow says so at once rather than one at a time** ([FR-HH4](../prd/02-identity-and-access.md)) |
+| Leave a household | The two refusals name what unblocks them: `last_owner` → promote someone; `billing_payer` → hand billing to another owner, which cancelling the subscription does not stand in for (D-174). **A payer who is also the last owner hits both, and the flow says so at once rather than one at a time** ([FR-HH4](../prd/02-identity-and-access.md)) |
 | Regenerate the household code | Future sign-ins with the old code stop; **existing sessions are untouched** |
 | Change base currency | **Show what will change before it changes** ([FR-HA2](../prd/modules/17-household-admin.md)) |
 

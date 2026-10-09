@@ -191,11 +191,14 @@ Both clients, in CI, on every pull request:
   offline capture → reconnect → converge; subscribe → lapse → read-only → export. The web's suite
   runs against the server itself, which it starts on the development services, each test a
   network of its own to the server's limits ([ADR 0026](../adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)).
+  It pays at stand-ins for the payment processor, its API and its script alike, so that the path
+  needs no account, no secret and no network of the processor's (**D-176**).
 - Accessibility: axe on every route, both themes. On the web the routes are one list the router is
   built from, which the suite walks, and the twelve-state harness is among them: a dev-only page,
   in no build a deployment serves, whose words are fixtures (**D-154**).
 - Pseudolocalisation pass, to catch layouts that only survive English.
 - Bundle-size budget per platform, enforced. The web's is what a first visit downloads before the
   app can draw: 200 kB of script and 20 kB of stylesheet, compressed, and 150 kB for any one script
-  loaded later (**D-153**). The web holds one language at a time, and the largest catalog is
-  counted with the scripts (**D-159**).
+  loaded later (**D-153**). The web holds one language at a time (**D-159**), and a language in
+  parts: the app's own words are counted with the scripts, in the largest language, and a
+  screen's are fetched with the screen (**D-175**).

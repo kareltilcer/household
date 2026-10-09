@@ -205,12 +205,18 @@ leave without doing something first, and both refusals name the action that unbl
 | Who | Refusal | What unblocks it |
 |---|---|---|
 | The **last owner**, an owner whose account is scheduled for deletion counting as none (D-137) | `409`, `last_owner` | Promote another member to `owner`, or delete the household |
-| The **billing payer** | `409`, `billing_payer` | Hand billing to another owner (FR-HH6), or cancel the subscription |
+| The **billing payer** | `409`, `billing_payer` | Hand billing to another owner (FR-HH6), or delete the household |
 
-The payer rule is the same one account deletion applies
-([05](05-privacy-and-compliance.md) §4) and it exists for the same reason: a household whose payer
-has walked out is a household that lapses for a reason nobody in it can fix. A payer who is *also*
-the last owner hits both, and the flow says so at once rather than one at a time.
+The payer is refused whatever the subscription's state, a household that never subscribed and one
+whose subscription was cancelled among them: cancelling does not unblock it (**D-174**). A
+household always has a payer of record, who is the one member that can subscribe it again, and
+billing passes to nobody who has not accepted it (FR-BI6). Where the household has no
+subscription the hand-over asks the other owner for no card, and is theirs to accept in one
+press. The rule exists for the reason account deletion's does
+([05](05-privacy-and-compliance.md) §4), which is laxer, an account being about to stop existing:
+a household whose payer has walked out is a household that lapses for a reason nobody in it can
+fix. A payer who is *also* the last owner hits both, and the flow says so at once rather than one
+at a time. Removing the payer, and making them a member, are refused the same way.
 
 **FR-HH5 — Remove a member.** `owner` only. Immediate: sessions scoped to that household stop
 resolving, the offline replica receives retractions for everything they can no longer see, and

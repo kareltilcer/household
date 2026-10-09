@@ -58,7 +58,7 @@ than handling the requests.
 | **Erasure** (Art. 17) | Account deletion (§4) and household deletion (§5) | 30 days |
 | **Restriction** (Art. 18) | An owner puts the household into the `restricted` entitlement state — everything readable and exportable, nothing writable, reversible by the same owner ([04](04-billing-and-entitlements.md) FR-BI7) | Immediate |
 | **Objection** (Art. 21) | Analytics consent is withdrawable in settings; marketing email has one-click unsubscribe | Immediate |
-| **Complaint** | Link to the supervisory authority for the member's own country — their lead EU authority, or the **ICO** for UK residents — in the privacy centre | — |
+| **Complaint** | Link to the supervisory authority for the member's own country — their lead EU authority, or the **ICO** for UK residents — in the privacy centre. The authority and the address of its complaints page are reference data of the country's profile, and an account has no country of its own: the privacy centre shows the authority of each country a household of the member's is set in (**D-179**) | — |
 
 ### Export format
 
