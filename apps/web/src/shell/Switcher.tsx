@@ -6,10 +6,13 @@
 //
 // It lists the households the member belongs to and no other. A household whose subscription
 // has lapsed stays in the list with its state in a word, and can be entered: that is how its
-// payer reaches its billing. With one membership there is nothing to switch between, and the
-// name is a label and no control. The household the member stands in is drawn from the address
-// at once: opening the switcher never blanks it, and where the others could not be read it says
-// so in a line and the one that is open is as it was.
+// payer reaches its billing. One the platform suspended stays in it too, with its word, and
+// entering it opens its lockout (D-162, Lockout.tsx). The household that is open is named with
+// its word as the others are, beside the member's role in it: the banner above its screens
+// says the rest. With one membership there is nothing to switch between, and the name is a
+// label and no control. The household the member stands in is drawn from the address at once:
+// opening the switcher never blanks it, and where the others could not be read it says so in a
+// line and the one that is open is as it was.
 import { useNavigate } from 'react-router'
 import { inHousehold } from '../app/paths.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
@@ -28,8 +31,9 @@ import styles from './Sidebar.module.css'
 
 /**
  * The word a household is named with beside its name, for a state in which something is held
- * back: a word, and no lock glyph. A household that is trialing, paid for or past due is named
- * with none.
+ * back: a word, and no lock glyph. A household that is trialing or paid for is named with none,
+ * and so is one that is past due, which holds nothing back and is its owners' alone to know
+ * (PRD 04 §6).
  */
 function useStateWord(): (state: EntitlementState | undefined) => string | undefined {
   const t = useTranslate()
@@ -56,7 +60,7 @@ function useStateWord(): (state: EntitlementState | undefined) => string | undef
 
 export interface SwitcherViewProps {
   /** The household that is open. */
-  readonly household: Pick<Household, 'id' | 'name' | 'my_role'>
+  readonly household: Pick<Household, 'id' | 'name' | 'my_role' | 'entitlement'>
   /** The member's other households, in the server's order. */
   readonly others: readonly HouseholdSummary[]
   /** Whether the member's households could not be read. */
@@ -69,7 +73,11 @@ export function SwitcherView({ household, others, failed, onSwitch }: SwitcherVi
   const t = useTranslate()
   const roleWord = useRoleWord()
   const stateWord = useStateWord()
-  const role = roleWord(household.my_role)
+  const own = stateWord(household.entitlement?.state)
+  const role =
+    own === undefined
+      ? roleWord(household.my_role)
+      : t('shell.switcher.role_state', { role: roleWord(household.my_role), state: own })
 
   const named = (other: HouseholdSummary): string => {
     const name = other.name ?? ''

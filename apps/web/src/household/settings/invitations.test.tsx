@@ -279,7 +279,8 @@ describe('the invitations a household sent', () => {
     // The decline is still said; the way to ask again is a write, and is not drawn.
     expect(screen.getByText('petr@example.cz declined the invitation')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /^Invite .* again$/ })).not.toBeInTheDocument()
-    expect(screen.getByText(/^Read-only: nothing here can be changed/)).toBeInTheDocument()
+    // Why is the banner's to say, above the screen (shell/EntitlementBanner.tsx).
+    expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument()
   })
 
   it('teaches what an invitation takes where none was sent, with the way to send one', async () => {

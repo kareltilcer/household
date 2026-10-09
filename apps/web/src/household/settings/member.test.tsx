@@ -468,7 +468,8 @@ describe('what a member holds, as each reader reads it', () => {
     ])
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    expect(screen.getByText(/^Read-only: nothing here can be changed/)).toBeInTheDocument()
+    // Why is the banner's to say, above the screen (shell/EntitlementBanner.tsx).
+    expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument()
   })
 
   it('says that an owner holds everything, and to the owner who could what narrows it', async () => {

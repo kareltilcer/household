@@ -99,7 +99,7 @@ export const inboxCases: Readonly<Record<InboxCell, InboxCase>> = {
   },
   readonly: {
     name: 'Read-only',
-    rule: 'The household does not write. What is held is kept and sent when it does (FR-BI2), and no control that would send a change is drawn.',
+    rule: 'The household does not write. What is held is kept and sent when it does (FR-BI2), and nothing is answered meanwhile: each panel reads, and draws no control.',
     facts: {
       ...open,
       writes: false,

@@ -1,0 +1,41 @@
+/* The entitlement banner's own parts, and the lockout's (A-30, A-31): its sentences one under
+   another, each way on a control of a row's height, and what somebody else wrote, a restriction's
+   reason or a suspension's notice, kept as it was written. */
+.sentences {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+/* A way on: a target of a row's size each way, whose words break where a phone's width asks. */
+.way {
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--dens-row-min);
+  min-height: var(--dens-row-min);
+  overflow-wrap: anywhere;
+}
+
+.written {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* The lockout's parts are as wide as its column, whatever they hold. */
+.block {
+  align-self: stretch;
+  min-width: 0;
+}
+
+.text {
+  overflow-wrap: anywhere;
+}
+
+.ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: center;
+  min-width: 0;
+}

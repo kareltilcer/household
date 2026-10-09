@@ -27,8 +27,9 @@
 // to send one for an owner; *offline* is the list as this browser kept it, and a write that says
 // it could not reach the server; *absent* is the member who holds nothing on household settings;
 // *withdrawn* is that level lowered while the screen was open, which the list's `404` or the
-// household read again says; *read-only* is the list without its controls, the settings' own
-// note saying why. *Pending* and *syncing* have nothing to be, an invitation never being a
+// household read again says; *read-only* is the list without its controls, the household's
+// banner above the screen saying why (shell/EntitlementBanner.tsx). *Pending* and *syncing* have
+// nothing to be, an invitation never being a
 // change held to be sent later (D-80), nor has *conflicted*, an invitation having no version to
 // disagree over, nor *rejected*: a refused write is said where it was pressed.
 import type { BaseId } from '@household/icons'

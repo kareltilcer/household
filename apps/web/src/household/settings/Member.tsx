@@ -22,7 +22,8 @@
 // member of the household, and *withdrawn* a member removed while the page stood open, whose
 // next read finds nobody: both draw the neutral *not available*, with the household's home as its
 // way out, and neither says which it was. *Read-only* is the same page without its controls,
-// which the frame of the settings says the reason for (Page.tsx). *Empty* has nothing to be on
+// which the household's banner above it says the reason for (shell/EntitlementBanner.tsx).
+// *Empty* has nothing to be on
 // one member's page. *Pending* and *syncing* are a write under way, its control busy;
 // *conflicted* and *rejected* are refusals said where they are met, there being no queue to
 // hold a change that waits.

@@ -59,18 +59,24 @@ function notFound(): Response {
 }
 
 interface Server {
-  /** The households the member is in. */
+  /** The households the member is in: read as each request is answered, so a test may change them. */
   readonly memberships?: readonly string[]
   /**
-   * Those of them the platform suspended: the list still names each, with its state, and its own
-   * address is not found (D-115).
+   * Those of them the platform suspended: the list still names each, with its state, when it was
+   * suspended and the notice that went with it, and its own address is not found (D-115). Read
+   * as each request is answered too.
    */
   readonly suspended?: readonly string[]
   /** Answers a household's own address: left out, what `known` holds, else not found. */
   readonly household?: (id: string) => Response
+  /** Answers the list of the member's households: left out, `memberships` as the server lists them. */
+  readonly households?: () => Response | undefined
   /** Told of each request as it is asked, before it is answered. */
   readonly asking?: (path: string) => void
 }
+
+/** What the platform told a suspended household of why: its own words, shown as written. */
+const notice = 'We were told of files here that break our terms, and are looking at them.'
 
 /**
  * Takes the browser's connection away as the account is read: what the screen that follows
@@ -83,7 +89,13 @@ function offlineOnceKnown(path: string): void {
 /** The app at `address`, signed in, over a server of the test's, and what the server was asked. */
 function open(
   address: string,
-  { memberships = [home, cottage], suspended = [], household: answer, asking }: Server = {},
+  {
+    memberships = [home, cottage],
+    suspended = [],
+    household: answer,
+    households,
+    asking,
+  }: Server = {},
 ) {
   const asked: string[] = []
   const client = createWebClient({
@@ -97,14 +109,21 @@ function open(
       if (path === '/me') return Promise.resolve(Response.json(me))
       if (path === '/households') {
         return Promise.resolve(
-          Response.json({
-            items: memberships.map((id) => ({
-              id,
-              name: known[id]?.name,
-              my_role: 'owner',
-              entitlement: { state: suspended.includes(id) ? 'suspended' : 'trialing' },
-            })),
-          }),
+          households?.() ??
+            Response.json({
+              items: memberships.map((id) => ({
+                id,
+                name: known[id]?.name,
+                my_role: 'owner',
+                entitlement: suspended.includes(id)
+                  ? {
+                      state: 'suspended',
+                      suspended_at: '2026-09-09T12:02:00Z',
+                      suspension_notice: notice,
+                    }
+                  : { state: 'trialing' },
+              })),
+            }),
         )
       }
       const id = /^\/households\/([^/]+)$/.exec(path)?.[1]
@@ -377,10 +396,12 @@ describe('where the app opens', () => {
     })
   })
 
-  it('leads from a suspended household’s address, which opens nothing, to one that opens', async () => {
+  it('leads from a suspended household’s address, by where the app opens, to one that opens', async () => {
     rememberHousehold(me.id, cottage)
     const { router } = open(inHousehold.home(cottage), { suspended: [cottage] })
-    await userEvent.click(await screen.findByRole('link', { name: 'Go to Home' }))
+    await screen.findByRole('heading', { level: 1, name: 'Chata is suspended' })
+    // The shell's own way to where the app opens passes over the household it stands at.
+    await userEvent.click(screen.getByRole('link', { name: 'Home' }))
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(inHousehold.home(home))
     })
@@ -395,11 +416,146 @@ describe('where the app opens', () => {
       expect(router.state.location.pathname).toBe(inHousehold.home(cottage))
     })
     expect(
+      await screen.findByRole('heading', { level: 1, name: 'Chata is suspended' }),
+    ).toBeInTheDocument()
+  })
+})
+
+// A-31 (DD-15, D-115): every route of a suspended household answers `404`, and the member's own
+// list of households still names it. Where the two meet, the lockout stands in the place of
+// *not available*.
+describe('a suspended household’s lockout', () => {
+  const title = 'Chata is suspended'
+
+  it('says whose it is, since when, the notice itself, what was kept and whom it was told to', async () => {
+    open(inHousehold.home(cottage), { suspended: [cottage] })
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument()
+    const page = screen.getByRole('main')
+    expect(within(page).getByText('Household suspended it on Sep 9, 2026.')).toBeInTheDocument()
+    // The platform's own words to the household, as written, under what they are.
+    expect(within(page).getByText('What its owners were told')).toBeInTheDocument()
+    expect(within(page).getByText(notice)).toBeInTheDocument()
+    expect(
+      within(page).getByText(
+        'Nothing in it was deleted. While it is suspended, nobody can open it and nothing can be exported.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(page).getByText(
+        'Each owner was told by email. An owner who thinks it is a mistake contacts Household support.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    await waitFor(() => {
+      expect(document.title).toBe(`${title} · Household`)
+    })
+  })
+
+  it('draws nothing of the household: no navigation of it, no bar, no banner, and no way to export', async () => {
+    open(inHousehold.settings(cottage), { suspended: [cottage] })
+    await screen.findByRole('heading', { level: 1, name: title })
+    expect(screen.queryByRole('navigation', { name: 'Household' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Household settings' })).not.toBeInTheDocument()
+    // The bar names the app, and no household.
+    expect(screen.getByRole('banner')).not.toHaveTextContent('Chata')
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    // Export is said to be unavailable, and offered by no control that could only fail (DD-15).
+    const page = screen.getByRole('main')
+    expect(within(page).queryByRole('link', { name: /export/i })).not.toBeInTheDocument()
+    expect(within(page).queryByRole('button', { name: /export/i })).not.toBeInTheDocument()
+    expect(lastHousehold(me.id)).toBeNull()
+  })
+
+  it('leads to another household of the member’s, and lets them sign out', async () => {
+    const { router } = open(inHousehold.home(cottage), { suspended: [cottage] })
+    await screen.findByRole('heading', { level: 1, name: title })
+    const page = screen.getByRole('main')
+    expect(within(page).getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    await userEvent.click(within(page).getByRole('link', { name: 'Go to Tilcerovi' }))
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(inHousehold.home(home))
+    })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument()
+    // The member chose it themselves: nothing is said of a switch.
+    expect(screen.queryByText('Switched household to open this link.')).not.toBeInTheDocument()
+  })
+
+  it('offers a member in no other household that opens the way out alone', async () => {
+    open(inHousehold.home(cottage), { suspended: [home, cottage] })
+    await screen.findByRole('heading', { level: 1, name: title })
+    const page = screen.getByRole('main')
+    expect(within(page).queryByRole('link')).not.toBeInTheDocument()
+    expect(within(page).getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+  })
+
+  // What this browser kept of the member's households may be older than the suspension: it is
+  // read again once the address is not found, and only that answer says which screen stands.
+  it('reads the member’s households again before it says which it is', async () => {
+    const suspended: string[] = []
+    const { router, asked } = open(inHousehold.home(home), { suspended })
+    await screen.findByRole('button', { name: 'Switch household. Currently Tilcerovi' })
+    // The list was read, and named the household as one that opens. It is suspended since.
+    suspended.push(cottage)
+    const before = asked.length
+    await act(() => router.navigate(inHousehold.home(cottage)))
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument()
+    const since = asked.slice(before)
+    expect(since.indexOf('/households')).toBeGreaterThan(since.indexOf(`/households/${cottage}`))
+    expect(
+      screen.queryByRole('heading', { name: 'This link doesn’t open anything here.' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('opens the household once the suspension is lifted and the page is looked at again', async () => {
+    const suspended = [cottage]
+    open(inHousehold.home(cottage), { suspended })
+    await screen.findByRole('heading', { level: 1, name: title })
+    suspended.splice(0, 1)
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toHaveTextContent('Chata')
+  })
+
+  it('says the households could not be read where they were not, and draws the lockout once they are', async () => {
+    let down = true
+    open(inHousehold.home(cottage), {
+      suspended: [cottage],
+      households: () =>
+        down
+          ? Response.json(
+              { type: 'about:blank', title: 'down', status: 503, code: 'internal' },
+              { status: 503, headers: { 'Content-Type': 'application/problem+json' } },
+            )
+          : undefined,
+    })
+    expect(
+      await screen.findByRole(
+        'heading',
+        { level: 1, name: 'Your households could not be read' },
+        { timeout: 10_000 },
+      ),
+    ).toBeInTheDocument()
+    // Neither screen is drawn on a guess.
+    expect(screen.queryByRole('heading', { name: title })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'This link doesn’t open anything here.' }),
+    ).not.toBeInTheDocument()
+    down = false
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument()
+  }, 20_000)
+
+  it('is not drawn for a household the member is simply not in', async () => {
+    open(inHousehold.home('01900000-0000-7000-8000-0000000000ff'), { suspended: [cottage] })
+    expect(
       await screen.findByRole('heading', {
         level: 1,
         name: 'This link doesn’t open anything here.',
       }),
     ).toBeInTheDocument()
+    expect(screen.queryByText(notice)).not.toBeInTheDocument()
   })
 })
 
