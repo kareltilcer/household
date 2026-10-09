@@ -439,6 +439,68 @@ describe('Google and Apple', () => {
     expect(disconnect).not.toHaveAttribute('aria-disabled')
   })
 
+  // The rows share one disconnection and one start. A second of the same kind, sent from another
+  // row in the place of the first, would leave the first one's row busy no longer and its
+  // refusal said nowhere.
+  it('send no second disconnection in the place of one on its way', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google', 'apple'] })
+    configured(server, ['google', 'apple'])
+    let refuse: () => void = () => undefined
+    server.on(
+      'DELETE /auth/oauth/google',
+      () =>
+        new Promise<Response>((resolve) => {
+          refuse = () => {
+            resolve(problem(500, 'internal'))
+          }
+        }),
+    )
+    const { user } = await security(server)
+    const google = await screen.findByRole('button', { name: 'Disconnect Google' })
+    const apple = screen.getByRole('button', { name: 'Disconnect Apple' })
+    await user.click(google)
+    await waitFor(() => {
+      expect(server.to('DELETE /auth/oauth/google')).toHaveLength(1)
+    })
+    expect(apple).toHaveAttribute('aria-disabled', 'true')
+    expect(apple).not.toHaveAttribute('aria-busy')
+    await user.click(apple)
+    expect(server.to('DELETE /auth/oauth/apple')).toHaveLength(0)
+    expect(google).toHaveAttribute('aria-busy', 'true')
+
+    refuse()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong at our end\./)
+    expect(apple).not.toHaveAttribute('aria-disabled')
+  })
+
+  it('begin no second link in the place of one being begun', async () => {
+    const server = createServer()
+    configured(server, ['google', 'apple'])
+    let fail: (reason: Error) => void = () => undefined
+    vi.mocked(startProvider).mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          fail = reject
+        }),
+    )
+    const { user } = await security(server)
+    const google = await screen.findByRole('button', { name: 'Connect Google' })
+    const apple = screen.getByRole('button', { name: 'Connect Apple' })
+    await user.click(google)
+    await waitFor(() => {
+      expect(google).toHaveAttribute('aria-busy', 'true')
+    })
+    expect(apple).toHaveAttribute('aria-disabled', 'true')
+    expect(apple).not.toHaveAttribute('aria-busy')
+    await user.click(apple)
+    expect(startProvider).toHaveBeenCalledTimes(1)
+    expect(google).toHaveAttribute('aria-busy', 'true')
+
+    fail(new Error('no connection'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^We couldn’t reach Household\./)
+    expect(apple).not.toHaveAttribute('aria-disabled')
+  })
+
   // The page is leaving for the provider's. Where it did not after all, a navigation stopped,
   // no other row may be held for a start that has nothing left to answer.
   it('hold nothing once a link’s start is answered', async () => {

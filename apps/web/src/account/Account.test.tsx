@@ -50,7 +50,7 @@ function formParts(): (readonly [string, unknown])[] {
   return parts
 }
 
-const picture = () => new File(['picture'], 'me.png', { type: 'image/png' })
+const pictureFile = () => new File(['picture'], 'me.png', { type: 'image/png' })
 
 /** The chooser no member sees, which a test hands a file as the browser would. */
 function chooserIn(container: HTMLElement): HTMLInputElement {
@@ -170,7 +170,7 @@ describe('the account screen', () => {
     const parts = formParts()
     const { user, container } = await account(server)
     const chooser = chooserIn(container)
-    const file = picture()
+    const file = pictureFile()
 
     fireEvent.change(chooser, { target: { files: [file] } })
     const remove = await screen.findByRole('button', { name: 'Remove picture' })
@@ -271,7 +271,7 @@ describe('the account screen', () => {
     const change = screen.getByRole('button', { name: 'Change picture' })
     const remove = screen.getByRole('button', { name: 'Remove picture' })
 
-    fireEvent.change(chooserIn(container), { target: { files: [picture()] } })
+    fireEvent.change(chooserIn(container), { target: { files: [pictureFile()] } })
     await waitFor(() => {
       expect(server.to('PUT /me/avatar')).toHaveLength(1)
     })
@@ -357,7 +357,7 @@ describe('the account screen', () => {
     await waitFor(() => {
       expect(server.to('PATCH /me')).toHaveLength(1)
     })
-    fireEvent.change(chooserIn(container), { target: { files: [picture()] } })
+    fireEvent.change(chooserIn(container), { target: { files: [pictureFile()] } })
     await waitFor(() => {
       expect(server.to('PUT /me/avatar')).toHaveLength(1)
     })
