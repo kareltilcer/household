@@ -330,8 +330,10 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   secret is asked for by a press and kept in the screen's state alone; what the processor adds
   to an address on a return is taken out of it and nothing of it believed; and a payment is
   said to have gone through when the server says so: subscribing asks `postBillingSubscription`
-  again once the processor's script has resolved, and its `409 already_subscribed` is the
-  payment taken ([D-131](docs/prd/09-decisions.md)). An export's *Download*
+  again once the processor's script has resolved, which has the server read the processor
+  itself, and then reads the subscription, saying *subscribed* only where it names a plan: the
+  ask's `409 already_subscribed` is answered for a bank debit still on its way too
+  ([D-131](docs/prd/09-decisions.md)). An export's *Download*
   (`privacy/ExportList.tsx`) reads its job again and leaves for the link that answer carries, a
   navigation and never a `fetch`, the policy admitting none of the object store. The privacy
   centre (`privacy/Privacy.tsx`) is the account's and its route names no part of the

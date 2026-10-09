@@ -658,7 +658,7 @@ describe('what an invitation shows', () => {
     )
     expect(held[2]).toHaveTextContent('Finance, Utilities, Garden, Property, and Vehicles')
     expect(held[3]).toHaveTextContent(
-      'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+      'The household’s invitations and its storage, beside its profile, its members, its modules, its data and sync health, which every member reads. Changing anything in the settings is for an owner.',
     )
     expect(screen.getByRole('main')).not.toHaveTextContent(/\b(none|view|contribute|manage)\b/)
 

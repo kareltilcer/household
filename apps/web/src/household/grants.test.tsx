@@ -131,13 +131,13 @@ describe('the grant matrix', () => {
     const settings = screen.getByRole('combobox', { name: 'Household settings' })
     expect(settings).toHaveValue('view')
     expect(settings).toHaveAccessibleDescription(
-      'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+      'The household’s invitations and its storage, beside its profile, its members, its modules, its data and sync health, which every member reads. Changing anything in the settings is for an owner.',
     )
     // It offers what the server takes, and says what each comes to.
     expect(offered(settings)).toEqual(['Off', 'Can see', 'Can add and edit', 'Can set it up'])
     await userEvent.selectOptions(settings, 'Off')
     expect(settings).toHaveAccessibleDescription(
-      'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not. Changed from “Can see”.',
+      'In their app all the same, as in every member’s: the household’s profile, its members, its modules, its data and sync health. Its invitations and its storage are not. Changed from “Can see”.',
     )
     for (const level of ['Can add and edit', 'Can set it up']) {
       await userEvent.selectOptions(settings, level)
@@ -175,7 +175,7 @@ describe('what somebody holds, gathered by level', () => {
     expect(held[2]).toHaveTextContent('Not in your app at all')
     expect(held[2]).toHaveTextContent('Finance, Utilities, Garden, Property, and Vehicles')
     expect(held[3]).toHaveTextContent(
-      'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+      'The household’s invitations and its storage, beside its profile, its members, its modules, its data and sync health, which every member reads. Changing anything in the settings is for an owner.',
     )
   })
 
@@ -201,7 +201,7 @@ describe('what somebody holds, gathered by level', () => {
     expect(theirs[2]).toHaveTextContent('Not in their app at all')
     expect(theirs[2]).not.toHaveTextContent('Household settings')
     expect(theirs[3]).toHaveTextContent(
-      'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+      'In their app all the same, as in every member’s: the household’s profile, its members, its modules, its data and sync health. Its invitations and its storage are not.',
     )
     unmount()
     draw(
@@ -218,7 +218,7 @@ describe('what somebody holds, gathered by level', () => {
       'Household settings',
     ])
     expect(screen.getAllByRole('definition')[3]).toHaveTextContent(
-      'In your app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+      'In your app all the same, as in every member’s: the household’s profile, its members, its modules, its data and sync health. Its invitations and its storage are not.',
     )
   })
 

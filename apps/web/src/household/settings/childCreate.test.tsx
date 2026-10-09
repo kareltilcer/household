@@ -150,7 +150,7 @@ describe('the sheet that makes a child profile', () => {
     // child profile's app as in every member's, which its own sentence says.
     expect(held[2]).not.toHaveTextContent('Household settings')
     expect(held[3]).toHaveTextContent(
-      'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+      'In their app all the same, as in every member’s: the household’s profile, its members, its modules, its data and sync health. Its invitations and its storage are not.',
     )
     expect(
       within(starts).getByText(

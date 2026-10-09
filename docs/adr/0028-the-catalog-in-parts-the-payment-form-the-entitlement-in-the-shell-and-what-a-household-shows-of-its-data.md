@@ -128,11 +128,14 @@ it: the screen reads the subscription.
 
 **A payment is believed when the server says so.** The server moves a household on the
 processor's word alone (D-131, D-134). After Stripe resolves a payment with no error, the
-screen asks `postBillingSubscription` again: the server reads the processor itself there, and
-its `409 already_subscribed` is the payment taken and the household settled, where a secret
-answered again is a payment not yet made, a bank debit on its way among them. The same `409`
-on the first ask is a household subscribed already, by a credit or in another tab, and is no
-error. A card confirmed for a method's replacement or for taking billing over has no such
+screen asks `postBillingSubscription` again: the server reads the processor itself there and
+settles the household where it is paid. Its `409 already_subscribed` does not say which it
+found, a payment taken or a bank debit still on its way, both being a household that may not
+subscribe again, so the screen then reads the subscription and says *subscribed* only where
+that names a plan, and otherwise that the payment was sent and billing shows how it stands
+(the browser showed the first version telling a debit's payer that it had gone through). The
+same `409` on the first ask is a household subscribed already, by a credit or in another tab,
+or one whose payment is on its way, and is no error. A card confirmed for a method's replacement or for taking billing over has no such
 question to ask: the screen reads the subscription again a bounded number of times
 (`billing/cadence.ts`) and says that the processor has confirmed it once the read shows it, and
 otherwise that it has not said yet.

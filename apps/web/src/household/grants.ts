@@ -88,9 +88,10 @@ export interface LevelWords {
 }
 
 /**
- * The module whose levels mean what no other's do. Its profile, its members and its modules
- * are every member's to read whatever is set (D-167); what *Can see* adds is the household's
- * invitations; and nothing above that adds anything, every change in the settings being an
+ * The module whose levels mean what no other's do. Its profile, its members, its modules, its
+ * data and the reader's own sync health are every member's to read whatever is set (D-167,
+ * D-177); what *Can see* adds is the household's invitations and its storage picture; and
+ * nothing above that adds anything, every change in the settings being an
  * owner's whatever the level says (PRD 02 FR-AC3, PRD 17 Permissions). So a sentence that is
  * true of a level on any other module is untrue of it, *not in their app at all* first of all.
  */

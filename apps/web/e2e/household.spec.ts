@@ -66,10 +66,10 @@ const words = 'Přijď k nám, Víťo!'
  * module (D-167): its screens are every member's, and what *Can see* adds is the invitations.
  */
 const settingsSay = {
-  none: 'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+  none: 'In their app all the same, as in every member’s: the household’s profile, its members, its modules, its data and sync health. Its invitations and its storage are not.',
   noneYours:
-    'In your app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
-  view: 'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+    'In your app all the same, as in every member’s: the household’s profile, its members, its modules, its data and sync health. Its invitations and its storage are not.',
+  view: 'The household’s invitations and its storage, beside its profile, its members, its modules, its data and sync health, which every member reads. Changing anything in the settings is for an owner.',
   contribute:
     'No more than “Can see” gives: changing anything in the settings is for an owner, whatever is set here.',
 } as const
@@ -748,7 +748,7 @@ test('an owner lowers what a member holds, having read what that comes to, and t
     `${settingsSay.none} Changed from “Can see”.`,
   )
   await expect(save).toHaveAccessibleDescription(
-    `2 modules are lowered. Shopping leaves ${member.name}’s app entirely, and their devices drop their copy of it. Nothing they added is deleted. ${member.name} no longer reads the household’s invitations. Its profile, its members and its modules stay theirs to read. ${member.name} is told of the change.`,
+    `2 modules are lowered. Shopping leaves ${member.name}’s app entirely, and their devices drop their copy of it. Nothing they added is deleted. ${member.name} no longer reads the household’s invitations or its storage. Its profile, its members, its modules, its data and sync health stay theirs to read. ${member.name} is told of the change.`,
   )
   // Saved, which is said, and the focus goes where it went before.
   await save.click()
