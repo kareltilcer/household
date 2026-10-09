@@ -1,5 +1,5 @@
 import { onlineManager } from '@tanstack/react-query'
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { paths } from '../app/paths.ts'
@@ -364,8 +364,17 @@ describe('the providers on the sign-in screen', () => {
     })
     expect(apple).toHaveAttribute('aria-disabled', 'true')
     await user.click(apple)
-    // Asked by its button and by Enter in a field, the form sends nothing over the start.
-    await signIn(user)
+    // Asked by whatever submits a form without pressing anything, as a password manager may, by
+    // its button, or by Enter in a field, the form sends nothing over the start.
+    const button = screen.getByRole('button', { name: 'Sign in' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).not.toHaveAttribute('aria-busy')
+    await user.type(screen.getByLabelText('Email'), address)
+    await user.type(screen.getByLabelText('Password'), password)
+    const form = button.closest('form')
+    if (form === null) throw new Error('no form')
+    fireEvent.submit(form)
+    await user.click(button)
     await user.type(screen.getByLabelText('Password'), '{Enter}')
     expect(backend.to('POST /auth/login')).toHaveLength(0)
     expect(vi.mocked(startProvider).mock.calls.length - before).toBe(1)
@@ -374,7 +383,31 @@ describe('the providers on the sign-in screen', () => {
     fail(new Error('no connection'))
     expect(await screen.findByRole('alert')).toHaveTextContent(/^We couldn’t reach Household\./)
     // Answered, the form is a way in again.
-    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    await user.click(button)
+    await waitFor(() => {
+      expect(backend.to('POST /auth/login')).toHaveLength(1)
+    })
+  })
+
+  // The page is leaving for the provider's. Where it did not after all, a navigation stopped,
+  // nothing else of the screen may be held for a start that has nothing left to answer.
+  it('hold nothing once a start is answered, and leave the form a way in', async () => {
+    const user = userEvent.setup()
+    const backend = serve()
+    backend.on('GET /auth/oauth', () => Response.json({ providers: ['google', 'apple'] }))
+    backend.on('POST /auth/login', () => problem(401, 'invalid_credentials'))
+    open(paths.signIn.path, { backend })
+    const google = await screen.findByRole('button', { name: 'Continue with Google' })
+    const apple = screen.getByRole('button', { name: 'Continue with Apple' })
+    const button = screen.getByRole('button', { name: 'Sign in' })
+    await user.click(google)
+    // Its own control stays busy, and the others are there to be pressed.
+    await waitFor(() => {
+      expect(apple).not.toHaveAttribute('aria-disabled')
+    })
+    expect(google).toHaveAttribute('aria-busy', 'true')
+    expect(button).not.toHaveAttribute('aria-disabled')
+    await signIn(user)
     await waitFor(() => {
       expect(backend.to('POST /auth/login')).toHaveLength(1)
     })

@@ -439,6 +439,30 @@ describe('Google and Apple', () => {
     expect(disconnect).not.toHaveAttribute('aria-disabled')
   })
 
+  // The page is leaving for the provider's. Where it did not after all, a navigation stopped,
+  // no other row may be held for a start that has nothing left to answer.
+  it('hold nothing once a link’s start is answered', async () => {
+    const server = createServer({ ...jana, credentials: ['password', 'google'] })
+    configured(server, ['google', 'apple'])
+    server.on('DELETE /auth/oauth/google', () => {
+      server.me = { ...server.me, credentials: ['password'] }
+      return noContent()
+    })
+    const { user } = await security(server)
+    const connect = await screen.findByRole('button', { name: 'Connect Apple' })
+    const disconnect = screen.getByRole('button', { name: 'Disconnect Google' })
+    await user.click(connect)
+    // Its own control stays busy, and the other is there to be pressed.
+    await waitFor(() => {
+      expect(disconnect).not.toHaveAttribute('aria-disabled')
+    })
+    expect(connect).toHaveAttribute('aria-busy', 'true')
+    await user.click(disconnect)
+    expect(
+      await screen.findByText('Google is disconnected and no longer signs you in.'),
+    ).toBeInTheDocument()
+  })
+
   it('are said not to have been read, and said again where asking again comes to nothing', async () => {
     const server = createServer()
     // A server that cannot be reached, each request failing when the test says it has.

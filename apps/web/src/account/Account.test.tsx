@@ -33,6 +33,32 @@ async function account(server: Server = createServer()) {
   return opened
 }
 
+/**
+ * The form a browser would send, as far as a test needs it: which parts it was given. The test
+ * environment's own `Request` cannot carry jsdom's form with a file in it.
+ */
+function formParts(): (readonly [string, unknown])[] {
+  const parts: (readonly [string, unknown])[] = []
+  vi.stubGlobal(
+    'FormData',
+    class {
+      set(name: string, value: unknown) {
+        parts.push([name, value])
+      }
+    },
+  )
+  return parts
+}
+
+const picture = () => new File(['picture'], 'me.png', { type: 'image/png' })
+
+/** The chooser no member sees, which a test hands a file as the browser would. */
+function chooserIn(container: HTMLElement): HTMLInputElement {
+  const chooser = container.querySelector<HTMLInputElement>('input[type="file"]')
+  if (chooser === null) throw new Error('no file input')
+  return chooser
+}
+
 describe('the account screen', () => {
   it('is its one title and a section for each thing an account has', async () => {
     await account()
@@ -141,21 +167,10 @@ describe('the account screen', () => {
       server.me = { ...server.me, avatar_url: null }
       return Response.json(server.me)
     })
-    // The form a browser would send, as far as a test needs it: which parts it was given. The
-    // test environment's own `Request` cannot carry jsdom's form with a file in it.
-    const parts: (readonly [string, unknown])[] = []
-    vi.stubGlobal(
-      'FormData',
-      class {
-        set(name: string, value: unknown) {
-          parts.push([name, value])
-        }
-      },
-    )
+    const parts = formParts()
     const { user, container } = await account(server)
-    const chooser = container.querySelector<HTMLInputElement>('input[type="file"]')
-    if (chooser === null) throw new Error('no file input')
-    const file = new File(['picture'], 'me.png', { type: 'image/png' })
+    const chooser = chooserIn(container)
+    const file = picture()
 
     fireEvent.change(chooser, { target: { files: [file] } })
     const remove = await screen.findByRole('button', { name: 'Remove picture' })
@@ -251,23 +266,12 @@ describe('the account screen', () => {
       server.me = { ...server.me, avatar_url: null }
       return Response.json(server.me)
     })
-    vi.stubGlobal(
-      'FormData',
-      class {
-        set() {
-          // The parts are another test's to read.
-        }
-      },
-    )
+    formParts()
     const { user, container } = await account(server)
-    const chooser = container.querySelector<HTMLInputElement>('input[type="file"]')
-    if (chooser === null) throw new Error('no file input')
     const change = screen.getByRole('button', { name: 'Change picture' })
     const remove = screen.getByRole('button', { name: 'Remove picture' })
 
-    fireEvent.change(chooser, {
-      target: { files: [new File(['picture'], 'me.png', { type: 'image/png' })] },
-    })
+    fireEvent.change(chooserIn(container), { target: { files: [picture()] } })
     await waitFor(() => {
       expect(server.to('PUT /me/avatar')).toHaveLength(1)
     })
@@ -292,7 +296,8 @@ describe('the account screen', () => {
     expect(server.to('PATCH /me')).toHaveLength(1)
   })
 
-  it('opens no chooser while a picture is being removed, and says a removal that was refused', async () => {
+  /** A removal the test refuses when it chooses to, for a member who has a picture. */
+  function removing() {
     const server = createServer({ ...jana, avatar_url: `${origin}/files/picture` })
     let refuse: () => void = () => undefined
     server.on(
@@ -304,19 +309,18 @@ describe('the account screen', () => {
           }
         }),
     )
-    server.on('PUT /me/avatar', () => Response.json(server.me))
-    vi.stubGlobal(
-      'FormData',
-      class {
-        set() {
-          // The parts are another test's to read.
-        }
+    return {
+      server,
+      refuse: () => {
+        refuse()
       },
-    )
+    }
+  }
+
+  it('opens no chooser while a picture is being removed, and says a removal that was refused', async () => {
+    const { server, refuse } = removing()
     const { user, container } = await account(server)
-    const chooser = container.querySelector<HTMLInputElement>('input[type="file"]')
-    if (chooser === null) throw new Error('no file input')
-    const opened = vi.spyOn(chooser, 'click')
+    const opened = vi.spyOn(chooserIn(container), 'click')
     const change = screen.getByRole('button', { name: 'Change picture' })
     const remove = screen.getByRole('button', { name: 'Remove picture' })
 
@@ -329,14 +333,35 @@ describe('the account screen', () => {
     await user.click(change)
     expect(opened).not.toHaveBeenCalled()
 
-    // A file that arrives all the same is sent, and puts nothing away: the removal is its
-    // control's until it is answered, and its refusal is said.
-    fireEvent.change(chooser, {
-      target: { files: [new File(['picture'], 'me.png', { type: 'image/png' })] },
+    refuse()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong at our end\./)
+    expect(remove).not.toHaveAttribute('aria-busy')
+    // Answered, the chooser opens at a press again.
+    expect(change).not.toHaveAttribute('aria-disabled')
+    await user.click(change)
+    expect(opened).toHaveBeenCalledTimes(1)
+    expect(server.to('PATCH /me')).toHaveLength(1)
+    expect(server.to('PUT /me/avatar')).toHaveLength(0)
+  })
+
+  // No press hands the chooser a file while a removal is on its way: the control that opens it
+  // takes none. The chooser's own event is a step from that press, and holds to the rule itself.
+  it('leaves a removal on its way to be answered, whatever hands the chooser a file meanwhile', async () => {
+    const { server, refuse } = removing()
+    server.on('PUT /me/avatar', () => Response.json(server.me))
+    formParts()
+    const { user, container } = await account(server)
+    const remove = screen.getByRole('button', { name: 'Remove picture' })
+
+    await user.click(remove)
+    await waitFor(() => {
+      expect(server.to('PATCH /me')).toHaveLength(1)
     })
+    fireEvent.change(chooserIn(container), { target: { files: [picture()] } })
     await waitFor(() => {
       expect(server.to('PUT /me/avatar')).toHaveLength(1)
     })
+    // The removal is its control's until it is answered, and its refusal is said.
     expect(remove).toHaveAttribute('aria-busy', 'true')
     refuse()
     expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong at our end\./)

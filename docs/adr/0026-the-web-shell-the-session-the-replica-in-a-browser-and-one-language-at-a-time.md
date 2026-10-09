@@ -138,11 +138,11 @@ returns (ADR 0025), which is what a household's queued write wants and no sign-i
 once (`api/query.ts`, `askedNow`) it fails at once, and its screen says that the server could not
 be reached and that nothing was changed. A provider's control stays busy once its start is
 answered, the page being on its way to the provider's, and is put back where the browser shows
-that page again as it kept it, for its Back button (`auth/provider.ts`). Two writes of one thing
-are asked one at a time: while a sign-in or a start is on its way the form sends nothing and no
-provider's control takes a press, and the same holds of a picture's two controls and of the
-providers' rows on an account, so that no write is put away, nor another sent in its place,
-before it is answered. A start that was answered holds nothing, the page being on its way.
+that page again as it kept it, for its Back button (`auth/provider.ts`). Two controls that write
+one thing take a press one at a time: while a sign-in or a start is on its way the form sends
+nothing and no provider's control takes a press, and the same holds of a picture's two controls
+and of the providers' rows on an account, so that no write is put away, nor another sent in its
+place, before it is answered. A start that was answered holds nothing, the page being on its way.
 
 **The service worker shows a Web Push and does nothing else.** The build writes it as one file
 at the origin's root (`build/pushWorker.ts`), part of the build's id: it handles `push` and
