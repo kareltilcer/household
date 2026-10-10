@@ -251,9 +251,11 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   record, which *what brought you here?* offers (`household/Start.tsx`,
   [D-169](docs/prd/09-decisions.md)). Household settings is under `/households/{id}/settings` and
   is listed for every member, whatever they hold on it: `view` on it unlocks the invitations and
-  nothing else ([D-167](docs/prd/09-decisions.md)). A screen there is set in
+  the storage picture, and nothing else ([D-167](docs/prd/09-decisions.md),
+  [D-177](docs/prd/09-decisions.md)). A screen there is set in
   `HouseholdSettingsPage`, draws a control that changes something only where
-  `useStanding().changes`, an owner's in a household that takes writes, and reads through
+  `useStanding().changes`, an owner's in a household that takes writes, but for a control of an
+  operation the gate exempts (the next paragraph), and reads through
   `household/data.ts`. Its entities are never written offline, so every write under
   `src/household` spreads `askedNow`, which the test beside the query client holds them to, and
   none is queued ([D-170](docs/prd/09-decisions.md)); a write that was answered reads the household
@@ -333,7 +335,18 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   again once the processor's script has resolved, which has the server read the processor
   itself, and then reads the subscription, saying *subscribed* only where it names a plan: the
   ask's `409 already_subscribed` is answered for a bank debit still on its way too
-  ([D-131](docs/prd/09-decisions.md)). An export's *Download*
+  ([D-131](docs/prd/09-decisions.md)). What an answer does not establish is said neither way
+  there: a confirmation that fails for a reason that is neither the form's nor the method's
+  (`billing/PaymentForm.tsx`), a `503 billing_unavailable` (`useBillingRefusal`,
+  `billing/data.ts`) and the bodiless `204` of an offer taken back (`billing/Handover.tsx`) say
+  no more than that, and the household or the subscription is read again before anything says
+  what was charged or who pays; and a day or a promise the server keeps in one state, a
+  take-over's start, a next charge, the day a lapse keeps its data until, is drawn in that
+  state alone, the last never once the household's own deletion is scheduled. A refusal whose
+  own re-read takes away the part it was pressed in is said in a toast (`useRefusals`,
+  `billing/parts.tsx`). A read of something that is not every member's and is answered
+  `not_found` reads the household alone again (`useRereadWhereRefused`, `household/data.ts`),
+  told by the problem's code (`notTheirs`) and never by the status alone. An export's *Download*
   (`privacy/ExportList.tsx`) reads its job again and leaves for the link that answer carries, a
   navigation and never a `fetch`, the policy admitting none of the object store. The privacy
   centre (`privacy/Privacy.tsx`) is the account's and its route names no part of the
@@ -342,7 +355,9 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   (`i18n/format.ts`), in no unit smaller than the kilobyte: `Intl` writes a byte as an English
   word in every language. Sync health (`health/SyncHealth.tsx`) is its reader's own replicas,
   this browser's drawn from the replica itself and reported as the screen opens
-  (`useReportOnOpen`, `health/data.ts`), and a diagnostic bundle (`health/bundle.ts`) holds the
+  (`useReportOnOpen`, `health/data.ts`) once it has caught up, which is a checkpoint applied
+  since its stream came up and not one of the visit before (`Replica.caughtUp`,
+  `packages/sync/src/replica.ts`), and a diagnostic bundle (`health/bundle.ts`) holds the
   replica's state and no value a member typed ([D-181](docs/prd/09-decisions.md)). In a
   household that takes no writes the conflict panel draws no answer and the refused-change
   panel keeps *Discard* (`sync/ConflictResolver.tsx`, `sync/RejectedResolver.tsx`).
