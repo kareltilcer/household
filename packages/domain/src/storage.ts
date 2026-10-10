@@ -56,6 +56,15 @@ export function storageCharge(
 }
 
 /**
+ * Whether `stored` is at or above four fifths of `allowance`, both in bytes: where a household's
+ * owners are first told that it is filling (the server's `fairuse.Warns`). In whole numbers,
+ * with nothing rounded, so that the screen and the notice agree to the byte.
+ */
+export function storageWarns(stored: number, allowance: number): boolean {
+  return stored * 5 >= allowance * 4
+}
+
+/**
  * The average a period ends on if the household goes on storing `current` bytes for each of its
  * `remaining` days not sampled yet: the mean of the samples and those days, rounded down, and
  * `current` when there is neither (FR-BI4).

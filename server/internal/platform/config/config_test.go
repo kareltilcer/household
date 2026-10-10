@@ -688,3 +688,97 @@ func TestTheBillingSettings(t *testing.T) {
 		t.Errorf("development with one key of three: %v", err)
 	}
 }
+
+// Where Stripe's API is asked is development's alone to say, for the stand-in the web's end-to-end
+// suite pays against: over http on this machine, and with test-mode keys. Anywhere else the
+// setting stops the server from starting, since a deployment that could be pointed at another
+// "Stripe" is one whose payments could be.
+func TestOnlyDevelopmentSaysWhereStripeIs(t *testing.T) {
+	standIn := func(vars map[string]string) map[string]string {
+		for key, value := range map[string]string{
+			config.StripeSecretKeyVar:      "sk_" + "test_key",
+			config.StripePublishableKeyVar: "pk_" + "test_key",
+			config.StripeWebhookSecretVar:  "whsec_" + "key",
+			config.BillingPricesVar:        prices,
+		} {
+			if _, ok := vars[key]; !ok {
+				vars[key] = value
+			}
+		}
+		return vars
+	}
+
+	c, err := config.Load(config.Serve, env(nil))
+	if err != nil || c.StripeAPIURL != "" {
+		t.Fatalf("development with nothing set asks Stripe at %q (%v), want Stripe's own", c.StripeAPIURL, err)
+	}
+	for raw, want := range map[string]string{
+		"http://127.0.0.1:12112":  "http://127.0.0.1:12112",
+		"http://localhost:12112/": "http://localhost:12112",
+		"http://[::1]:12112":      "http://[::1]:12112",
+	} {
+		c, err := config.Load(config.Serve, env(standIn(map[string]string{config.StripeAPIURLVar: raw})))
+		if err != nil {
+			t.Errorf("development with a stand-in at %s: %v", raw, err)
+			continue
+		}
+		if c.StripeAPIURL != want || c.StripeSecretKey == "" {
+			t.Errorf("development with a stand-in at %s asks %q, want %q", raw, c.StripeAPIURL, want)
+		}
+	}
+
+	// A deployment asks Stripe itself, whatever it is told.
+	for _, e := range []string{"staging", "production"} {
+		_, err := config.Load(config.Serve, env(serving(map[string]string{
+			config.EnvVar: e, config.DatabaseURLVar: dsn("household_app", "s3cret", "db.internal:5432", "household"),
+			config.StripeAPIURLVar: "https://stripe.household.test",
+		})))
+		if err == nil || !strings.Contains(err.Error(), config.StripeAPIURLVar) || !strings.Contains(err.Error(), "only development") {
+			t.Errorf("%s told where Stripe is: %v; want it refused", e, err)
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		vars map[string]string
+		want string
+	}{
+		{"over http to another machine", map[string]string{config.StripeAPIURLVar: "http://stripe.household.test:12112"}, "this machine"},
+		// Over TLS to another machine is another machine all the same: the keys and the customers would go to it.
+		{"over https", map[string]string{config.StripeAPIURLVar: "https://stripe.household.test"}, "scheme and host"},
+		{"over https to this machine", map[string]string{config.StripeAPIURLVar: "https://127.0.0.1:12112"}, "scheme and host"},
+		{"over http to an address that is not the loopback's", map[string]string{config.StripeAPIURLVar: "http://10.0.0.5:12112"}, "this machine"},
+		// The loopback is matched whole: a name that only begins as it does is another machine's.
+		{"at a name that begins as the loopback's address does", map[string]string{config.StripeAPIURLVar: "http://127.0.0.1.household.test:12112"}, "this machine"},
+		{"at a name that begins as the loopback's name does", map[string]string{config.StripeAPIURLVar: "http://localhost.household.test:12112"}, "this machine"},
+		{"with the loopback as the user of another machine", map[string]string{config.StripeAPIURLVar: "http://127.0.0.1" + "@stripe.household.test"}, "scheme and host"},
+		{"with no scheme", map[string]string{config.StripeAPIURLVar: "127.0.0.1:12112"}, "scheme and host"},
+		{"with a path", map[string]string{config.StripeAPIURLVar: "http://127.0.0.1:12112/v1"}, "scheme and host"},
+		{"with credentials", map[string]string{config.StripeAPIURLVar: "http://stand:" + "in" + "@127.0.0.1:12112"}, "scheme and host"},
+		{"with a query", map[string]string{config.StripeAPIURLVar: "http://127.0.0.1:12112?mode=test"}, "scheme and host"},
+		{"with no keys", map[string]string{
+			config.StripeAPIURLVar: "http://127.0.0.1:12112", config.StripeSecretKeyVar: "", config.StripePublishableKeyVar: "",
+			config.StripeWebhookSecretVar: "",
+		}, "test-mode keys"},
+		{"with an API key that says no mode", map[string]string{
+			config.StripeAPIURLVar: "http://127.0.0.1:12112", config.StripeSecretKeyVar: "sk_" + "key",
+		}, "test-mode keys"},
+		{"with a publishable key that says no mode", map[string]string{
+			config.StripeAPIURLVar: "http://127.0.0.1:12112", config.StripePublishableKeyVar: "pk_" + "key",
+		}, "test-mode keys"},
+		{"with a live key", map[string]string{
+			config.StripeAPIURLVar: "http://127.0.0.1:12112", config.StripeSecretKeyVar: "sk_" + "live_key",
+		}, "test-mode keys"},
+	} {
+		c, err := config.Load(config.Serve, env(standIn(tc.vars)))
+		if err == nil || !strings.Contains(err.Error(), config.StripeAPIURLVar) || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("a stand-in %s: %v; want an error saying %q", tc.name, err, tc.want)
+		}
+		if c != nil {
+			t.Errorf("a stand-in %s: the configuration was loaded, asking %q", tc.name, c.StripeAPIURL)
+		}
+		if err != nil && strings.Contains(err.Error(), "stand:in") {
+			t.Errorf("a stand-in %s: the error quotes the URL's password: %v", tc.name, err)
+		}
+	}
+}

@@ -12,7 +12,7 @@
 // confirmation that names the code and says what stops and what stays (03-patterns §5), and
 // then asked of the server at once (D-170).
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { copyText } from '../../account/common.ts'
+import { copyText, useData } from '../../account/common.ts'
 import styles from '../../account/Settings.module.css'
 import { useApi } from '../../api/ApiProvider.tsx'
 import { unwrap } from '../../api/problem.ts'
@@ -29,7 +29,7 @@ import { useHousehold } from '../HouseholdContext.tsx'
 import { householdKey } from '../households.ts'
 import { useTimeZone } from '../timezone.ts'
 import { Section } from './Page.tsx'
-import { grouped, useGiven, useStandingRefusal, type AskedProps } from './profile.ts'
+import { grouped, useStandingRefusal, type AskedProps } from './profile.ts'
 
 export interface HouseholdCodeProps {
   /** The code, as the server keeps it. */
@@ -41,7 +41,7 @@ export interface HouseholdCodeProps {
 export function HouseholdCode({ code, onRenew }: HouseholdCodeProps) {
   const t = useTranslate()
   const format = useFormat()
-  const given = useGiven()
+  const given = useData()
   const toast = useToast()
   const household = useHousehold()
   const members = useMembers(household.id)
@@ -108,7 +108,7 @@ export function RenewCode({ code, onClose, onEnded }: RenewCodeProps) {
   const t = useTranslate()
   const api = useApi()
   const queries = useQueryClient()
-  const given = useGiven()
+  const given = useData()
   const toast = useToast()
   const say = useProblemText(useTimeZone())
   const standing = useStandingRefusal()

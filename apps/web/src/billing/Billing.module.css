@@ -1,0 +1,134 @@
+/* Billing's screens (A-27, A-28, A-29): sections one under another in the settings' one column,
+   which is the window's on a phone. Nothing here has a width of its own, and every text that
+   holds a name or a number wraps inside its column. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* A part of a screen whose controls come and go: what it holds, one under another as a section
+   holds it. It takes the focus once a control that held it has left, and is no control: it shows
+   no ring of its own. */
+.place {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.place:focus {
+  outline: none;
+}
+
+/* The household's state: its glyph, in its status colour, beside its word. The word says all of
+   it; the colour and the glyph say it again (N2). */
+.state {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+.stateWord {
+  composes: title2 from '../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+.stateGlyph,
+.statusGlyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.stateGlyph[data-tone='positive'],
+.statusGlyph[data-tone='positive'] {
+  color: var(--positive);
+}
+
+.stateGlyph[data-tone='info'] {
+  color: var(--info);
+}
+
+.stateGlyph[data-tone='warning'],
+.statusGlyph[data-tone='warning'] {
+  color: var(--warning);
+}
+
+.stateGlyph[data-tone='danger'],
+.statusGlyph[data-tone='danger'] {
+  color: var(--danger);
+}
+
+/* Where the processor draws its payment form: a frame of its own, as wide as a form's fields
+   are and no wider than its column. */
+.form {
+  width: 100%;
+  max-width: 28rem;
+  min-width: 0;
+}
+
+/* An invoice, as a row of the list of them: what it is and what it is made of, and beside them
+   its one action, which goes under the words where the window is too narrow for both. */
+.invoice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-15);
+  align-items: flex-start;
+  min-width: 0;
+  min-height: var(--dens-row-min);
+  padding: var(--dens-pad-y) var(--dens-pad-x);
+  border-block-end: 1px solid var(--dens-rule);
+}
+
+.invoice:last-child {
+  border-block-end: 0;
+}
+
+.about {
+  display: flex;
+  flex: 1 1 16rem;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+/* How an invoice stands: a glyph and the words that say it. */
+.status {
+  display: flex;
+  gap: var(--space-05);
+  align-items: flex-start;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* An invoice's lines and its total: what each is at the start, its amount at the end, and one
+   under the other where the two do not fit a line. */
+.lines {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-05) var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+  padding: var(--space-05) 0;
+}
+
+.lineAbout {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

@@ -106,7 +106,7 @@ export interface GrantChange {
   readonly off: readonly ModuleKey[]
   /**
    * Whether household settings was lowered to *Off*: the member reads the household's
-   * invitations no longer, and its profile, its members and its modules as before.
+   * invitations and its storage no longer, and the rest of its settings as before.
    */
   readonly settingsOff: boolean
 }

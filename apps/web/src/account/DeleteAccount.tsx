@@ -43,7 +43,8 @@ import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { paths } from '../app/paths.ts'
 import { useRefusedField } from '../auth/fields.tsx'
-import { householdsKey, membersKey, useHouseholds } from '../household/households.ts'
+import { membersQuery } from '../household/data.ts'
+import { householdsKey, useHouseholds } from '../household/households.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe, useSession, type Me } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -53,7 +54,7 @@ import { cx } from '../ui/cx.ts'
 import { PasswordField, TextField } from '../ui/Field.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
-import { readState, refocus, useNoWithdrawal, useOwnZone, type Read } from './common.ts'
+import { readState, refocus, together, useNoWithdrawal, useOwnZone } from './common.ts'
 import { useOnline } from '../ui/online.ts'
 import { blockedBy, blocks, standingOf, type Standing } from './deletion.ts'
 import { Section, SettingsPage } from './Page.tsx'
@@ -93,7 +94,7 @@ function Situation({
           </span>
           {/* Read again, the members still name another owner: one the server did not count. */}
           {standing.uncounted && readAgain ? (
-            <span className={styles.text}>{t('household.leave.last_owner.deleting')}</span>
+            <span className={styles.text}>{t('account.delete.sole.uncounted')}</span>
           ) : null}
           <Checkbox
             label={t('account.delete.sole.choose', { household: name })}
@@ -156,26 +157,11 @@ function Deletion({ me }: { readonly me: Me }) {
     (household) => household.my_role === 'owner' && household.entitlement?.state !== 'suspended',
   )
   const members = useQueries({
-    queries: owned.map((household) => ({
-      queryKey: membersKey(household.id),
-      queryFn: async ({ signal }: { readonly signal: AbortSignal }) =>
-        unwrap(
-          await api.GET('/households/{household_id}/members', {
-            params: { path: { household_id: household.id } },
-            signal,
-          }),
-        ).items ?? [],
-    })),
+    queries: owned.map((household) => membersQuery(api, household.id)),
   })
   const reads = [households, ...members]
   const ready = list !== undefined && members.every((each) => each.data !== undefined)
-  const read: Read = {
-    data: ready ? list : undefined,
-    isError: reads.some((each) => each.isError && each.data === undefined),
-    fetchStatus: reads.some((each) => each.data === undefined && each.fetchStatus === 'paused')
-      ? 'paused'
-      : 'idle',
-  }
+  const read = together(reads)
   // The households the server named, refusing a press, as the member's alone to own: its word
   // on where they stand there, kept beside what the page reads again after every refusal
   // (D-173). An owner whose own account is scheduled for deletion counts as none (D-137) and is

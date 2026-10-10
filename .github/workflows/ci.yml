@@ -134,7 +134,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The end-to-end suite starts the API itself, from its sources (apps/web/playwright.config.ts).
+      # The end-to-end suite starts the API itself, and the stand-in for Stripe it pays against, from
+      # their sources (apps/web/playwright.config.ts).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: server/go.mod
@@ -143,7 +144,8 @@ jobs:
         with:
           cache: true
           require-lockfile: true
-      # The typed client and the message keys, which the app's sources import.
+      # The typed client, the message keys and the parts of each language's catalog, which the
+      # app's sources import.
       - name: Generate
         run: pnpm exec turbo run gen
       # The build a deployment serves, held to what can be read off its files: the bundle budget,

@@ -388,7 +388,7 @@ describe('what a member holds, as each reader reads it', () => {
     expect(screen.getByText(/^Not in their app at all/)).toBeInTheDocument()
     expect(
       screen.getByText(
-        'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+        'In their app all the same, as in every member’s: the household’s profile, its members, its modules, its data and sync health. Its invitations and its storage are not.',
       ),
     ).toBeInTheDocument()
     // The same page without its controls, and the frame says whose they are.
@@ -414,7 +414,7 @@ describe('what a member holds, as each reader reads it', () => {
     expect(screen.getByText(/^Not in your app at all/)).toBeInTheDocument()
     expect(
       screen.getByText(
-        'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+        'The household’s invitations and its storage, beside its profile, its members, its modules, its data and sync health, which every member reads. Changing anything in the settings is for an owner.',
       ),
     ).toBeInTheDocument()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
@@ -468,7 +468,8 @@ describe('what a member holds, as each reader reads it', () => {
     ])
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    expect(screen.getByText(/^Read-only: nothing here can be changed/)).toBeInTheDocument()
+    // Why is the banner's to say, above the screen (shell/EntitlementBanner.tsx).
+    expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument()
   })
 
   it('says that an owner holds everything, and to the owner who could what narrows it', async () => {
@@ -587,15 +588,15 @@ describe('changing what a member holds', () => {
     const { user } = await page(petr)
     await user.selectOptions(row('Household settings'), 'Off')
     expect(row('Household settings')).toHaveAccessibleDescription(
-      'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not. Changed from “Can see”.',
+      'In their app all the same, as in every member’s: the household’s profile, its members, its modules, its data and sync health. Its invitations and its storage are not. Changed from “Can see”.',
     )
     expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAccessibleDescription(
-      '1 module is lowered. Petr Tilcer no longer reads the household’s invitations. Its profile, its members and its modules stay theirs to read. Petr Tilcer is told of the change.',
+      '1 module is lowered. Petr Tilcer no longer reads the household’s invitations or its storage. Its profile, its members, its modules, its data and sync health stay theirs to read. Petr Tilcer is told of the change.',
     )
     // Beside a module that does leave, each is said as what it is.
     await user.selectOptions(row('Utilities'), 'Off')
     expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAccessibleDescription(
-      '2 modules are lowered. Utilities leaves Petr Tilcer’s app entirely, and their devices drop their copy of it. Nothing they added is deleted. Petr Tilcer no longer reads the household’s invitations. Its profile, its members and its modules stay theirs to read. Petr Tilcer is told of the change.',
+      '2 modules are lowered. Utilities leaves Petr Tilcer’s app entirely, and their devices drop their copy of it. Nothing they added is deleted. Petr Tilcer no longer reads the household’s invitations or its storage. Its profile, its members, its modules, its data and sync health stay theirs to read. Petr Tilcer is told of the change.',
     )
   })
 
@@ -1098,14 +1099,22 @@ describe('a member’s role', () => {
     await page(jana.id, ownedBy(petr))
     expect(screen.queryByRole('button', { name: /Make Jana/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Remove Jana/ })).not.toBeInTheDocument()
+    // As the server has it (FR-HH4): only the payer offers billing, and cancelling the
+    // subscription leaves them the payer.
+    const role = screen.getByRole('region', { name: 'Role' })
     expect(
-      screen.getByText(
-        'Jana Tilcerová pays for the household, so they stay an owner until billing has moved to another owner.',
+      within(role).getByText(
+        'Jana Tilcerová pays for the household, so they stay an owner until billing has moved to another owner. Only whoever pays can offer it, and cancelling the subscription does not change who pays.',
       ),
     ).toBeInTheDocument()
+    // The way to the screen that says who pays, and where the payer offers it.
+    expect(within(role).getByRole('link', { name: 'Billing' })).toHaveAttribute(
+      'href',
+      inHousehold.billing(home),
+    )
     expect(
       screen.getByText(
-        'Jana Tilcerová pays for the household, so billing moves to another owner before they can be removed.',
+        'Jana Tilcerová pays for the household, so billing moves to another owner before they can be removed. Only whoever pays can offer it, and cancelling the subscription does not change who pays.',
       ),
     ).toBeInTheDocument()
   })
@@ -1266,7 +1275,7 @@ describe('removing a member', () => {
       }),
     )
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Petr Tilcer pays for the household, so billing moves to another owner before they can be removed.',
+      'Petr Tilcer pays for the household, so billing moves to another owner before they can be removed. Only whoever pays can offer it, and cancelling the subscription does not change who pays.',
     )
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(router.state.location.pathname).toBe(inHousehold.member(home, petr))

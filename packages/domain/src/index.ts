@@ -41,5 +41,6 @@ export {
   storageAllowance,
   storageBlocks,
   storageCharge,
+  storageWarns,
   type StorageAllowance,
 } from './storage.ts'

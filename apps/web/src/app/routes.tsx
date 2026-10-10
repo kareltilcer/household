@@ -1,7 +1,8 @@
 // The router's routes, one for each path of paths.ts, each drawn in the layout its path names:
 // the plain one, the frame of the screens before sign-in, or the shell around an account or a
 // household, which are a member's alone. Every screen is a file of its own, fetched when its
-// address is opened: a first visit downloads the app and the one screen it opened at (D-153).
+// address is opened: a first visit downloads the app and the one screen it opened at (D-153),
+// and with a screen's file the parts of the catalog its path says it reads (D-159).
 //
 // The dev-only pages are named only where a build is told to have them: the development server,
 // and the build the end-to-end suite runs against (`vite build --mode e2e`). Both conditions are
@@ -9,10 +10,11 @@
 // imports the pages is dead code, and neither they nor the files they would load are written
 // (build/check.ts holds the build a deployment serves to that).
 import type { RouteObject } from 'react-router'
+import { needWords } from '../i18n/catalogs.ts'
 import { Signed, VisitorOnly } from './guards.tsx'
 import { Home } from './Home.tsx'
 import { NotAvailable } from './NotAvailable.tsx'
-import { paths, routeIds, type Layout, type RouteId } from './paths.ts'
+import { paths, routeIds, type Layout, type RouteId, type RoutePath } from './paths.ts'
 import { Public } from './Public.tsx'
 import { Plain, Root } from './Root.tsx'
 import { RootError, RouteError } from './RouteError.tsx'
@@ -78,6 +80,9 @@ const pages: Partial<Record<RouteId, Page>> = {
   accountDelete: {
     lazy: async () => ({ Component: (await import('../account/DeleteAccount.tsx')).DeleteAccount }),
   },
+  accountPrivacy: {
+    lazy: async () => ({ Component: (await import('../privacy/Privacy.tsx')).Privacy }),
+  },
   householdNew: {
     lazy: async () => ({ Component: (await import('../household/Create.tsx')).Create }),
   },
@@ -121,6 +126,33 @@ const pages: Partial<Record<RouteId, Page>> = {
       Component: (await import('../household/settings/Modules.tsx')).Modules,
     }),
   },
+  settingsStorage: {
+    lazy: async () => ({ Component: (await import('../storage/Storage.tsx')).Storage }),
+  },
+  settingsBilling: {
+    lazy: async () => ({ Component: (await import('../billing/Billing.tsx')).Billing }),
+  },
+  settingsSubscribe: {
+    lazy: async () => ({ Component: (await import('../billing/Subscribe.tsx')).Subscribe }),
+  },
+  settingsTakeover: {
+    lazy: async () => ({ Component: (await import('../billing/Takeover.tsx')).Takeover }),
+  },
+  settingsData: {
+    lazy: async () => ({ Component: (await import('../privacy/Data.tsx')).Data }),
+  },
+  settingsExports: {
+    lazy: async () => ({ Component: (await import('../privacy/Exports.tsx')).Exports }),
+  },
+  settingsSync: {
+    lazy: async () => ({ Component: (await import('../health/SyncHealth.tsx')).SyncHealth }),
+  },
+  settingsDiagnostics: {
+    lazy: async () => ({ Component: (await import('../health/Diagnostics.tsx')).Diagnostics }),
+  },
+  settingsClients: {
+    lazy: async () => ({ Component: (await import('../health/Clients.tsx')).Clients }),
+  },
   module: {
     lazy: async () => ({ Component: (await import('../modules/ModuleRoute.tsx')).ModuleRoute }),
   },
@@ -154,6 +186,30 @@ const pages: Partial<Record<RouteId, Page>> = {
 export const served: readonly RouteId[] = routeIds.filter(
   (id) => pages[id] !== undefined && (devPages || !paths[id].dev),
 )
+
+/**
+ * The page of the route `id`, with its words: where paths.ts names parts of the catalog that its
+ * screen reads, they are fetched beside the screen's file, and the screen is drawn once both have
+ * come. Either failing is the screen's file failing, and is named as that is (RouteError): a
+ * file of the app's own whose import failed is not imported again. A screen that is no file of
+ * its own is in the first download, which has the app's own words and no other.
+ */
+function pageOf(id: RouteId): Page | undefined {
+  const page = pages[id]
+  const { words }: RoutePath = paths[id]
+  if (page === undefined || words === undefined) return page
+  const { lazy } = page
+  if (typeof lazy !== 'function') {
+    throw new Error(`routes: ${id} names words, and its page fetches no file to fetch them with`)
+  }
+  return {
+    ...page,
+    lazy: async () => {
+      const [screen] = await Promise.all([lazy(), needWords(words)])
+      return screen
+    },
+  }
+}
 
 /**
  * What stands in a screen's place while its file loads, on the visit that opens the app at it:
@@ -201,7 +257,7 @@ function idsOf(layout: Layout, visitor?: boolean): RouteId[] {
 
 /** The served routes of `layout`, by their whole paths. */
 function of(layout: Layout, visitor?: boolean): RouteObject[] {
-  return idsOf(layout, visitor).map((id) => ({ path: paths[id].path, ...pages[id] }))
+  return idsOf(layout, visitor).map((id) => ({ path: paths[id].path, ...pageOf(id) }))
 }
 
 /**
@@ -212,7 +268,7 @@ function of(layout: Layout, visitor?: boolean): RouteObject[] {
 function underHousehold(): RouteObject[] {
   return idsOf('household').map((id): RouteObject => {
     const rest = paths[id].path.slice(paths.household.path.length).replace(/^\//, '')
-    return rest === '' ? { index: true, ...pages[id] } : { path: rest, ...pages[id] }
+    return rest === '' ? { index: true, ...pageOf(id) } : { path: rest, ...pageOf(id) }
   })
 }
 

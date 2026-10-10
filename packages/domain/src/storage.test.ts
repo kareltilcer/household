@@ -8,6 +8,7 @@ import {
   storageAllowance,
   storageBlocks,
   storageCharge,
+  storageWarns,
 } from './storage.ts'
 
 describe('vectors/storage.json', () => {
@@ -20,6 +21,7 @@ describe('vectors/storage.json', () => {
         storageCharge(average_bytes, unit_amount_minor),
       projected: ({ samples, current, remaining }) =>
         projectedAverageBytes(samples, current, remaining),
+      warns: ({ count, ceiling }) => storageWarns(count, ceiling),
     },
     () => undefined,
   )

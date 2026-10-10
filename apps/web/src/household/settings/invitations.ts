@@ -3,7 +3,6 @@
 // somebody declined at them, what the composer is handed when it is opened from a declined
 // invitation, and what a refused write of either screen is said to have come to.
 import { accessLevels } from '@household/domain'
-import { useState } from 'react'
 import { useProblemText } from '../../api/problemText.ts'
 import type { Invitation } from '../data.ts'
 import { defaultsFor, levelsOf, type Levels } from '../grants.ts'
@@ -11,18 +10,6 @@ import type { AccessLevel } from '../households.ts'
 import { useStandingRefusal } from './profile.ts'
 
 export type InvitationStatus = NonNullable<Invitation['status']>
-
-/**
- * Whether the invitations have been this member's to read at any time while the screen was open,
- * `holds` being whether they are now (`useStanding().invitations`). One who never held them is
- * drawn the neutral *not available*, and nothing is asked for them; one who held them and no
- * longer does was here when their access changed, and is told that it did (03-patterns §2).
- */
-export function useEverHeld(holds: boolean): boolean {
-  const [held, setHeld] = useState(holds)
-  if (holds && !held) setHeld(true)
-  return held || holds
-}
 
 /**
  * How `invitation` stands at `now`. The server answers `expired` for one that is `pending` past

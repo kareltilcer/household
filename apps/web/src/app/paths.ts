@@ -2,6 +2,7 @@
 // end-to-end suite walks it: axe runs on every route in both themes (06-clients §8), so a route
 // that is not here is a route nothing checks, and a test fails a router that has one. This file
 // is data, with nothing of React's: the suite reads it on Node.
+import type { Part } from '@household/i18n/lazy'
 
 /**
  * The mode of the one build that has the dev-only pages, beside the development server: the build
@@ -42,6 +43,13 @@ export interface RoutePath {
    * are signed in already.
    */
   readonly visitor?: true
+  /**
+   * The parts of the catalog its screen reads beside the app's own, fetched with the screen's
+   * file (routes.tsx, D-159). A test holds each route to them, both ways: no screen reads a word
+   * its route does not fetch, and no route fetches a part its screen does not read
+   * (i18n/words.test.ts).
+   */
+  readonly words?: readonly Part[]
 }
 
 const household = '/households/:householdId'
@@ -99,7 +107,13 @@ export const paths = {
    * What an invitation's link opens, its token in the fragment (A-24): what is being given,
    * shown to whoever holds the link, and taken or declined by a member who has signed in.
    */
-  invitation: { path: '/invitation', example: '/invitation', dev: false, layout: 'public' },
+  invitation: {
+    path: '/invitation',
+    example: '/invitation',
+    dev: false,
+    layout: 'public',
+    words: ['household'],
+  },
   /** What a child profile's graduation link opens (ADR 0012). */
   graduate: { path: '/graduate', example: '/graduate', dev: false, layout: 'public' },
   /** What the link in an account deletion's email opens: it cancels it, signed out (D-136). */
@@ -144,6 +158,17 @@ export const paths = {
     layout: 'account',
   },
   /**
+   * The privacy centre (A-34): a member's rights over their data, each with its one way, and
+   * their own exports. The server's email that an export of the account's is ready links here.
+   */
+  accountPrivacy: {
+    path: '/account/privacy',
+    example: '/account/privacy',
+    dev: false,
+    layout: 'account',
+    words: ['privacy'],
+  },
+  /**
    * Creating a household (A-22): the first thing a new account does (DD-6), and what a member of
    * some makes another by. It is the account's, there being no household around it yet.
    */
@@ -152,6 +177,7 @@ export const paths = {
     example: '/account/households/new',
     dev: false,
     layout: 'account',
+    words: ['household'],
   },
 
   // One household, which the address names (D-4).
@@ -180,6 +206,7 @@ export const paths = {
     example: `${exampleHousehold}/start`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** Leaving the household (A-26): every member's but a child profile's, whatever they hold. */
   leave: {
@@ -187,6 +214,7 @@ export const paths = {
     example: `${exampleHousehold}/leave`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
 
   // Household settings (module `admin`, PRD 17 §1 to §3). The server's notifications link to
@@ -197,6 +225,7 @@ export const paths = {
     example: `${exampleHousehold}/settings`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** Everybody's access, visible to everybody (C-50). */
   settingsMembers: {
@@ -204,6 +233,7 @@ export const paths = {
     example: `${exampleHousehold}/settings/members`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** One member: what they hold, their role, and a child profile's own controls. */
   settingsMember: {
@@ -211,6 +241,7 @@ export const paths = {
     example: `${exampleHousehold}/settings/members/{member}`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** The invitations the household sent, a declined one's notice among them (A-25). */
   settingsInvitations: {
@@ -218,6 +249,7 @@ export const paths = {
     example: `${exampleHousehold}/settings/invitations`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** The invitation composer (A-23): who, how, as what, and the whole of what they get. */
   settingsInvite: {
@@ -225,6 +257,7 @@ export const paths = {
     example: `${exampleHousehold}/settings/invitations/new`,
     dev: false,
     layout: 'household',
+    words: ['household'],
   },
   /** Which modules the household has on (C-51). */
   settingsModules: {
@@ -232,6 +265,83 @@ export const paths = {
     example: `${exampleHousehold}/settings/modules`,
     dev: false,
     layout: 'household',
+    words: ['household'],
+  },
+
+  // The settings' other sections (PRD 17 §5 to §8; plan item 27). The server's notifications
+  // and emails link to `settings/storage`, `settings/billing`, `settings/billing/takeover` and
+  // `settings/exports` by these names.
+  /** What the household stores against what its plan includes (C-54). */
+  settingsStorage: {
+    path: `${household}/settings/storage`,
+    example: `${exampleHousehold}/settings/storage`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'storage'],
+  },
+  /** The subscription as its owners read it, and as its payer manages it (A-28, C-55). */
+  settingsBilling: {
+    path: `${household}/settings/billing`,
+    example: `${exampleHousehold}/settings/billing`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'billing'],
+  },
+  /** Subscribing, in the payment processor's own form (A-27). */
+  settingsSubscribe: {
+    path: `${household}/settings/billing/subscribe`,
+    example: `${exampleHousehold}/settings/billing/subscribe`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'billing'],
+  },
+  /** Taking billing over from the payer who offered it (A-29). */
+  settingsTakeover: {
+    path: `${household}/settings/billing/takeover`,
+    example: `${exampleHousehold}/settings/billing/takeover`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'billing'],
+  },
+  /** A copy of the household, a restriction, an owner made, the household deleted (C-56). */
+  settingsData: {
+    path: `${household}/settings/data`,
+    example: `${exampleHousehold}/settings/data`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'privacy'],
+  },
+  /** The exports of the household its reader asked for: asked, made, downloaded (A-35). */
+  settingsExports: {
+    path: `${household}/settings/exports`,
+    example: `${exampleHousehold}/settings/exports`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'privacy'],
+  },
+  /** The reader's own replicas of the household, and what each has (A-32). */
+  settingsSync: {
+    path: `${household}/settings/sync`,
+    example: `${exampleHousehold}/settings/sync`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'health'],
+  },
+  /** A diagnostic bundle, read whole before it is sent (A-33). */
+  settingsDiagnostics: {
+    path: `${household}/settings/sync/diagnostics`,
+    example: `${exampleHousehold}/settings/sync/diagnostics`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'health'],
+  },
+  /** The clients that synced the household, and the version each named (C-57). */
+  settingsClients: {
+    path: `${household}/settings/clients`,
+    example: `${exampleHousehold}/settings/clients`,
+    dev: false,
+    layout: 'household',
+    words: ['household', 'health'],
   },
   /**
    * A module by its name: it leads to where the module opens, for one the member holds and this
@@ -256,7 +366,13 @@ export const paths = {
   /** The primitives that carry no household data, each in its own states. */
   primitives: { path: '/dev/primitives', example: '/dev/primitives', dev: true, layout: 'plain' },
   /** The shell's own parts in their states: the sidebar, the switcher, the arrange screen. */
-  devShell: { path: '/dev/shell', example: '/dev/shell', dev: true, layout: 'plain' },
+  devShell: {
+    path: '/dev/shell',
+    example: '/dev/shell',
+    dev: true,
+    layout: 'plain',
+    words: ['household'],
+  },
   /** The sync UI in its states: the inbox, the two resolvers, the withdrawn treatment. */
   devSync: { path: '/dev/sync', example: '/dev/sync', dev: true, layout: 'plain' },
   /** Whatever no other route matches. */
@@ -307,6 +423,15 @@ export const inHousehold = {
   invitations: (householdId: string) => fill(paths.settingsInvitations.path, { householdId }),
   invite: (householdId: string) => fill(paths.settingsInvite.path, { householdId }),
   modules: (householdId: string) => fill(paths.settingsModules.path, { householdId }),
+  storage: (householdId: string) => fill(paths.settingsStorage.path, { householdId }),
+  billing: (householdId: string) => fill(paths.settingsBilling.path, { householdId }),
+  subscribe: (householdId: string) => fill(paths.settingsSubscribe.path, { householdId }),
+  takeover: (householdId: string) => fill(paths.settingsTakeover.path, { householdId }),
+  data: (householdId: string) => fill(paths.settingsData.path, { householdId }),
+  exports: (householdId: string) => fill(paths.settingsExports.path, { householdId }),
+  syncHealth: (householdId: string) => fill(paths.settingsSync.path, { householdId }),
+  diagnostics: (householdId: string) => fill(paths.settingsDiagnostics.path, { householdId }),
+  clients: (householdId: string) => fill(paths.settingsClients.path, { householdId }),
   module: (householdId: string, module: string, rest = '') =>
     fill(paths.module.path, { householdId, module }, rest),
 } as const

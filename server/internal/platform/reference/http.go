@@ -3,6 +3,7 @@ package reference
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -53,11 +54,42 @@ type countryJSON struct {
 	HolidaySet         string    `json:"holiday_set"`
 	InspectionLabel    string    `json:"inspection_label"`
 	DocumentTypeSet    string    `json:"document_type_set"`
+	// SupervisoryAuthority is the contract's SupervisoryAuthority.
+	SupervisoryAuthority authorityJSON `json:"supervisory_authority"`
 }
 
-// countryColumns are countryJSON's columns, in its fields' order.
+// authorityJSON is the contract's SupervisoryAuthority: whom a person in the country complains to
+// about their personal data, and the address of the authority's page for it.
+type authorityJSON struct {
+	Name Localized `json:"name"`
+	URL  string    `json:"url"`
+}
+
+// countryColumns are countryJSON's columns, in the order scanCountry reads them.
 const countryColumns = `code, version, name, currency, vat_standard_percent::text, default_units::text,
-	first_day_of_week, holiday_set, inspection_label, document_type_set`
+	first_day_of_week, holiday_set, inspection_label, document_type_set,
+	supervisory_authority_name, supervisory_authority_url`
+
+// scanCountry reads a row of countryColumns. A profile no load has given its authority does not
+// scan, and the read fails rather than answer a profile the contract does not admit: one between
+// migration 01026 and the load that follows it in the same migrate, or one an administrator edited
+// before that migration, which the loader leaves as it is until its file agrees with it (D-148).
+func scanCountry(row pgx.CollectableRow) (countryJSON, error) {
+	var (
+		c       countryJSON
+		address *string
+	)
+	err := row.Scan(&c.Code, &c.Version, &c.Name, &c.Currency, &c.VATStandardPercent, &c.DefaultUnits, &c.FirstDayOfWeek,
+		&c.HolidaySet, &c.InspectionLabel, &c.DocumentTypeSet, &c.SupervisoryAuthority.Name, &address)
+	if err != nil {
+		return c, err
+	}
+	if address == nil {
+		return c, fmt.Errorf("reference: the profile of %s has no supervisory authority: no load has given it one", c.Code)
+	}
+	c.SupervisoryAuthority.URL = *address
+	return c, nil
+}
 
 // countryListJSON is the contract's CountryList.
 type countryListJSON struct {
@@ -106,7 +138,7 @@ func (h handler) countries(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		body.Items, err = pgx.AppendRows(body.Items, rows, pgx.RowToStructByPos[countryJSON])
+		body.Items, err = pgx.AppendRows(body.Items, rows, scanCountry)
 		return err
 	})
 	if err != nil {
@@ -127,7 +159,7 @@ func (h handler) country(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		c, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[countryJSON])
+		c, err = pgx.CollectExactlyOneRow(rows, scanCountry)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return problem.NotFound()
 		}

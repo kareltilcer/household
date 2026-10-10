@@ -1,8 +1,8 @@
 // The households a member is in, and the one an address names, as the API answers them. Every
 // household-scoped screen reads the household through here, by the id in its address (D-4): there
 // is no current household kept anywhere but there.
-import type { components } from '@household/api'
-import { useQuery, type UseQueryResult } from '@tanstack/react-query'
+import type { ApiClient, components } from '@household/api'
+import { queryOptions, useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
@@ -90,6 +90,53 @@ export function moduleStatesKey(household: string) {
   return [...householdKey(household), 'modules'] as const
 }
 
+/**
+ * A household's subscription (`getBillingSubscription`), under the household's own key too: what
+ * moves the household's entitlement moves this, and the two are read again together.
+ */
+export function subscriptionKey(household: string) {
+  return [...householdKey(household), 'billing', 'subscription'] as const
+}
+
+/** The month's storage as it will be billed (`getBillingUsage`), under the household's own key. */
+export function usageKey(household: string) {
+  return [...householdKey(household), 'billing', 'usage'] as const
+}
+
+/** What a household's answer says of the days its data may go on. */
+type Going = Pick<Household, 'entitlement' | 'deletion_scheduled_at'>
+
+/**
+ * Whether the deletion its owners scheduled takes `household` no later than `at`: whatever its
+ * state promises for that moment is then a moment it does not reach. False where none is
+ * scheduled.
+ */
+export function deletedBy(household: Going, at: string): boolean {
+  const deletion = household.deletion_scheduled_at ?? null
+  return deletion !== null && Date.parse(deletion) <= Date.parse(at)
+}
+
+/**
+ * The day a lapse keeps a household's data until, where that is the day it goes: the erasure
+ * takes whichever is due first of that day and a deletion its owners scheduled (the server's
+ * `privacy.erase`), and neither holds the other back. So it is null where a deletion comes no
+ * later, whose own notice says its day, and it stands where a deletion is scheduled for later:
+ * one scheduled in the last thirty days of a lapse does not give the household the days it names.
+ * Null as well where the household's answer gives no such day.
+ */
+export function keptUntil(household: Going): string | null {
+  const until = household.entitlement?.data_retained_until ?? null
+  return until === null || deletedBy(household, until) ? null : until
+}
+
+/**
+ * The moment a household's data goes, as its own answer gives it: the earlier of a deletion its
+ * owners scheduled and, under a lapse, the day its data is kept until. Null where neither is set.
+ */
+export function goesAt(household: Going): string | null {
+  return keptUntil(household) ?? household.deletion_scheduled_at ?? null
+}
+
 /** The households the member belongs to, a `suspended` one among them, in the server's order. */
 export function useHouseholds(): UseQueryResult<HouseholdSummary[]> {
   const api = useApi()
@@ -103,9 +150,8 @@ export function useHouseholds(): UseQueryResult<HouseholdSummary[]> {
  * The household `household` names, as its member reads it. A household the member is not in, one
  * that is `suspended`, and an id that is none answer `404` alike, and read the same here.
  */
-export function useHouseholdQuery(household: string): UseQueryResult<Household> {
-  const api = useApi()
-  return useQuery({
+export function householdQuery(api: ApiClient, household: string) {
+  return queryOptions({
     queryKey: householdKey(household),
     queryFn: async ({ signal }) =>
       unwrap(
@@ -115,6 +161,10 @@ export function useHouseholdQuery(household: string): UseQueryResult<Household> 
         }),
       ),
   })
+}
+
+export function useHouseholdQuery(household: string): UseQueryResult<Household> {
+  return useQuery(householdQuery(useApi(), household))
 }
 
 /** Where the household a member was last in is kept, in this browser, for each member. */

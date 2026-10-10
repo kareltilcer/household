@@ -12,13 +12,16 @@
 // since the members were read, and an owner whose account is being deleted counts as none
 // (D-137), which no member can read.
 //
-// What the prototype drew and this does not: *Hand billing over* leads nowhere yet, billing's
-// screens being plan item 27's, so what has to happen is named and nothing is linked; and
-// deleting the household, the last owner's other way out, is not built, so only making somebody
-// else an owner is offered. A member who is the only one in the household is told that leaving
-// would leave it with nobody in it, and one whose only company is child profiles, which are
-// never made owners, is led to where somebody is invited and not to a list that can give no
-// owner. A child profile does not leave: an owner removes it (D-104).
+// *Hand billing over* leads to the billing screen, where whoever pays offers billing to another
+// owner and it moves once they accept (billing/Handover.tsx; FR-BI6). The server refuses a payer
+// of record whatever the subscription's state, a trial that never subscribed among them, so
+// cancelling the subscription is no way out and is said not to be. The last owner's other way
+// out is deleting the household (FR-HH4), which is done on the screen of its data, in every
+// state it can be opened in (FR-BI1), and is led to from here beside making somebody else an
+// owner. A member who is the only one in the household is told that leaving would leave it with
+// nobody in it, and one whose only company is child profiles, which are never made owners, is
+// led to where somebody is invited and not to a list that can give no owner. A child profile
+// does not leave: an owner removes it (D-104).
 //
 // What leaving does to what the member wrote is said in a section of its own, always, and again
 // in the confirmation: what they added stays with the household, and their private notes and
@@ -31,12 +34,15 @@
 // says it could not reach the server. Nothing waits *pending* or *syncing*: a membership ends on
 // the server or not at all (D-80), its control busy meanwhile. Nothing is *conflicted*, and a
 // refusal is no *rejected* change to settle later: it is drawn as what stands in the way.
-// Nothing is *absent* or *withdrawn*, no grant standing over leaving, and *read-only* changes
-// nothing: a household whose subscription lapsed is left like any other.
+// Nothing is *absent* or *withdrawn*, no grant standing over leaving. *Read-only* changes one
+// thing: leaving is taken by a household that takes no other write (FR-BI1), so a household
+// whose subscription lapsed is left like any other, but its last owner can make nobody an owner
+// there and invite nobody, and is told that in the place of a way that would lead to neither:
+// what is left them there is deleting it, which the gate lets through.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { readState, refocus, useNoWithdrawal } from '../account/common.ts'
+import { readState, refocus, sameId, useNoWithdrawal } from '../account/common.ts'
 import { Section, SettingsPage } from '../account/Page.tsx'
 import styles from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
@@ -53,7 +59,7 @@ import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import { useToast } from '../ui/Toast.tsx'
-import { useMembers, useReread } from './data.ts'
+import { useMembers, useReread, writes } from './data.ts'
 import { useHousehold } from './HouseholdContext.tsx'
 import { householdKey, householdsKey, type HouseholdSummary } from './households.ts'
 import { useTimeZone } from './timezone.ts'
@@ -63,10 +69,6 @@ export type Blocker = 'last_owner' | 'billing_payer'
 
 function isBlocker(value: unknown): value is Blocker {
   return value === 'last_owner' || value === 'billing_payer'
-}
-
-function same(one: string | undefined, other: string): boolean {
-  return one?.toLowerCase() === other.toLowerCase()
 }
 
 /**
@@ -129,7 +131,7 @@ function Leaving({ me }: { readonly me: Me }) {
       // The list this browser kept names the household still, and where the app opens would
       // lead straight back to it: it is taken out of the list at once, and the list read again.
       queries.setQueryData<HouseholdSummary[]>(householdsKey, (list) =>
-        list?.filter((each) => !same(each.id, id)),
+        list?.filter((each) => !sameId(each.id, id)),
       )
       void queries.invalidateQueries({ queryKey: householdsKey, exact: true })
       toast({ message: t('household.leave.done', { household: name }) })
@@ -150,7 +152,7 @@ function Leaving({ me }: { readonly me: Me }) {
 
   // What stands in the way, as the members read here say it.
   const list = members.data ?? []
-  const own = list.find((each) => same(each.user_id, me.id))
+  const own = list.find((each) => sameId(each.user_id, me.id))
   const others = list.filter((each) => each !== own)
   const anotherOwner = others.some((each) => each.role === 'owner')
   const alone = own !== undefined && others.length === 0
@@ -245,6 +247,9 @@ function Leaving({ me }: { readonly me: Me }) {
                   <p className={styles.text}>
                     {t('household.leave.alone.body', { household: name })}
                   </p>
+                  <Link className={styles.link} to={inHousehold.data(id)}>
+                    {t('household.leave.delete')}
+                  </Link>
                 </Section>
               ) : null}
               {lastOwner && !alone ? (
@@ -258,8 +263,13 @@ function Leaving({ me }: { readonly me: Me }) {
                     <p className={styles.text}>{t('household.leave.last_owner.deleting')}</p>
                   ) : null}
                   {/* No way that could only lead to nobody: where the members can give no owner,
-                      the way on is to where one is invited. */}
-                  {onlyChildren ? (
+                      the way on is to where one is invited, and where the household takes no
+                      writes neither can be done, which is said. */}
+                  {!writes(household) ? (
+                    <p className={styles.text}>
+                      {t('household.leave.last_owner.held', { household: name })}
+                    </p>
+                  ) : onlyChildren ? (
                     <Link className={styles.link} to={inHousehold.invite(id)}>
                       {t('household.invite.title')}
                     </Link>
@@ -268,11 +278,22 @@ function Leaving({ me }: { readonly me: Me }) {
                       {t('household.leave.last_owner.action')}
                     </Link>
                   )}
+                  {/* The other way out, which a household that takes no other write takes too. */}
+                  <Link className={styles.link} to={inHousehold.data(id)}>
+                    {t('household.leave.delete')}
+                  </Link>
                 </Section>
               ) : null}
               {payer ? (
                 <Section title={t('household.leave.payer.title')}>
                   <p className={styles.text}>{t('household.leave.payer.body')}</p>
+                  {/* Billing is an owner's screen, and whoever pays is one (FR-HH6): the way
+                      to where it is offered to another. */}
+                  {household.my_role === 'owner' ? (
+                    <Link className={styles.link} to={inHousehold.billing(id)}>
+                      {t('household.leave.payer.action')}
+                    </Link>
+                  ) : null}
                 </Section>
               ) : null}
               <Section title={t('household.leave.behind.title')}>

@@ -5,12 +5,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kareltilcer/household/server/internal/platform/fairuse"
 	"github.com/kareltilcer/household/server/internal/platform/storage"
 	"github.com/kareltilcer/household/server/internal/platform/vectors"
 )
 
 // The shared vectors, run against the server's twin of @household/domain's storage arithmetic
-// (D-37): the average, the blocks it needs, what they cost and the month's projection.
+// (D-37): the average, the blocks it needs, what they cost, the month's projection, and the four
+// fifths of an allowance the owners are first told at, which is fairuse's and which the sampler asks
+// of what a household stores.
 func TestStorageVectors(t *testing.T) {
 	a := storage.Default
 	vectors.Run(t, "storage", map[string]vectors.Subject{
@@ -49,6 +52,16 @@ func TestStorageVectors(t *testing.T) {
 				return nil, err
 			}
 			return storage.Projected(v.Samples, v.Current, v.Remaining), nil
+		},
+		"warns": func(in json.RawMessage) (any, error) {
+			v, err := vectors.Decode[struct {
+				Count   int64 `json:"count"`
+				Ceiling int64 `json:"ceiling"`
+			}](in)
+			if err != nil {
+				return nil, err
+			}
+			return fairuse.Warns(v.Count, v.Ceiling), nil
 		},
 	}, func(error) string { return "" })
 }

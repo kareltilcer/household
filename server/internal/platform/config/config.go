@@ -127,6 +127,8 @@ const (
 	StripeWebhookSecretVar  = "HOUSEHOLD_STRIPE_WEBHOOK_SECRET"
 	StripeAutomaticTaxVar   = "HOUSEHOLD_STRIPE_AUTOMATIC_TAX"
 	BillingPricesVar        = "HOUSEHOLD_BILLING_PRICES"
+	// StripeAPIURLVar is development's alone: where a stand-in answers for Stripe's API.
+	StripeAPIURLVar = "HOUSEHOLD_STRIPE_API_URL"
 )
 
 // NoProxies is TrustedProxiesVar's value for a server its clients reach directly, with no proxy
@@ -270,6 +272,10 @@ type Config struct {
 	// BillingPrices are the plans by currency (PRD 04 §1): PRD's EUR and GBP figures when none are
 	// configured, which name no Stripe price and so take no payment.
 	BillingPrices billing.Prices
+	// StripeAPIURL is where billing asks Stripe, Stripe's own when "", which it is in every
+	// environment but development: there it may name a stand-in for Stripe's API, the one the web's
+	// end-to-end suite pays against (cmd/stripe-standin), asked with test-mode keys.
+	StripeAPIURL string
 }
 
 // Getenv looks a variable up, reporting whether it is set.
@@ -576,7 +582,8 @@ func (l *loader) notifications(c *Config, dev bool) {
 // plans. Outside development all three keys are required; in development none leaves billing
 // unconfigured. A live key takes real payments, and so is production's alone, as a test key is never
 // production's: staging holds synthetic data (PL-8) and pays in Stripe's test mode. With a key, every
-// price of every plan names the Stripe price that charges it.
+// price of every plan names the Stripe price that charges it. Where Stripe is asked is no setting of
+// a deployment's: development alone may name a stand-in for it (stripeAPI).
 func (l *loader) billing(c *Config) {
 	dev := c.Env == Development
 	keys := []struct {
@@ -615,6 +622,7 @@ func (l *loader) billing(c *Config) {
 	if set != 0 && set != len(keys) {
 		l.fail("%s, %s and %s are set together or not at all", StripeSecretKeyVar, StripePublishableKeyVar, StripeWebhookSecretVar)
 	}
+	l.stripeAPI(c)
 	switch tax := l.str(StripeAutomaticTaxVar, "false"); tax {
 	case "true":
 		c.StripeAutomaticTax = true
@@ -634,6 +642,42 @@ func (l *loader) billing(c *Config) {
 	if unpriced := c.BillingPrices.Unpriced(); set > 0 && len(unpriced) > 0 {
 		l.fail("%s names no Stripe price for: %s", BillingPricesVar, strings.Join(unpriced, ", "))
 	}
+}
+
+// stripeAPI reads where billing asks Stripe when that is not Stripe: a stand-in for its API, which
+// the web's end-to-end suite pays against (cmd/stripe-standin). Only development may say so. A
+// deployment that could be pointed at another "Stripe" is one whose payments, and whose customers'
+// names and addresses, could be sent to it, so anywhere else the setting stops the server from
+// starting rather than being passed over. In development it is asked over http on this machine
+// alone, and only with Stripe's test-mode keys, which are all that should ever reach a stand-in.
+// billing has read the keys by now.
+func (l *loader) stripeAPI(c *Config) {
+	raw := l.str(StripeAPIURLVar, "")
+	if raw == "" {
+		return
+	}
+	u, err := url.Parse(raw)
+	switch {
+	case c.Env != Development:
+		l.fail("%s is set, which only development may: anywhere else billing asks Stripe itself", StripeAPIURLVar)
+	case err != nil || u.Scheme != "http" || u.Host == "" || u.User != nil ||
+		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "":
+		l.fail("%s is %s; want the http scheme and host a stand-in for Stripe's API answers at", StripeAPIURLVar, quotedURL(raw))
+	case !loopback(u.Hostname()):
+		l.fail("%s is %s; only a stand-in on this machine is asked", StripeAPIURLVar, quotedURL(raw))
+	case !testKey(c.StripeSecretKey) || !testKey(c.StripePublishableKey) || c.StripeWebhookSecret == "":
+		l.fail("%s is set without Stripe's test-mode keys, which are all a stand-in is asked with: set %s, %s and %s",
+			StripeAPIURLVar, StripeSecretKeyVar, StripePublishableKeyVar, StripeWebhookSecretVar)
+	default:
+		c.StripeAPIURL = u.Scheme + "://" + u.Host
+	}
+}
+
+// testKey reports whether key, an API key of Stripe's or a publishable one, is a test-mode key:
+// sk_test_…, rk_test_… or pk_test_….
+func testKey(key string) bool {
+	_, mode, _ := strings.Cut(key, "_")
+	return strings.HasPrefix(mode, "test_")
 }
 
 // quotedURL is raw as an error about it quotes it: its password replaced, since a setting that refuses

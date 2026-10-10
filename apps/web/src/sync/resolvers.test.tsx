@@ -45,7 +45,7 @@ const words = {
   elsewhere: 'You, on another device',
   deleted: 'Deleted',
   readonly:
-    'This household is read-only right now, so your version can’t be sent. You can keep the other version now, or decide later.',
+    'This household can’t be changed right now, so neither version can be chosen yet. Yours is kept in this browser, and the question waits here.',
   open: 'Open it',
   retry: 'Try again',
   edit: 'Edit',
@@ -61,7 +61,8 @@ const words = {
   yours: 'Your change',
   neighbour: 'The entry next to it',
   kept: 'Your change isn’t lost. It stays in this browser until you decide what to do with it.',
-  cannotResend: 'This household is read-only right now, so this can’t be sent again yet.',
+  waits:
+    'This household can’t be changed right now. You can discard this change now, or decide what to do with it once the household can be changed again.',
   shopping: 'Shopping',
   entered: 'What you entered',
   saved: 'What is saved now',
@@ -221,14 +222,23 @@ describe('the conflict resolver', () => {
     expect(version(words.elsewhere)).toHaveTextContent(/2\.00/)
   })
 
-  it('offers only the other version in a household that does not write, and says why', () => {
-    drawConflict(conflict, { writes: false })
-    expect(screen.getByText(words.readonly)).toBeVisible()
+  // Read-only removes the answer, and not the question (FR-BI2): neither version can be chosen
+  // where one of them could not be sent, and the conflict waits as it is.
+  it('reads and does not answer in a household that does not write, and says why', () => {
+    const { stand, onClose } = drawConflict(conflict, { writes: false })
+    const panel = screen.getByRole('dialog', { name: words.settlement })
+    expect(within(panel).getByText(words.readonly)).toBeVisible()
+    // Both versions are still there to read.
+    expect(version(words.mine)).toHaveTextContent(/450\.00/)
+    expect(version(words.petr)).toHaveTextContent(/500\.00/)
     expect(screen.queryByRole('button', { name: words.keepMine })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: words.keepTheirs })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: words.open })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: words.keepTheirs })).toBeVisible()
-    // Absent, not disabled.
+    // Its one control closes it. Absent, not disabled.
+    expect(within(panel).getAllByRole('button')).toHaveLength(1)
     expect(document.querySelector(':disabled, [aria-disabled="true"]')).toBeNull()
+    expect(stand.asked).toEqual([])
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   it('leads to the row’s own editor for a value that is neither, and has no field of its own', async () => {
@@ -401,13 +411,53 @@ describe('a change that was not accepted', () => {
     expect(router.state.location.pathname).toBe(paths.devSync.path)
   })
 
-  it('draws nothing that would send a change in a household that does not write', () => {
-    drawRejected(rejectionWith('monotonicity_violation'), { writes: false })
-    expect(screen.getByText(words.cannotResend)).toBeVisible()
-    expect(screen.queryByRole('button', { name: words.retry })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: words.edit })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: words.discard })).toBeVisible()
-  })
+  // Sending a change again and editing it are writes, which a household that does not write
+  // refuses: both are absent. Giving it up is this browser's own and asks nothing of the server,
+  // so it stays (FR-BI2).
+  it.each(rejections.map((entry) => [entry.code ?? '', entry] as const))(
+    'offers only to give it up in a household that does not write: %s',
+    (code, outcome) => {
+      const { stand } = drawRejected(outcome, { writes: false })
+      const panel = screen.getByRole('dialog')
+      const rejection = rejectionOf(code)
+      // The reason is said as ever, and what the member entered is there to read.
+      expect(within(panel).getByText(catalogs.en[rejection.reason])).toBeVisible()
+      expect(version(words.yours)).toBeVisible()
+      expect(screen.queryByRole('button', { name: words.retry })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: words.edit })).not.toBeInTheDocument()
+      expect(within(panel).getByRole('button', { name: words.discard })).toBeVisible()
+      // The control that closes it, and the one that gives the change up. Absent, not disabled.
+      expect(within(panel).getAllByRole('button')).toHaveLength(2)
+      expect(document.querySelector(':disabled, [aria-disabled="true"]')).toBeNull()
+      // A change that is held says in its own sentence that it goes by itself; any other says
+      // what can be done with it now, and that the rest waits for a household that writes.
+      expect(within(panel).queryByText(words.waits) !== null).toBe(!rejection.held)
+      expect(stand.asked).toEqual([])
+    },
+  )
+
+  // A change held for a household that does not write is sent by the replica itself once it
+  // writes again, which may be months on: its member declines that while it waits, or never can.
+  it.each(['entitlement_read_only', 'entitlement_restricted', 'validation_failed'])(
+    'gives a change up in a household that does not write, after the confirmation that names it: %s',
+    async (code) => {
+      const outcome = rejectionWith(code)
+      const { stand, onClose } = drawRejected(outcome, { writes: false })
+      await userEvent.click(screen.getByRole('button', { name: words.discard }))
+      const confirmation = screen.getByRole('dialog', { name: words.discardTitle })
+      expect(confirmation).toHaveAccessibleDescription(words.discardBody)
+      // The safe choice first, and it changes nothing.
+      await userEvent.click(within(confirmation).getByRole('button', { name: words.keepIt }))
+      expect(screen.queryByRole('dialog', { name: words.discardTitle })).not.toBeInTheDocument()
+      expect(stand.asked).toEqual([])
+
+      await userEvent.click(screen.getByRole('button', { name: words.discard }))
+      await userEvent.click(screen.getByRole('button', { name: words.discardIt }))
+      expect(stand.asked).toEqual([`discard:${outcome.mutation_id}`])
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(await screen.findByText(words.discarded)).toBeVisible()
+    },
+  )
 
   it('is what a rejected row’s mark opens, and a conflict’s the comparison', () => {
     const stand = standIn({ registry })

@@ -113,7 +113,13 @@ to export and deletion rather than next to billing, because it is not a billing 
 ### 8. Advanced
 
 **FR-HA18 — API version and client compatibility** — which clients are connected and their versions,
-useful when a member reports something the others do not see.
+useful when a member reports something the others do not see. A connected client is one that
+synced this household: each replica that has reported itself, with whose it is, the client's type
+and the version it named itself with, a device's platform and label or a browser's user agent,
+and when it last reported, beside the oldest versions the deployment serves. It is an owner's to
+read. It is not the accounts' devices and sessions, which are no household's, and it says of no
+client how far it is behind: the server knows which versions it refuses, and nothing of what has
+been released since (**D-178**).
 
 **FR-HA19 — Sync health** — per device: last sync, cursor position, pending mutation count,
 conflicts awaiting resolution, **replica-digest state** (when the device last verified itself
@@ -122,7 +128,10 @@ through `POST …/sync/digest`, and which entity types disagreed — [D-85](../0
 why, and its absence is why sync bugs become support tickets. **D-79.** Under D-93 the cursor
 position is the replica's last checkpoint, the replica-digest state is its bucket-checksum state
 with the digest's, both from the replica's report (`POST …/sync/digest`, **D-125**), and the
-re-snapshot is a re-download of the replica once its queue has drained.
+re-snapshot is a re-download of the replica once its queue has drained. It is every member's
+screen, of their own replicas: the server answers a member theirs and nobody else's, and asks a
+re-download of those alone (**D-177**). A client that draws it reports itself as it does, so that
+the device a member is reading it on is among what it shows (**D-181**).
 
 **It ships in Phase 0, not with this module** ([10-sync-risk.md](../10-sync-risk.md) §6). Because
 platform staff cannot read household content ([D-3](../09-decisions.md)), nobody can inspect a
@@ -189,15 +198,19 @@ None — this module is a consumer of every catalog and a contributor to none.
 | View household profile settings | Any member |
 | View the modules the household enables, and one's own level on each | Any member |
 | View the household's invitations | `view` on the admin module |
-| View the storage picture | `view` on the admin module |
+| View the storage picture | `view` on the admin module. What the month's storage will cost is billing's, and an owner's |
 | Leave the household | Any member (FR-HH4) |
 | Billing | The payer; other owners see state only |
+| Read on the data screen that the household is scheduled for deletion, or restricted | Any member: every member is told of both ([05](../05-privacy-and-compliance.md) §5, FR-BI7). Exporting, restricting and deleting are an owner's |
+| Sync health, of one's own replicas | Any member (FR-HA19) |
 | Personal notification categories and quiet hours | Any member — these are personal preferences |
 
 So a client lists household settings for every member, whatever level they hold on it, and a
 level of `none` takes away what `view` unlocks and no screen; a control that changes something is
 drawn for an owner alone (**D-167**). Nothing here is written offline (Sync, above): a client
 asks each change as it is made, and says so where the server could not be reached (**D-170**).
+Of the sections beside those three, storage is listed for whoever holds `view`, billing and the
+clients for owners, and the data screen and sync health for every member (**D-177**).
 
 ## Non-goals
 

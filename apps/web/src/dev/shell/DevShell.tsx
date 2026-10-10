@@ -6,11 +6,19 @@
 // member with several modules sees, with one pinned and one put away; a member who holds none;
 // the switcher with several households, one of them read-only; and with none it could read.
 //
-// The households' names are fixtures, as every word of a dev page is (D-154). The words the
+// The entitlement banner is here in each of its drawings (plan item 27; A-30), and the suspended
+// lockout (A-31): a household in each state would take a clock moved and a staff action to make,
+// so the walk holds them to the two gates from fixtures. Each banner is drawn to one of its
+// three readers, so that all three are on the page; a lapse with a restriction beside it and a
+// restriction whose owner is gone are drawn too.
+//
+// The households' names are fixtures, as every word of a dev page is (D-154), and so are a
+// restriction's reason and a suspension's notice, which are somebody's own words. The words the
 // shell says itself are the catalogs'.
 import type { ReactNode } from 'react'
 import { inHousehold } from '../../app/paths.ts'
 import { usePageTitle } from '../../app/title.ts'
+import type { Reader } from '../../household/data.ts'
 import { HouseholdContext } from '../../household/HouseholdContext.tsx'
 import type { Household, HouseholdSummary, ModuleKey } from '../../household/households.ts'
 import { beginnings, StartAnswers } from '../../household/Start.tsx'
@@ -18,6 +26,9 @@ import { useTranslate } from '../../i18n/I18nProvider.tsx'
 import type { ModuleRegistry } from '../../modules/registry.ts'
 import { ArrangeLists } from '../../shell/Arrange.tsx'
 import { arrangementKey } from '../../shell/arrangement.ts'
+import { bannerOf, type Entitlement } from '../../shell/entitlement.ts'
+import { EntitlementBannerView } from '../../shell/EntitlementBanner.tsx'
+import { LockoutView } from '../../shell/Lockout.tsx'
 import type { Arrangement } from '../../shell/navigation.ts'
 import { SidebarView } from '../../shell/Sidebar.tsx'
 import { SwitcherView } from '../../shell/Switcher.tsx'
@@ -54,6 +65,7 @@ const user = '01900000-0000-7000-8000-00000000d0e5'
 const home = '01900000-0000-7000-8000-0000000000a1'
 const cottage = '01900000-0000-7000-8000-0000000000a2'
 const none = '01900000-0000-7000-8000-0000000000a3'
+const lodge = '01900000-0000-7000-8000-0000000000a4'
 
 function household(id: string, name: string, grants: Grants): Household {
   return {
@@ -112,6 +124,94 @@ function others(sample: Sample): HouseholdSummary[] {
 
 const inSync: Sync = { replica: { phase: 'opening' }, online: true, receiving: null }
 
+/** The moment the banners are drawn at, and the zone their days are said in. */
+const now = Date.parse('2026-09-21T10:00:00Z')
+const zone = 'Europe/Prague'
+
+/** One drawing of the entitlement banner: the state it is of, and whom it is drawn to. */
+interface BannerCase {
+  readonly title: string
+  readonly entitlement: Entitlement
+  readonly reader: Reader
+}
+
+/** The banner's seven drawings (A-30), and two more of a restriction: beside a lapse, and unnamed. */
+function bannerCases(sample: Sample): BannerCase[] {
+  const restriction = {
+    restricted_by: { user_id: user, label: sample('Jana Tilcerová'), is_former_member: false },
+    restricted_at: '2026-09-09T12:02:00Z',
+    reason: sample('Until the insurance claim is settled.'),
+  }
+  return [
+    {
+      title: sample(
+        'Trial, with ten days or fewer left: a notice that can be put away, to the payer',
+      ),
+      entitlement: {
+        state: 'trialing',
+        trial_notice: 'notice',
+        trial_ends_at: '2026-09-30T08:00:00Z',
+      },
+      reader: 'payer',
+    },
+    {
+      title: sample('Trial, with five days or fewer left: a banner that stays, to another owner'),
+      entitlement: {
+        state: 'trialing',
+        trial_notice: 'banner',
+        trial_ends_at: '2026-09-24T08:00:00Z',
+      },
+      reader: 'owner',
+    },
+    {
+      title: sample('Past due, to the payer: no member is drawn it'),
+      entitlement: { state: 'past_due' },
+      reader: 'payer',
+    },
+    {
+      title: sample('Grace, to a member'),
+      entitlement: { state: 'grace', grace_ends_at: '2026-10-05T08:00:00Z' },
+      reader: 'member',
+    },
+    {
+      title: sample('Read-only, to the payer'),
+      entitlement: { state: 'read_only', data_retained_until: '2027-10-09T08:00:00Z' },
+      reader: 'payer',
+    },
+    {
+      title: sample('Read-only with a restriction beside it, to another owner'),
+      entitlement: {
+        state: 'read_only',
+        data_retained_until: '2027-10-09T08:00:00Z',
+        restriction,
+      },
+      reader: 'owner',
+    },
+    {
+      title: sample('Cancelled, to a member'),
+      entitlement: { state: 'canceled', data_retained_until: '2027-10-09T08:00:00Z' },
+      reader: 'member',
+    },
+    {
+      title: sample('Restricted, with its reason, to an owner'),
+      entitlement: { state: 'restricted', restriction },
+      reader: 'owner',
+    },
+    {
+      title: sample('Restricted by an account that is gone, to a member'),
+      entitlement: {
+        state: 'restricted',
+        restriction: {
+          restricted_by: { user_id: null, label: '', is_former_member: true },
+          restricted_at: '2026-09-09T12:02:00Z',
+          reason: null,
+        },
+      },
+      reader: 'member',
+    },
+  ]
+}
+
 function Case({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   return (
     <section className={styles.case}>
@@ -128,6 +228,19 @@ export function DevShell() {
   arrange()
   const first = household(home, sample('Tilcerovi'), grants)
   const empty = household(none, sample('Babička'), { dashboard: 'view' })
+  // As the member's list of households names one the platform suspended (D-115).
+  const suspended: HouseholdSummary = {
+    id: lodge,
+    name: sample('Srub Šumava'),
+    my_role: 'member',
+    entitlement: {
+      state: 'suspended',
+      suspended_at: '2026-09-09T12:02:00Z',
+      suspension_notice: sample(
+        'We were told that files kept here break our terms, and have suspended the household while we look at them.',
+      ),
+    },
+  }
   const switchTo = () => undefined
   return (
     <div className={styles.page}>
@@ -185,6 +298,41 @@ export function DevShell() {
       <Case title={sample('Above a household’s screens: offline, and not receiving')}>
         <OfflineBar />
         <OfflineBar sentence={t('sync.not_receiving')} />
+      </Case>
+      <Case title={sample('Above a household that takes no writes: offline, and not receiving')}>
+        <OfflineBar sentence={t('shell.offline.reading')} />
+        <OfflineBar sentence={t('shell.not_receiving.reading')} />
+      </Case>
+      {bannerCases(sample).map(({ title, entitlement, reader }) => {
+        const shown = bannerOf(entitlement, reader !== 'member')
+        return shown === null ? null : (
+          <Case key={title} title={title}>
+            <EntitlementBannerView
+              household={first}
+              shown={shown}
+              reader={reader}
+              owners={[sample('Jana Tilcerová'), sample('Petr Tilcer')]}
+              zone={zone}
+              now={now}
+              onDismiss={shown.kind === 'trial' && shown.stage === 'notice' ? switchTo : undefined}
+            />
+          </Case>
+        )
+      })}
+      <Case
+        title={sample('Switcher: the household that is open is read-only, another is suspended')}
+      >
+        <div className={styles.sidebar}>
+          <SwitcherView
+            household={{ ...first, entitlement: { state: 'read_only' } }}
+            others={[suspended, ...others(sample)]}
+            failed={false}
+            onSwitch={switchTo}
+          />
+        </div>
+      </Case>
+      <Case title={sample('The lockout: a household the platform suspended')}>
+        <LockoutView household={suspended} others={[first]} zone={zone} nested />
       </Case>
     </div>
   )

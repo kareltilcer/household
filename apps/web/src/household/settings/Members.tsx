@@ -21,7 +21,8 @@
 // read* where nothing is kept and the read failed or waits for a connection, and the list as
 // this browser kept it. *Empty* is a household of one: its member's own row, and under it what
 // inviting somebody takes. *Populated* is the list. *Read-only* is the list with the owner's two
-// actions absent, the settings' own note saying why (Page.tsx). *Absent* has nothing to be,
+// actions absent, the household's banner above the screen saying why
+// (shell/EntitlementBanner.tsx). *Absent* has nothing to be,
 // every member reading this screen. *Withdrawn* is a member removed while the screen is open,
 // which the shell answers for the whole household, a `404` on it drawing *not available*: the
 // screen has no state of its own for it. *Pending*, *syncing*, *conflicted* and *rejected* have
@@ -29,7 +30,7 @@
 // said where it was asked.
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { readState } from '../../account/common.ts'
+import { readState, useFocusKept } from '../../account/common.ts'
 import settings from '../../account/Settings.module.css'
 import { inHousehold } from '../../app/paths.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
@@ -53,7 +54,6 @@ import { ChildCreate } from './ChildCreate.tsx'
 import { statusAt } from './invitations.ts'
 import styles from './Members.module.css'
 import { HouseholdSettingsPage, useStanding } from './Page.tsx'
-import { useFocusKept } from './profile.ts'
 
 const tones: readonly MemberTone[] = [1, 2, 3, 4, 5, 6, 7, 8]
 
@@ -147,7 +147,8 @@ export function Members() {
   // Where the focus is once the sheet has closed: on the control that opened it, and, where
   // that control went while the sheet was open, with the owner's standing or the household's
   // writes, on the list's own place. It is not left to drop to the page: nor is the focus of a
-  // control that left with no sheet open, when the household was read again (profile.ts).
+  // control that left with no sheet open, when the household was read again
+  // (account/common.ts).
   const [adding, setAdding] = useState(false)
   const opener = useRef<HTMLButtonElement>(null)
   const view = useFocusKept(standing.changes, adding)

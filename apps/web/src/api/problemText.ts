@@ -15,7 +15,9 @@ export function deviceTimeZone(): string {
 /**
  * A sentence for `error`, whatever it is: a lost connection, a `429` with the time it clears, or
  * the server's own failure. `timeZone` is the zone that time is said in: the member's own, or
- * the device's where nobody is signed in.
+ * the device's where nobody is signed in. A time that is on another calendar day than now, in
+ * that zone, is said with its day: a limit counted by the day clears most of a day later, and a
+ * time of day alone would read as today's.
  */
 export function useProblemText(timeZone: string = deviceTimeZone()): (error: unknown) => string {
   const t = useTranslate()
@@ -27,9 +29,12 @@ export function useProblemText(timeZone: string = deviceTimeZone()): (error: unk
       if (problem === undefined) return t('ui.problem.unreachable')
       if (problem.status === 429) {
         const at = error instanceof ApiProblemError ? error.retryAt : undefined
-        return at === undefined
-          ? t('ui.problem.rate_limited')
-          : t('ui.problem.rate_limited_until', { time: format.time(at, timeZone) })
+        if (at === undefined) return t('ui.problem.rate_limited')
+        const time = format.time(at, timeZone)
+        const day = format.dayOf(at, timeZone)
+        return day === format.dayOf(new Date(), timeZone)
+          ? t('ui.problem.rate_limited_until', { time })
+          : t('ui.problem.rate_limited_until_day', { time, day })
       }
       return t('ui.problem.server')
     },

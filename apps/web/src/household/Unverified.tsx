@@ -6,33 +6,16 @@
 //
 // The block lifts by itself: the account is read again each time the page is looked at
 // (session/SessionProvider.tsx), which is when an address proven in another tab is noticed.
-import { useQueryClient } from '@tanstack/react-query'
-import { useCallback } from 'react'
+//
+// Whether a refusal is this one, and the server's word on it taken, are the account's
+// (account/unverified.ts), which its own screens import with no word of a household's.
 import { VerifyResend } from '../account/VerifyResend.tsx'
-import { problemIn } from '../api/problem.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
-import { meKey, useMe, type Me } from '../session/SessionProvider.tsx'
+import { useMe } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 import styles from '../account/Settings.module.css'
 
-/** Whether `error` is the server's refusal of an account whose address is not verified. */
-export function isUnverified(error: unknown): boolean {
-  return problemIn(error)?.code === 'account_unverified'
-}
-
-/**
- * Takes the server's word that the account is not verified, whatever this page had read of it:
- * a screen calls it where a write of its own was refused so, and then draws `Unverified` in the
- * write's place, as it does for an account it read as unverified from the first.
- */
-export function useMarkUnverified(): () => void {
-  const queries = useQueryClient()
-  return useCallback(() => {
-    queries.setQueryData<Me>(meKey, (was) =>
-      was === undefined ? was : { ...was, email_verified: false },
-    )
-  }, [queries])
-}
+export { isUnverified, useMarkUnverified } from '../account/unverified.ts'
 
 export interface UnverifiedProps {
   /** Why this, of all things, waits for a verified address: the screen's own sentence. */

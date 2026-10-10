@@ -226,6 +226,35 @@ func TestLoadingAChangeVersionsWhatChanged(t *testing.T) {
 	}
 }
 
+// A profile made before it carried a supervisory authority (migration 01026) is given its file's by
+// the load that follows, as a load gives a row any value that differs: every profile's version
+// moves on, and the dataset's, so that a client that cached either asks again; and the next load
+// writes nothing.
+func TestLoadingGivesAProfileTheAuthorityItLacked(t *testing.T) {
+	tx := rolledBack(t)
+	if _, err := tx.Exec(t.Context(),
+		"UPDATE country_profiles SET supervisory_authority_name = NULL, supervisory_authority_url = NULL"); err != nil {
+		t.Fatal(err)
+	}
+	rows := shipped(t)[reference.Countries]
+
+	r := load(t, tx, reference.Files())[reference.Countries]
+	if want := (reference.Report{Dataset: reference.Countries, Version: 2, Updated: rows}); r != want {
+		t.Fatalf("the load after the migration: %+v, want %+v", r, want)
+	}
+	var given int
+	if err := tx.QueryRow(t.Context(), `SELECT count(*) FROM country_profiles
+		WHERE version = 2 AND supervisory_authority_name ->> 'en' <> '' AND supervisory_authority_url LIKE 'https://%'`).Scan(&given); err != nil {
+		t.Fatal(err)
+	}
+	if given != rows {
+		t.Errorf("%d profiles at version 2 with an authority, want all %d", given, rows)
+	}
+	if r := load(t, tx, reference.Files())[reference.Countries]; r.Changed() || r.Version != 2 {
+		t.Errorf("loading again: %+v, want nothing written", r)
+	}
+}
+
 // A row an administrator edited is theirs until the files hold the same values (D-148, ADR 0022):
 // a load whose files differ from it leaves it as it is, reports it held and writes nothing; one
 // whose files have caught up with it releases it, changing no value and no version; and from then on

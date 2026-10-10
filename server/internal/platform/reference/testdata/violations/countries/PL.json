@@ -7,5 +7,9 @@
   "first_day_of_week": { "value": 1, "source": "a-source" },
   "holiday_set": { "value": "pl", "source": "a-source" },
   "inspection_label": { "value": "Przegląd techniczny", "source": "a-source" },
-  "document_type_set": { "value": "pl", "source": "a-source" }
+  "document_type_set": { "value": "pl", "source": "a-source" },
+  "supervisory_authority": {
+    "name": { "value": { "en": "An authority", "cs": "Úřad", "sk": "Úrad", "de": "Eine Behörde", "pl": "Urząd" }, "source": "a-source" },
+    "url": { "value": "https:///complaints", "source": "a-source" }
+  }
 }

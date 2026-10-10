@@ -9,8 +9,12 @@
 // Item 25 widened three (ADR 0026). Two are the replica's: `script-src` admits compiling
 // WebAssembly, which the replica's SQLite is, and `connect-src` the sync service's origin. The
 // third is a picture's: `img-src` admits the object store's origin, where the API's pre-signed
-// links point. A build is told both origins (deployment.ts). The payment processor's frame is
-// item 27's.
+// links point. A build is told both origins (deployment.ts).
+//
+// Item 27 widened three for the payment form, which is the processor's own (PRD 04 §6, D-131):
+// `script-src` admits Stripe.js, `frame-src`, which the policy had none of, the frames it draws
+// the form and a bank's challenge in, and `connect-src` the processor's API (`processor`,
+// below). They are the processor's origins and no deployment's, so no build is told them.
 import { deployment, type Deployment } from './deployment.ts'
 
 /**
@@ -20,15 +24,38 @@ import { deployment, type Deployment } from './deployment.ts'
  */
 export const wasm = "'wasm-unsafe-eval'"
 
+/**
+ * What Stripe.js needs of a page's policy, as Stripe states it (docs.stripe.com/security/guide,
+ * *Content Security Policy*, Stripe.js), and nothing more:
+ *
+ * - `script`: Stripe.js itself, which is loaded from Stripe and never bundled (PCI DSS), and the
+ *   origins under it that Stripe starts its own scripts on.
+ * - `frame`: the frames the Payment Element is drawn in, on the same origins, and
+ *   `hooks.stripe.com`, where a payment that has to be confirmed with its bank, a card under
+ *   3-D Secure, is sent.
+ * - `connect`: the processor's API, which Stripe.js confirms a payment with.
+ *
+ * Left out of what that page lists: `maps.googleapis.com`, which only the Address Element's
+ * autocomplete asks for, and Link's origins, Link being no method this product takes. Nothing of
+ * the processor's is inline: its styles are its frames' own, and the form's look is handed to it
+ * as values (src/billing/appearance.ts).
+ */
+export const processor = {
+  script: ['https://js.stripe.com', 'https://*.js.stripe.com'],
+  frame: ['https://js.stripe.com', 'https://*.js.stripe.com', 'https://hooks.stripe.com'],
+  connect: ['https://api.stripe.com'],
+} as const
+
 /** The directives a `<meta http-equiv>` carries, for a page of the deployment `of`. */
 export function directivesFor(of: Deployment) {
   return {
     'default-src': ["'none'"],
-    'script-src': ["'self'", wasm],
+    'script-src': ["'self'", wasm, ...processor.script],
     'style-src': ["'self'"],
     'img-src': ["'self'", ...of.files],
     'font-src': ["'self'"],
-    'connect-src': ["'self'", ...of.sync],
+    'connect-src': ["'self'", ...of.sync, ...processor.connect],
+    'frame-src': [...processor.frame],
     'manifest-src': ["'self'"],
     'base-uri': ["'none'"],
     'form-action': ["'self'"],

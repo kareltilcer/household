@@ -1,9 +1,13 @@
 import { dehydrate, MutationObserver, onlineManager } from '@tanstack/react-query'
 import type { PersistedClient } from '@tanstack/react-query-persist-client'
 import type { UseStore } from 'idb-keyval'
-import { describe, expect, it, vi } from 'vitest'
+import { renderHook } from '@testing-library/react'
+import { createElement, type ReactNode } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { I18nProvider, useFormat } from '../i18n/I18nProvider.tsx'
 import { clientName, cookieValue, createWebClient, csrfCookie } from './client.ts'
 import { ApiProblemError, isRetryable, problemIn, unwrap } from './problem.ts'
+import { useProblemText } from './problemText.ts'
 import {
   askedNow,
   cacheMaxAge,
@@ -137,13 +141,16 @@ describe('what a request answered', () => {
   })
 })
 
-function thrown(status: number, code: string): ApiProblemError {
-  return new ApiProblemError({
-    type: `https://household.example/problems/${code}`,
-    title: code,
-    status,
-    code,
-  } as ApiProblemError['problem'])
+function thrown(status: number, code: string, retryAt?: Date): ApiProblemError {
+  return new ApiProblemError(
+    {
+      type: `https://household.example/problems/${code}`,
+      title: code,
+      status,
+      code,
+    } as ApiProblemError['problem'],
+    retryAt,
+  )
 }
 
 describe('asking again', () => {
@@ -168,6 +175,62 @@ describe('asking again', () => {
     ] as const) {
       expect(isRetryable(thrown(status, code)), code).toBe(false)
     }
+  })
+})
+
+describe('a refusal for now', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** What a screen says of an error, and the formatters it says it through, in `zone`. */
+  const saying = (zone: string) =>
+    renderHook(() => ({ say: useProblemText(zone), format: useFormat() }), {
+      wrapper: ({ children }: { readonly children: ReactNode }) =>
+        createElement(I18nProvider, { locale: 'en', children }),
+    }).result.current
+
+  // Half past eleven at night in Prague, on the ninth of September.
+  const now = new Date('2026-09-09T21:30:00Z')
+  const prague = 'Europe/Prague'
+
+  it('is said with the time it clears, where that is today in the zone it is said in', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(now)
+    const at = new Date('2026-09-09T21:50:00Z')
+    const { say, format } = saying(prague)
+    expect(say(thrown(429, 'rate_limited', at))).toBe(
+      `Too many attempts. Try again at ${format.time(at, prague)}.`,
+    )
+  })
+
+  // A limit counted by the day clears most of a day later: the fifth export of a day, a
+  // household's deletion asked for a sixth time. *Try again at 14:32* would read as today's.
+  it('is said with the day too, where the time is on another day there', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(now)
+    // An hour on is past midnight in Prague, and still the ninth where the day is UTC's.
+    const at = new Date('2026-09-09T22:30:00Z')
+    const there = saying(prague)
+    expect(there.format.dayOf(at, prague)).not.toBe(there.format.dayOf(now, prague))
+    expect(there.say(thrown(429, 'rate_limited', at))).toBe(
+      `Too many attempts. Try again at ${there.format.time(at, prague)} on ${there.format.dayOf(at, prague)}.`,
+    )
+    const utc = saying('UTC')
+    expect(utc.say(thrown(429, 'rate_limited', at))).toBe(
+      `Too many attempts. Try again at ${utc.format.time(at, 'UTC')}.`,
+    )
+    // And most of a day on, wherever it is said.
+    const tomorrow = new Date('2026-09-10T19:00:00Z')
+    expect(utc.say(thrown(429, 'rate_limited', tomorrow))).toBe(
+      `Too many attempts. Try again at ${utc.format.time(tomorrow, 'UTC')} on ${utc.format.dayOf(tomorrow, 'UTC')}.`,
+    )
+  })
+
+  it('names no time where the answer named none', () => {
+    expect(saying(prague).say(thrown(429, 'rate_limited'))).toBe(
+      'Too many attempts. Try again in a little while.',
+    )
   })
 })
 
@@ -349,14 +412,19 @@ describe('the cache kept in this browser', () => {
 })
 
 /**
- * The screens before sign-in, those of a member's own account and a household's own, each file
- * as it is written.
+ * The screens before sign-in, those of a member's own account and a household's own, its
+ * billing, its storage, its data with the privacy centre, and its sync health among them, each
+ * file as it is written.
  */
 const screens = import.meta.glob<string>(
   [
     '../auth/*.{ts,tsx}',
     '../account/*.{ts,tsx}',
     '../household/**/*.{ts,tsx}',
+    '../billing/*.{ts,tsx}',
+    '../storage/*.{ts,tsx}',
+    '../privacy/*.{ts,tsx}',
+    '../health/*.{ts,tsx}',
     '!../**/*.test.{ts,tsx}',
   ],
   { query: '?raw', import: 'default', eager: true },
@@ -382,14 +450,32 @@ describe('a write that must not wait', () => {
   // A sign-in completed, a password set or an account deleted when a connection returns,
   // minutes after the press and with nobody at the screen, is not what was asked for (D-164).
   // Nor is a household made or left, a member removed, a level changed, an invitation sent or a
-  // module turned off: household settings is changed on the server or not at all (D-170).
+  // module turned off: household settings is changed on the server or not at all (D-170). Nor
+  // a subscription begun, changed or handed over, an export asked for, changes stopped, a
+  // household's deletion scheduled, a consent given, a copy asked to download itself again or a
+  // diagnostic bundle sent: none of them is a part of a replica, and none waits on the device.
   it('is every write of the screens before sign-in, of a member’s own account and of a household’s own screens', () => {
     const writes = Object.entries(screens).flatMap(([path, source]) =>
       [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
     )
-    // The sources were read at all: every screen of the three that writes is among them.
-    expect(writes.length).toBeGreaterThan(40)
+    // The sources were read at all: every directory that writes is among them.
+    const directories = new Set(writes.map(({ path }) => path.split('/')[1]))
+    expect([...directories].sort()).toEqual([
+      'account',
+      'auth',
+      'billing',
+      'health',
+      'household',
+      'privacy',
+    ])
+    expect(writes.length).toBeGreaterThan(60)
     expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
+    // And no mutation is written any other way than the one that is read here: each naming of
+    // `useMutation` is its import or a write that was read.
+    const sources = Object.values(screens)
+    const named = sources.flatMap((source) => [...source.matchAll(/useMutation\b/g)])
+    const imported = sources.filter((source) => /import \{[^}]*\buseMutation\b/.test(source))
+    expect(named.length - imported.length).toBe(writes.length)
   })
 })
 

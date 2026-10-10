@@ -1,11 +1,12 @@
 // The app's language at run time: @household/i18n's translator behind a switch, its pseudo-locale
 // among the choices, and the `Intl` formatters for the same member. No component holds a word of
 // its own: each asks `useTranslate` for a key of the catalogs. One language's catalog is held at
-// a time (catalogs.ts): the one the app starts in is fetched before anything is drawn, and one
+// a time, in the parts this page has needed (catalogs.ts): the app's own words in the language
+// it starts in are fetched before anything is drawn, a screen's with its file, and a language
 // chosen later is fetched before the words change.
 import {
   translatorOver,
-  type Catalog,
+  type CatalogPart,
   type DisplayLocale,
   type Translate,
 } from '@household/i18n/lazy'
@@ -17,9 +18,10 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react'
-import { fetchCatalog, heldCatalog } from './catalogs.ts'
+import { fetchCatalog, heldCatalog, holdsCatalog, subscribe } from './catalogs.ts'
 import { createFormatters, type Formatters } from './format.ts'
 import { formattingLocale, initialLocale, storeLocale } from './locale.ts'
 
@@ -27,8 +29,8 @@ export interface I18n {
   readonly locale: DisplayLocale
   /**
    * Shows the app in `locale` from now on, in this browser: at once where its catalog is held,
-   * and once it has been fetched where it is not. It rejects, and the language stays as it was,
-   * where the catalog cannot be fetched.
+   * every part this page has needed, and once it has been fetched where it is not. It rejects,
+   * and the language stays as it was, where the catalog cannot be fetched.
    */
   readonly setLocale: (locale: DisplayLocale) => Promise<void>
   readonly t: Translate
@@ -48,51 +50,56 @@ export interface I18nProviderProps {
   readonly locale?: DisplayLocale
 }
 
-interface Shown {
-  readonly locale: DisplayLocale
-  readonly catalog: Catalog
-}
-
-/** The language to start in with its catalog, which whoever draws the app holds already. */
-function starting(given: DisplayLocale | undefined): Shown {
-  const locale = given ?? initialLocale()
-  const catalog = heldCatalog(locale)
-  if (catalog === undefined) {
+/** What this page holds of the catalog `locale` is shown from: whoever draws in it fetched it. */
+function held(locale: DisplayLocale): CatalogPart {
+  const messages = heldCatalog(locale)
+  if (messages === undefined) {
     throw new Error(`I18nProvider: no catalog is held for ${locale}; fetch it before drawing`)
   }
-  return { locale, catalog }
+  return messages
+}
+
+/** The language to start in, which whoever draws the app holds the catalog of already. */
+function starting(given: DisplayLocale | undefined): DisplayLocale {
+  const locale = given ?? initialLocale()
+  held(locale)
+  return locale
 }
 
 export function I18nProvider({ children, locale: given }: I18nProviderProps) {
-  const [shown, setShown] = useState<Shown>(() => starting(given))
+  const [locale, setShown] = useState<DisplayLocale>(() => starting(given))
+  // What is held of the language shown, read where it is kept and not kept again here: a part
+  // that arrives with a screen that reads it makes a new translator, and its words are drawn.
+  const messages = useSyncExternalStore(subscribe, () => held(locale))
   const [account, setFormatting] = useState<string | undefined>(undefined)
   // The language asked for last: a catalog that arrives for one asked for before it is not shown.
-  const asked = useRef<DisplayLocale>(shown.locale)
+  const asked = useRef<DisplayLocale>(locale)
 
   useEffect(() => {
-    document.documentElement.lang = shown.locale
-  }, [shown.locale])
+    document.documentElement.lang = locale
+  }, [locale])
 
   const setLocale = useCallback(async (next: DisplayLocale) => {
     asked.current = next
-    const catalog = heldCatalog(next) ?? (await fetchCatalog(next))
+    if (!holdsCatalog(next)) await fetchCatalog(next)
     if (asked.current !== next) return
     storeLocale(next)
-    setShown({ locale: next, catalog })
+    setShown(next)
   }, [])
 
-  const value = useMemo<I18n>(() => {
+  // The formatters are the language's and the account's, and no part's: a part of the catalog that
+  // arrives with a screen makes a new translator, and leaves them, and whatever was made of them,
+  // as they were.
+  const format = useMemo(() => {
     const device = window.navigator.languages
-    return {
-      locale: shown.locale,
-      setLocale,
-      t: translatorOver(shown.locale, shown.catalog),
-      format: createFormatters(
-        formattingLocale(shown.locale, account === undefined ? device : [account, ...device]),
-      ),
-      setFormatting,
-    }
-  }, [shown, setLocale, account])
+    return createFormatters(
+      formattingLocale(locale, account === undefined ? device : [account, ...device]),
+    )
+  }, [locale, account])
+  const value = useMemo<I18n>(
+    () => ({ locale, setLocale, t: translatorOver(locale, messages), format, setFormatting }),
+    [locale, messages, setLocale, format],
+  )
   return <I18nContext value={value}>{children}</I18nContext>
 }
 

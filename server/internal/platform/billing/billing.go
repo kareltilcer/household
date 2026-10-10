@@ -148,7 +148,8 @@ func (s *Service) SecretRoutes(r chi.Router) {
 // The problems billing answers with beside the platform's own.
 var (
 	// errUnavailable answers a request that needs the processor when none is configured, or when it
-	// fails on its own side: nothing was changed, and the request may be sent again.
+	// fails on its own side: the request may be sent again. It says nothing of what was changed: a
+	// change the processor took that could not then be read back is answered so too.
 	errUnavailable = problem.New(http.StatusServiceUnavailable, problem.CodeBillingUnavailable)
 	// errSubscribed answers a subscribe for a household that has a subscription, and errNotSubscribed
 	// a change of one for a household that has none.

@@ -27,9 +27,9 @@ const OfferFor = 14 * 24 * time.Hour
 const offerKey = "billing:offer"
 
 // takeoverRoute is the web client's take-over screen of household (A-29), which the offer's email
-// opens.
+// opens: under the household's settings, as billing's own screen is (billingRoute).
 func takeoverRoute(household uuid.UUID) string {
-	return "households/" + household.String() + "/billing/takeover"
+	return billingRoute(household) + "/takeover"
 }
 
 // offerRequest is postBillingTransfer's body.

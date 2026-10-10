@@ -268,7 +268,7 @@ describe('the inbox', () => {
     expect(screen.getByRole('button', { name: words.openConflict })).toBeVisible()
   })
 
-  it('says a household that does not write keeps what is held, and draws nothing that sends', async () => {
+  it('says a household that does not write keeps what is held, and answers nothing there', async () => {
     const stand = standIn({
       registry,
       entries: [conflict, rejectionWith('entitlement_read_only')],
@@ -277,9 +277,21 @@ describe('the inbox', () => {
     // Said politely once the replica has been read, and so drawn before its words (ui/Banner).
     expect(await screen.findByText(words.readonly)).toBeVisible()
     expect(screen.getByText(/sent by themselves once it can be changed again\.$/)).toBeVisible()
+    // The entry still opens: what disagrees is read, and neither version is chosen.
     await userEvent.click(screen.getByRole('button', { name: words.openConflict }))
+    expect(screen.getByRole('dialog', { name: words.settlement })).toBeVisible()
     expect(screen.queryByRole('button', { name: words.keepMine })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: words.keepTheirs })).toBeVisible()
+    expect(screen.queryByRole('button', { name: words.keepTheirs })).not.toBeInTheDocument()
+    expect(stand.asked).toEqual([])
+  })
+
+  // With no connection as well: nothing is decided there, so nothing is said of deciding.
+  it('does not say that a member can still decide, in a household that does not write', async () => {
+    drawView(syncOver(standIn({ registry, entries: [conflict] }), { online: false }), {
+      writes: false,
+    })
+    expect(await screen.findByText(words.readonly)).toBeVisible()
+    expect(screen.queryByText(words.offline)).not.toBeInTheDocument()
   })
 })
 
@@ -400,6 +412,8 @@ describe('the inbox’s page', () => {
     })
     expect(await screen.findByText(words.readonly)).toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: words.openFinance }))
+    expect(screen.getByRole('dialog', { name: words.finance })).toBeVisible()
     expect(screen.queryByRole('button', { name: words.keepMine })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: words.keepTheirs })).not.toBeInTheDocument()
   })
 })

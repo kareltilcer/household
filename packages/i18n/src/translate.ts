@@ -2,8 +2,9 @@
 // (translator.ts), and what a client that loads one language at a time makes its own from
 // (lazy.ts).
 import type { MessageArgs } from './generated/messages.ts'
-import { sourceLocale, type Catalog, type Locale, type MessageKey } from './locales.ts'
+import { sourceLocale, type Locale, type MessageKey } from './locales.ts'
 import { compileMessage, type CompiledMessage } from './message.ts'
+import { partOf, type CatalogPart } from './parts.ts'
 import { pseudoLocale, pseudolocalize } from './pseudo.ts'
 
 /** A language the UI can be shown in: a shipped one, or the pseudo-locale. */
@@ -35,11 +36,13 @@ export function catalogLocale(locale: DisplayLocale): Locale {
 }
 
 /**
- * A Translate for `locale` over `catalog`, which is `catalogLocale(locale)`'s. Each message is
- * parsed the first time it is asked for and kept. The pseudo-locale formats pseudo-localised
- * English with English's rules.
+ * A Translate for `locale` over `catalog`, which is `catalogLocale(locale)`'s: the whole of it,
+ * or the parts of it its caller holds (parts.ts). Each message is parsed the first time it is
+ * asked for and kept. The pseudo-locale formats pseudo-localised English with English's rules.
+ * Asked for a key the catalog it was given lacks, it throws: a client reads a word of a part it
+ * has not fetched, and no word stands in for it.
  */
-export function translatorOver(locale: DisplayLocale, catalog: Catalog): Translate {
+export function translatorOver(locale: DisplayLocale, catalog: CatalogPart): Translate {
   const pseudo = locale === pseudoLocale
   const language = catalogLocale(locale)
   const compiled = new Map<MessageKey, CompiledMessage>()
@@ -47,6 +50,15 @@ export function translatorOver(locale: DisplayLocale, catalog: Catalog): Transla
     let message = compiled.get(key)
     if (message === undefined) {
       const text = catalog[key]
+      if (text === undefined) {
+        const part = partOf(key)
+        throw new Error(
+          `translatorOver: no message is held for ${key}: ` +
+            (part === undefined
+              ? 'it is the server’s alone, and in no part a client fetches'
+              : `its part of the catalog, ${part}, is not held`),
+        )
+      }
       message = compileMessage(language, pseudo ? pseudolocalize(text) : text)
       compiled.set(key, message)
     }

@@ -28,5 +28,25 @@
     "drafted": true,
     "note": "The emission check (EK) is a separate inspection on the same cadence; PRD 13 writes the pair TK + EK, and Vehicles (plan item 81) schedules both."
   },
-  "document_type_set": { "value": "sk", "source": "prd-documents", "drafted": true }
+  "document_type_set": { "value": "sk", "source": "prd-documents", "drafted": true },
+  "supervisory_authority": {
+    "name": {
+      "value": {
+        "en": "Office for Personal Data Protection of the Slovak Republic",
+        "cs": "Úrad na ochranu osobných údajov Slovenskej republiky",
+        "sk": "Úrad na ochranu osobných údajov Slovenskej republiky",
+        "de": "Úrad na ochranu osobných údajov Slovenskej republiky",
+        "pl": "Úrad na ochranu osobných údajov Slovenskej republiky"
+      },
+      "source": "sk-uoou",
+      "drafted": true,
+      "note": "The English is the Office's own (dataprotection.gov.sk/en), whose footer also writes Personal Data Protection Office of the Slovak Republic. Czech, German and Polish have no established name for it, and carry the Slovak one."
+    },
+    "url": {
+      "value": "https://dataprotection.gov.sk/sk/dotknute-osoby/konanie-ochrane-osobnych-udajov/",
+      "source": "sk-uoou",
+      "drafted": true,
+      "note": "The Office's page on its proceedings: a complaint is a proposal to start them (návrh na začatie konania), and the page says how one is made, what it must say, and gives its form. In Slovak only."
+    }
+  }
 }

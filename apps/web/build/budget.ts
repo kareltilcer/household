@@ -2,6 +2,7 @@
 // can draw, compressed as a server sends it. A budget is a number in this file: a pull request
 // that needs more raises it here, in a line of its diff, or loads what it added later.
 import { gzipSync } from 'node:zlib'
+import type { Part } from '@household/i18n/lazy'
 
 /** One thousand bytes, as the build's own report counts. */
 const kB = 1000
@@ -9,30 +10,44 @@ const kB = 1000
 export const budgets = {
   /**
    * The scripts index.html names, the entry and every file the entry imports before it runs, and
-   * with them the catalog of the language the app starts in.
+   * with them the app's own words in the language the app starts in.
    */
   script: 200 * kB,
   /** The stylesheets index.html names. The faces they name are fetched by script, and are not here. */
   style: 20 * kB,
-  /** Any one script loaded later, by a route or a feature of its own. */
+  /**
+   * Any one script loaded later, by a route or a feature of its own: a screen's words among
+   * them, a part of a language's catalog fetched with the screen that reads it.
+   */
   lazy: 150 * kB,
 } as const
 
 export type Budget = keyof typeof budgets
 
 /**
- * What a language's catalog is named in a build: `assets/catalog-<language>-<hash>.js`. The app
- * holds one language at a time and fetches its catalog before it draws a word (src/main.tsx), so
- * a catalog is part of what a first visit downloads though index.html does not name it.
+ * What a part of a language's catalog is named in a build:
+ * `assets/catalog-<language>.<part>-<hash>.js`. The app holds one language at a time, in parts
+ * (D-159, @household/i18n's parts.ts), each a file of its own.
  */
 export const catalogChunk = 'catalog-'
 
-/** Where @household/i18n keeps its catalogs, as a module's id ends: one JSON file a language. */
-const catalogModule = /[\\/]packages[\\/]i18n[\\/]catalogs[\\/]([a-z]{2})\.json$/
+/**
+ * The part that is the app's own words. The app fetches it before it draws a word
+ * (src/main.tsx), so it is part of what a first visit downloads though index.html does not name
+ * it. Every other part is fetched with a screen that reads it, as that screen's script is.
+ */
+export const ownWords: Part = 'app'
 
 /**
- * The language whose catalog a chunk of the modules `ids` is, or undefined for any other chunk:
- * one that holds a catalog and nothing else.
+ * Where @household/i18n's `gen` writes the parts of its catalogs, as a module's id ends: one
+ * JSON file a language and part.
+ */
+const catalogModule =
+  /[\\/]packages[\\/]i18n[\\/]src[\\/]generated[\\/]parts[\\/]([a-z]{2}\.[a-z]+)\.json$/
+
+/**
+ * The part of a catalog a chunk of the modules `ids` is, as `<language>.<part>`, or undefined
+ * for any other chunk: one that holds a part and nothing else.
  */
 export function catalogOf(ids: readonly string[]): string | undefined {
   const [only, ...rest] = ids
@@ -40,9 +55,11 @@ export function catalogOf(ids: readonly string[]): string | undefined {
   return catalogModule.exec(only.replace(/[?#].*$/, ''))?.[1]
 }
 
-/** Whether `path` is a catalog's file, by the name the build gives one. */
-export function isCatalog(path: string): boolean {
-  return (path.split('/').at(-1) ?? '').startsWith(catalogChunk)
+const ownWordsFile = new RegExp(`^${catalogChunk}[a-z]{2}\\.${ownWords}-`)
+
+/** Whether `path` is the app's own words in some language, by the name the build gives a part. */
+export function isOwnWords(path: string): boolean {
+  return ownWordsFile.test(path.split('/').at(-1) ?? '')
 }
 
 /** A file's size as a server sends it: gzip at its best level, in bytes. */
@@ -88,10 +105,10 @@ export interface Measured {
 }
 
 /**
- * Every measurement of a build against its budget: the initial scripts together with the largest
- * language's catalog, which the app fetches before it draws; the initial stylesheets together;
- * and each other script alone. `read` gives a file's content by the path index.html or the build
- * names it.
+ * Every measurement of a build against its budget: the initial scripts together with the app's
+ * own words in the largest language, which the app fetches before it draws; the initial
+ * stylesheets together; and each other script alone, every other part of a catalog among them.
+ * `read` gives a file's content by the path index.html or the build names it.
  */
 export function measure(
   html: string,
@@ -102,16 +119,16 @@ export function measure(
   const total = (paths: readonly string[]) =>
     paths.reduce((sum, path) => sum + compressed(read(path)), 0)
   const later = scripts.filter((path) => !initial.script.includes(path))
-  // A first visit downloads one catalog, and the budget is held for whichever language is read:
-  // the largest.
-  const catalog = Math.max(0, ...later.filter(isCatalog).map((path) => compressed(read(path))))
+  // A first visit downloads the app's own words in one language, and the budget is held for
+  // whichever language is read: the largest.
+  const words = Math.max(0, ...later.filter(isOwnWords).map((path) => compressed(read(path))))
   return [
     {
       budget: 'script',
       what:
         `${String(initial.script.length)} initial scripts` +
-        (catalog > 0 ? ' and the largest catalog' : ''),
-      bytes: total(initial.script) + catalog,
+        (words > 0 ? " and the app's own words in the largest language" : ''),
+      bytes: total(initial.script) + words,
       limit: budgets.script,
     },
     {
@@ -121,7 +138,7 @@ export function measure(
       limit: budgets.style,
     },
     ...later
-      .filter((path) => !isCatalog(path))
+      .filter((path) => !isOwnWords(path))
       .map((path): Measured => ({
         budget: 'lazy',
         what: path,

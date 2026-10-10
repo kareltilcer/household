@@ -38,12 +38,16 @@ export default defineConfig(({ mode }) => {
       sourcemap: mode === devPagesMode,
       rolldownOptions: {
         output: {
-          // A language's catalog is a file of its own, named for what it is: the bundle budget
-          // counts the largest of them with what a first visit downloads (build/budget.ts).
-          chunkFileNames: (chunk) =>
-            catalogOf(chunk.moduleIds) === undefined
+          // A part of a language's catalog is a file of its own, named for what it is: the
+          // bundle budget counts the app's own words in the largest language with what a first
+          // visit downloads, and every other part as the script of the screen that reads it
+          // (build/budget.ts).
+          chunkFileNames: (chunk) => {
+            const part = catalogOf(chunk.moduleIds)
+            return part === undefined
               ? 'assets/[name]-[hash].js'
-              : `assets/${catalogChunk}[name]-[hash].js`,
+              : `assets/${catalogChunk}${part}-[hash].js`
+          },
         },
       },
     },

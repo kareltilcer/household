@@ -43,7 +43,7 @@ import { readState, signedInKey, useNoWithdrawal, useOwnZone } from './common.ts
 import { useOnline } from '../ui/online.ts'
 import { Section, SettingsPage } from './Page.tsx'
 import styles from './Settings.module.css'
-import { agentOf, type Browser, type System } from './userAgent.ts'
+import { useClientNames } from './userAgent.ts'
 
 type Device = components['schemas']['Device']
 
@@ -52,75 +52,6 @@ interface Target {
   readonly kind: 'session' | 'device'
   readonly id: string
   readonly name: string
-}
-
-/** The names of what an account is signed in on, as a member would say them. */
-function useNames() {
-  const t = useTranslate()
-  const browser = (given: Browser): string => {
-    switch (given) {
-      case 'edge':
-        return t('account.devices.browser.edge')
-      case 'opera':
-        return t('account.devices.browser.opera')
-      case 'samsung':
-        return t('account.devices.browser.samsung')
-      case 'firefox':
-        return t('account.devices.browser.firefox')
-      case 'chrome':
-        return t('account.devices.browser.chrome')
-      case 'safari':
-        return t('account.devices.browser.safari')
-    }
-  }
-  const system = (given: System): string => {
-    switch (given) {
-      case 'iphone':
-        return t('account.devices.system.iphone')
-      case 'ipad':
-        return t('account.devices.system.ipad')
-      case 'android':
-        return t('account.devices.system.android')
-      case 'windows':
-        return t('account.devices.system.windows')
-      case 'chromeos':
-        return t('account.devices.system.chromeos')
-      case 'macos':
-        return t('account.devices.system.macos')
-      case 'linux':
-        return t('account.devices.system.linux')
-    }
-  }
-  return {
-    /** A browser's session, from the one thing the server keeps of it. */
-    ofAgent: (userAgent: string | undefined): string => {
-      const agent = agentOf(userAgent)
-      if (agent.browser !== undefined && agent.system !== undefined) {
-        return t('account.devices.agent.both', {
-          browser: browser(agent.browser),
-          system: system(agent.system),
-        })
-      }
-      if (agent.browser !== undefined) return browser(agent.browser)
-      if (agent.system !== undefined) {
-        return t('account.devices.agent.system', { system: system(agent.system) })
-      }
-      return t('account.devices.agent.unknown')
-    },
-    /** A device, as it named itself or was renamed, or by its kind where it named nothing. */
-    ofDevice: (device: Device): string => {
-      const label = (device.label ?? '').trim()
-      if (label !== '') return label
-      switch (device.platform) {
-        case 'ios':
-          return t('account.devices.device.ios')
-        case 'android':
-          return t('account.devices.device.android')
-        default:
-          return t('account.devices.device.unknown')
-      }
-    },
-  }
 }
 
 function Rename({
@@ -223,7 +154,7 @@ export function Devices() {
   const zone = useOwnZone()
   const say = useProblemText(zone)
   const online = useOnline()
-  const names = useNames()
+  const names = useClientNames()
   const withdrawn = useNoWithdrawal()
 
   const read = useQuery({
@@ -406,7 +337,7 @@ export function Devices() {
                   ) : (
                     <List label={t('account.devices.devices.title')}>
                       {devices.map((each) => {
-                        const name = names.ofDevice(each)
+                        const name = names.ofDevice(each.label, each.platform)
                         return (
                           <ListRow
                             key={each.id}
@@ -543,7 +474,7 @@ export function Devices() {
       {renaming === null ? null : (
         <Rename
           device={renaming}
-          name={names.ofDevice(renaming)}
+          name={names.ofDevice(renaming.label, renaming.platform)}
           onDone={() => {
             setRenaming(null)
             void refresh()

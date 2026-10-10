@@ -1,9 +1,10 @@
 // What every end-to-end test stands on. A page is opened with the display modes and the language
 // a test names, set where the app keeps them, before its first script runs. And every test fails
 // on what no page may do: break the policy (build/csp.ts), or log an error.
+import { readFile } from 'node:fs/promises'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test as base, type Locator, type Page } from '@playwright/test'
-import { previewOrigin } from '../build/preview.ts'
+import { previewOrigin, stripeStandInOrigin } from '../build/preview.ts'
 import { apiPath } from '../src/api/names.ts'
 import { paths, type RouteId } from '../src/app/paths.ts'
 import { storageKey as displayKey, type DisplayPreferences } from '../src/display/modes.ts'
@@ -271,10 +272,22 @@ export interface Account {
   user?: string
 }
 
+/** The suite's stand-in for Stripe.js (stripe.js), read once for every test of a worker. */
+const standInScript = readFile(new URL('./stripe.js', import.meta.url), 'utf8')
+
+/** Where a page asks for the processor's script, and where that script asks the processor. */
+const stripe = { script: 'https://js.stripe.com/**', api: 'https://api.stripe.com/**' } as const
+
 interface Fixtures {
   readonly faults: string[]
   /** The address this test's requests come from, to the server: its own (stack.ts). */
   readonly network: string
+  /**
+   * Whose script a payment form loads: the suite's stand-in for Stripe.js, unless a test says the
+   * processor's own, which only the check of the policy against it does (stripe.spec.ts).
+   */
+  readonly processorScript: 'stand-in' | 'stripe'
+  readonly processor: undefined
   /**
    * Signs this test's page in as the worker's member, who owns a household, and returns the
    * household's id. A member's routes are opened after it.
@@ -330,6 +343,47 @@ export const test = base.extend<Fixtures>({
         }),
       )
       await use(address)
+    },
+    { auto: true },
+  ],
+
+  processorScript: ['stand-in', { option: true }],
+
+  // The payment processor, for every test: the suite never reaches Stripe. A page that draws a
+  // payment form asks Stripe for its script, and is answered the stand-in for it (stripe.js);
+  // that script confirms a payment by asking Stripe's API, which is answered here, from Node, by
+  // the stand-in for Stripe's server at its loopback origin (stack.ts). Both are asked for at
+  // the origins the app's policy admits for the processor, so the policy is held as it is
+  // written, and no directive is wider for the suite. A test that draws no payment form asks
+  // for neither, and nothing here touches it.
+  processor: [
+    async ({ context, processorScript }, use) => {
+      if (processorScript === 'stand-in') {
+        await context.route(stripe.script, async (route) =>
+          route.fulfill({ contentType: 'text/javascript', body: await standInScript }),
+        )
+        await context.route(stripe.api, async (route) => {
+          // What the form's script sent, as a form (stripe.js): the secret, and how it is paid.
+          const sent = new URLSearchParams(route.request().postData() ?? '')
+          const answer = await fetch(`${stripeStandInOrigin}/_standin/confirm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_secret: sent.get('client_secret'),
+              with: sent.get('with'),
+            }),
+          })
+          await route.fulfill({
+            status: answer.status,
+            contentType: 'application/json',
+            // Another origin than the page's: the browser hands the page its answer only where
+            // that origin says it may, as Stripe's does.
+            headers: { 'Access-Control-Allow-Origin': '*' },
+            body: await answer.text(),
+          })
+        })
+      }
+      await use(undefined)
     },
     { auto: true },
   ],

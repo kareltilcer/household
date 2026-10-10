@@ -55,6 +55,13 @@ type country struct {
 	HolidaySet         string            `json:"holiday_set"`
 	InspectionLabel    string            `json:"inspection_label"`
 	DocumentTypeSet    string            `json:"document_type_set"`
+	Authority          authority         `json:"supervisory_authority"`
+}
+
+// authority is the contract's SupervisoryAuthority, as a client reads it.
+type authority struct {
+	Name map[string]string `json:"name"`
+	URL  string            `json:"url"`
 }
 
 func TestReferenceCountries(t *testing.T) {
@@ -78,8 +85,63 @@ func TestReferenceCountries(t *testing.T) {
 		Name:     map[string]string{"en": "Czechia", "cs": "Česko", "sk": "Česko", "de": "Tschechien", "pl": "Czechy"},
 		Currency: "CZK", VATStandardPercent: "21", DefaultUnits: "metric", FirstDayOfWeek: 1,
 		HolidaySet: "cz", InspectionLabel: "STK", DocumentTypeSet: "cz",
+		Authority: authority{
+			Name: map[string]string{
+				"en": "Office for Personal Data Protection", "cs": "Úřad pro ochranu osobních údajů",
+				"sk": "Úřad pro ochranu osobních údajů", "de": "Úřad pro ochranu osobních údajů", "pl": "Úřad pro ochranu osobních údajů",
+			},
+			URL: "https://uoou.gov.cz/poradna/chci-podat-stiznost-na-spravce-nebo-zpracovatele",
+		},
 	}); !reflect.DeepEqual(cz, want) {
 		t.Errorf("CZ is %+v, want %+v", cz, want)
+	}
+}
+
+// Each of the five countries answers its supervisory authority (PRD 05 §3), in the list and on its
+// own: the authority's name in every language Household ships, in its own language where another
+// has none for it, and the https address of its own page for a complaint. Germany's is the federal
+// authority, whose page lists the Länder's.
+func TestEveryCountryAnswersItsSupervisoryAuthority(t *testing.T) {
+	user := idgen.New()
+	rec := read(t, "/api/v1/reference/countries", user)
+	expect(t, rec, http.StatusOK, "")
+	var body struct {
+		Items []country `json:"items"`
+	}
+	decode(t, rec, &body)
+	// Each authority's name in its country's own language and in English, and where its page is.
+	want := map[string]struct{ language, own, english, address string }{
+		"CZ": {"cs", "Úřad pro ochranu osobních údajů", "Office for Personal Data Protection",
+			"https://uoou.gov.cz/poradna/chci-podat-stiznost-na-spravce-nebo-zpracovatele"},
+		"DE": {"de", "Der Bundesbeauftragte für den Datenschutz und die Informationsfreiheit",
+			"The Federal Commissioner for Data Protection and Freedom of Information",
+			"https://www.bfdi.bund.de/DE/Service/Anschriften/Laender/Laender-node.html"},
+		"GB": {"en", "Information Commission", "Information Commission", "https://ico.org.uk/make-a-complaint/"},
+		"PL": {"pl", "Urząd Ochrony Danych Osobowych", "Personal Data Protection Office", "https://uodo.gov.pl/pl/492/2464"},
+		"SK": {"sk", "Úrad na ochranu osobných údajov Slovenskej republiky", "Office for Personal Data Protection of the Slovak Republic",
+			"https://dataprotection.gov.sk/sk/dotknute-osoby/konanie-ochrane-osobnych-udajov/"},
+	}
+	if len(body.Items) != len(want) {
+		t.Fatalf("%d countries, want %d", len(body.Items), len(want))
+	}
+	for _, c := range body.Items {
+		w, a := want[c.Code], c.Authority
+		if a.Name[w.language] != w.own || a.Name["en"] != w.english || a.URL != w.address {
+			t.Errorf("%s names %+v, want %+v", c.Code, a, w)
+		}
+		for _, language := range []string{"en", "cs", "sk", "de", "pl"} {
+			if a.Name[language] == "" {
+				t.Errorf("%s's authority has no name in %s: %+v", c.Code, language, a.Name)
+			}
+		}
+		// The country's own read answers the same.
+		one := read(t, "/api/v1/reference/countries/"+c.Code, user)
+		expect(t, one, http.StatusOK, "")
+		var alone country
+		decode(t, one, &alone)
+		if !reflect.DeepEqual(alone.Authority, a) {
+			t.Errorf("%s alone names %+v, and in the list %+v", c.Code, alone.Authority, a)
+		}
 	}
 }
 

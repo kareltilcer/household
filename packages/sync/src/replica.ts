@@ -152,6 +152,11 @@ export class Replica {
    */
   private refilling = false
   /**
+   * PowerSync's last checkpoint as it stood when its stream was last down, in milliseconds: one
+   * applied since the stream came up is stamped otherwise (caughtUp).
+   */
+  private syncedBefore = 0
+  /**
    * The rows the replica's member deleted since it was opened, by rowKey: one of them gone left by
    * its member's hand, whether or not a watcher saw the delete wait in the queue, which a quick push
    * ends before a watcher looks (watchRowState). Each is kept with the count of deletions it was
@@ -234,14 +239,31 @@ export class Replica {
   }
 
   /**
-   * Whether PowerSync has caught up, as a report needs it to have: connected, a checkpoint applied and
-   * none downloading. A replica that cannot reach PowerSync, or is still downloading itself, holds less
-   * than the server through no fault, and two reports of it a minute apart would be found divergent and
-   * told to clear it (D-125). The replica's own reports wait for it; report() does not look.
+   * Whether PowerSync has caught up, as a report needs it to have: connected, a checkpoint applied
+   * since its stream came up and none downloading. A replica that cannot reach PowerSync, or is still
+   * downloading itself, holds less than the server through no fault, and two reports of it a minute
+   * apart would be found divergent and told to clear it (D-125). So does one whose stream has only
+   * just come up: `hasSynced` holds from the visit before, and what changed while the replica was
+   * closed has not arrived until the first checkpoint of this one has, so a report made in between
+   * reads as a copy that does not match. The replica's own reports wait for it; report() does not
+   * look.
    */
   get caughtUp(): boolean {
     const status = this.db.currentStatus
-    return status.connected && !status.downloading && status.hasSynced === true
+    return (
+      status.connected &&
+      !status.downloading &&
+      status.hasSynced === true &&
+      // Another stamp than the one the stream came up over, and not a later one: the stamps are
+      // the device's clock, and a clock set back between two streams would hold every report
+      // until it had passed the old one again.
+      this.syncedAt(status) !== this.syncedBefore
+    )
+  }
+
+  /** When PowerSync last applied a checkpoint as `status` has it, in milliseconds: 0 for never. */
+  private syncedAt(status: { readonly lastSyncedAt?: Date | undefined }): number {
+    return status.lastSyncedAt?.getTime() ?? 0
   }
 
   /**
@@ -286,6 +308,8 @@ export class Replica {
       }
       this.subscriptions = subscriptions
     }
+    // What it last applied was applied before this stream: caught up is a checkpoint after it.
+    this.syncedBefore = this.syncedAt(this.db.currentStatus)
     await this.db.connect(
       {
         fetchCredentials: () => this.credentials(),
@@ -301,6 +325,9 @@ export class Replica {
     if (this.unlisten === null) {
       this.unlisten = this.db.registerListener({
         statusChanged: (status) => {
+          // The stream is down, and PowerSync brings it up again by itself: what it has applied by
+          // then was applied before the stream that follows.
+          if (!status.connected) this.syncedBefore = this.syncedAt(status)
           if (!status.connected || status.downloading) return
           // The download the replica asked of itself has landed: a row missing now was withdrawn.
           if (status.hasSynced === true) this.refilling = false

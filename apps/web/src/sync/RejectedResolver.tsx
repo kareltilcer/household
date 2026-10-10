@@ -9,6 +9,15 @@
 // itself when it does, and one too large to send is the same size the second time. Edit leads to
 // the row's own editor, where its module gives the address. Discard gives the change up
 // (`discard`), after a confirmation that names it. Each is this browser's own write (decide.tsx).
+//
+// In a household that does not write, sending a change again and editing it are absent
+// (FR-BI2): either would be a write the household refuses. Discard stays. A change that was not
+// accepted is this browser's own, and giving it up asks nothing of the server; and a change held
+// for a household that does not write is offered for replay, which its member must be able to
+// decline before the replica sends it by itself, months later, once the household writes again.
+// The panel says so: what cannot be done now, what can, and that the rest waits. The comparison
+// of a conflict is otherwise (ConflictResolver.tsx): there neither answer is drawn, since
+// choosing either version is a write.
 import type { RecordedOutcome, Replica } from '@household/sync'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -69,55 +78,51 @@ function RejectedSheet({ outcome, replica, onClose, setting, describers }: OpenP
     versions.push({ heading: t('sync.rejected.neighbour'), pairs: pairsOf(beside, 'theirs') })
   }
   // Sent again only where that could be accepted: by a household that writes, of a row this
-  // browser still holds.
+  // browser still holds. Absent, and not disabled, where it could not.
   const retries = rejection.retry && setting.writes && trouble !== 'nothing'
-  return (
-    <Sheet
-      open
-      onClose={onClose}
-      title={name}
-      actions={
-        <>
-          {retries ? (
-            <Button
-              variant="primary"
-              loading={busy === 'retry'}
-              onClick={() => {
-                decide(
-                  'retry',
-                  () => replica.retry(outcome.mutation_id),
-                  () => {
-                    onClose()
-                    toast({ message: t('sync.rejected.retried', { name }) })
-                  },
-                )
-              }}
-            >
-              {t('ui.retry')}
-            </Button>
-          ) : null}
-          {address === undefined || !setting.writes ? null : (
-            <Button
-              onClick={() => {
+  const answers = (
+    <>
+      {retries ? (
+        <Button
+          variant="primary"
+          loading={busy === 'retry'}
+          onClick={() => {
+            decide(
+              'retry',
+              () => replica.retry(outcome.mutation_id),
+              () => {
                 onClose()
-                void navigate(address)
-              }}
-            >
-              {t('sync.rejected.edit')}
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            aria-disabled={busy !== null}
-            onClick={() => {
-              setConfirming(true)
-            }}
-          >
-            {t('sync.rejected.discard')}
-          </Button>
-        </>
-      }
-    >
+                toast({ message: t('sync.rejected.retried', { name }) })
+              },
+            )
+          }}
+        >
+          {t('ui.retry')}
+        </Button>
+      ) : null}
+      {address === undefined || !setting.writes ? null : (
+        <Button
+          onClick={() => {
+            onClose()
+            void navigate(address)
+          }}
+        >
+          {t('sync.rejected.edit')}
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        aria-disabled={busy !== null}
+        onClick={() => {
+          setConfirming(true)
+        }}
+      >
+        {t('sync.rejected.discard')}
+      </Button>
+    </>
+  )
+  return (
+    <Sheet open onClose={onClose} title={name} actions={answers}>
       <div className={styles.status}>
         {reading.module === undefined ? null : <ModuleChip module={reading.module} />}
         <StatusMark status="rejected" />
@@ -125,9 +130,11 @@ function RejectedSheet({ outcome, replica, onClose, setting, describers }: OpenP
       <p className={styles.sentence}>{t(rejection.reason)}</p>
       {/* A held change's own sentence says where it is kept, and that it goes by itself. */}
       {rejection.held ? null : <p className={styles.aside}>{t('sync.rejected.kept')}</p>}
-      {rejection.retry && !setting.writes ? (
+      {/* And of any other, what can be done with it now and what waits for a household that
+          writes. */}
+      {setting.writes || rejection.held ? null : (
         <Banner tone="warning">{t('sync.rejected.readonly')}</Banner>
-      ) : null}
+      )}
       <Versions versions={versions} />
       <TroubleBanner trouble={trouble} />
       <Dialog

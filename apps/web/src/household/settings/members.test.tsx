@@ -171,16 +171,12 @@ describe('the list of members', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it('reads in a read-only household, whose owner has nothing to press and is told why', async () => {
+  // Why is the banner's to say, above the screen (shell/EntitlementBanner.tsx).
+  it('reads in a read-only household, whose owner has nothing to press', async () => {
     const server = createServer()
     server.household = { ...tilcerovi, entitlement: readOnly }
     await membersScreen(server)
     expect(await rows()).toHaveLength(5)
-    expect(
-      screen.getByText(
-        'Read-only: nothing here can be changed until the subscription resumes. Everything still reads.',
-      ),
-    ).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Invite somebody' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     // Nor is it nudged towards what it cannot do now.

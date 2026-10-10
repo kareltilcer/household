@@ -202,7 +202,9 @@ func Lost(catalog *module.Registry, now func() time.Time) func(context.Context, 
 // but leaving, whose key is the account's and answers a repeat before the tenant middleware looks
 // for the membership leaving ended: a member's keys go with their membership; and the two whose body
 // carries a child profile's PIN, which keep none (D-97). A replica's credentials are there too, and
-// keep no key either, since a credential is never kept to be answered with; and the push, behind
+// keep no key either, since a credential is never kept to be answered with; the replicas' reports of
+// themselves, with what an owner reads off them, the household's clients and their versions (item
+// 27); and the push, behind
 // the household's Idempotency-Key and the device's limit, which a web session's requests share as
 // a device's do (PRD 02 §9). Each module's
 // routes are mounted there at /<name>, behind the gate that answers 404 to a member who cannot see
@@ -261,7 +263,9 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	if err != nil {
 		return nil, fmt.Errorf("app: %w", err)
 	}
-	reports, err := replica.NewReports(replica.ReportsConfig{Registry: registry, Logger: d.Logger})
+	// The reports answer the household's clients too, beside the oldest versions the middleware below
+	// refuses under: the one place those are told to a client that is not being refused.
+	reports, err := replica.NewReports(replica.ReportsConfig{Registry: registry, Logger: d.Logger, MinClients: a.MinClients})
 	if err != nil {
 		return nil, fmt.Errorf("app: %w", err)
 	}

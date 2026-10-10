@@ -19,6 +19,8 @@ added, when a key is rotated or leaks, when a payment went through and the house
 | What Stripe said | `billing_subscriptions` (`standing`: `pending`, `current` or `ended`), `billing_invoices`, `billing_transfers`, in the household; `billing_customers`, a payer's customer in each currency, on the account |
 | A month's storage | `billing_storage_months`: the average, the blocks and the invoice item. The `billing.storage` job adds the month that ended, nightly at 01:30 UTC, after the usage sample |
 | The request check | `pnpm run up:stripe`, then `HOUSEHOLD_TEST_STRIPE_URL=http://127.0.0.1:12111 go test ./internal/platform/billing/` from `server/`: Stripe's own mock validates every request the server sends. CI's `stripe` job runs it |
+| Where Stripe is asked | Stripe's own API, in every deployment. `HOUSEHOLD_STRIPE_API_URL` names a stand-in for it in development alone, over http on the same machine only and with test-mode keys only; set in staging or production it stops the server from starting, since a deployment that could be pointed at another "Stripe" is one whose payments could be |
+| The stand-in | `server/cmd/stripe-standin`: the stand-in the server's tests ask (`billingtest`), served as a process on `127.0.0.1:12112`, which the web's end-to-end suite starts beside its API and pays against ([below](#the-stand-in-the-end-to-end-suite-pays-against)). The suite's alone, never deployed |
 
 ## Before the first deploy
 
@@ -27,7 +29,10 @@ step in the mode the environment uses.
 
 1. **The account** is the EU entity's, with EU data processing (PRD 04 §6). Turn on the payment
    methods PRD 04 §6 names: cards, SEPA Direct Debit, Apple Pay and Google Pay. Register the web
-   client's domain for Apple Pay.
+   client's domain for Apple Pay. Turn **Link** off among the payment methods: the web's policy
+   admits Stripe's own script, frames and API and nothing of `link.com`, so with Link on the
+   payment form asks for a frame the page refuses
+   ([ADR 0028](../adr/0028-the-catalog-in-parts-the-payment-form-the-entitlement-in-the-shell-and-what-a-household-shows-of-its-data.md)).
 2. **Two products**: the plan, and a storage block. For each currency in PRD 04 §1 make three prices,
    tax-inclusive:
    - the plan, recurring yearly (EUR 59.88, GBP 53.88);
@@ -170,6 +175,85 @@ customers there with their rows.
    rules out: put the setting right, then look at the subscription's latest invoice in Stripe's
    dashboard. With a payment on its way, leave it: paid, the household is `active`. With none,
    cancel the subscription there, and the household is erased the next night.
+
+## The stand-in the end-to-end suite pays against
+
+The web's end-to-end suite (`apps/web/playwright.config.ts`) takes a household through subscribing,
+lapsing and reading on (06-clients §8) with no account at Stripe, no secret and no network to it.
+It starts `go run ./cmd/stripe-standin serve` beside its API, and gives the API five settings:
+`HOUSEHOLD_STRIPE_API_URL=http://127.0.0.1:12112`, the stand-in's three keys (`sk_test_standin`,
+`pk_test_standin`, `whsec_standin`: `billingtest`'s published ones, which open nothing), and
+`HOUSEHOLD_BILLING_PRICES` with the stand-in's plans. What then runs is the server's own Stripe
+adapter, stripe-go and its signature check included, asking the stand-in where it would ask Stripe.
+Stripe.js is no part of it: the payment form's side is the suite's to stand in for, by confirming
+through the stand-in what the page was handed. A payment in Stripe's test mode itself is still
+staging's ("Before the first deploy", step 7).
+
+One check does fetch Stripe's own script, and is no part of a run: with `HOUSEHOLD_E2E_STRIPE_JS=1`
+set, `pnpm exec playwright test e2e/stripe.spec.ts` from `apps/web` holds the page's policy
+(`build/csp.ts`) against Stripe.js as Stripe serves it, the script fetched, its frame drawn, and
+nothing asked of an origin the policy does not name. Run it where the policy's three directives
+for the processor are changed, and before the first payment on staging.
+
+| | |
+|---|---|
+| Stripe's API | Under `/v1`, the routes stripe-go asks, as the server's tests have them. A request Stripe would not take, a route the stand-in does not answer or another API version, is answered and logged as `the stand-in was asked what Stripe would not have taken`: a test in `server/` fails on the same |
+| What drives it | Under `/_standin`, JSON in and out, with no key asked for (`server/cmd/stripe-standin/control.go` lists every path and answer). `POST /_standin/confirm` is the customer in the payment form, with the secret the API handed out and `with`: a `card`, a `declined_card` or a `debit`; it answers what Stripe.js resolves with. `POST /_standin/households/{id}/fail-payment`, `give-up`, `end-period`, `clear-debit` and `fail-debit` are what Stripe does on its own. `GET /_standin/households/{id}` reads back the household's subscriptions. `GET /_standin/health` says it serves |
+| The webhooks | The stand-in posts them itself, to `STRIPE_STANDIN_WEBHOOK_URL` (the suite's API, `http://127.0.0.1:8080/api/v1/webhooks/stripe`), signed with its webhook secret: the events Stripe sends of an act, in order, each waited for, a `5xx` sent again three times, and then the events of whatever the API changed at the stand-in on hearing them. The act's request is answered after that, so the household's row is settled by then and the next read is true |
+| What it leaves out | Events of what the API asks of Stripe on its own, a subscription made or set to cancel: the API records those from Stripe's answer, and is sent no event of them, so an invoice is first kept when it is paid or fails, where Stripe's `invoice.finalized` has it kept, `open`, from the moment the payer is shown the form. Stripe being down, a credit that covers a first invoice, a card declined at a charge made off-session, an unpaid or written-off ending, tax: the server's own tests cover those against the same stand-in |
+| Its clock | The wall clock. A period begins when it is asked for; `end-period` ends it now |
+
+**The plans drifted.** The stand-in is given the API's `HOUSEHOLD_BILLING_PRICES` too, and does not
+start on plans that are not its own: the suite then fails before its first test, with
+`names plans that are not the stand-in's own`. Run `go run ./cmd/stripe-standin prices` from
+`server/` and put what it prints in `apps/web/playwright.config.ts`.
+
+**By hand.** From `server/`: `go run ./cmd/stripe-standin serve`, and the API with the five
+settings above (`go run ./cmd/stripe-standin prices` prints the fifth). Subscribe as an owner with
+a verified address, then
+`curl -d '{"client_secret":"…","with":"card"}' http://127.0.0.1:12112/_standin/confirm`
+with the secret `POST …/billing/subscription` answered. It keeps what it holds in memory:
+restarted, it knows none of the subscriptions the database still names, and the API fails where it
+asks for one. A household made after the restart is not touched by that.
+
+### Making time pass in a spec
+
+The stand-in moves what Stripe moves: `active`, `past_due`, `grace` when Stripe gives up, and
+`canceled` when a cancelled subscription's period ends. What the clock moves, a trial that ends and
+a grace that runs out, is the hourly `entitlement.transitions` job's, and the served API reads the
+wall clock, which no setting moves. A household's state is read from its row and never derived on
+a read, so a date moved alone changes nothing a member sees but the trial's notice. A spec moves
+the household's own dates in PostgreSQL and brings the job forward, as the development superuser
+(`HOUSEHOLD_ADMIN_DATABASE_URL`, or `docker compose exec -T postgres psql --username=postgres
+--dbname=household`), which is who passes the tables' row-level security:
+
+```sql
+-- A household in grace, whose grace has run out: read_only once the job has run.
+UPDATE households SET grace_ends_at = now() - interval '1 minute' WHERE id = '…';
+-- Or a trial that ended fifteen days ago: grace, and read_only, in one run.
+UPDATE households SET trial_ends_at = now() - interval '15 days' WHERE id = '…';
+UPDATE scheduler_jobs SET next_run_at = now() WHERE name = 'entitlement.transitions';
+```
+
+Then it waits for the state to change, which takes a tick of the scheduler, fifteen seconds at
+most, and the run. Three things to mind:
+
+- **Bring the job forward again each time the state is looked at and has not moved.** A run that
+  was already under way, another test's, did not read this household's new date, and records its
+  next slot, an hour on, over the time just set as it ends. Setting it again is harmless: the job
+  does nothing for a household that is not due.
+- **The suite's API leads the scheduler** only when no other API runs on the same database
+  (`pnpm run dev:api` stopped, as the suite asks). With another leading, the job runs there, on
+  that process's code.
+- **The job moves every household that is due**, not the spec's alone, which changes nothing for
+  another test: none is due unless its own spec made it so.
+
+Where a state is only what a test starts from, and the move into it is not what it proves, write
+the row itself, as the server's tests do, keeping its checks: `billing_state = 'read_only'` with
+`lapsed_at` and `retained_until` both set, `'grace'` with `grace_ends_at`, `'past_due'` with
+`dunning_ends_at`. The next request reads it. A household that still has a subscription at the
+stand-in is `active` again on the next event of it, so end that first (`give-up`, or cancel and
+`end-period`).
 
 ## A key leaks or is rotated
 

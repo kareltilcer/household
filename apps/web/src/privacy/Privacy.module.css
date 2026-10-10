@@ -1,0 +1,135 @@
+/* An export, as a row of the list of them (A-35, A-34): when it was asked for, how it stands,
+   what it is and what is in it, one under another, and beside them the way to download it. The
+   words take the room and wrap inside it; the control keeps its size and goes under the words
+   where the window is too narrow for both, so that nothing in a row has a width of its own. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-15);
+  align-items: flex-start;
+  min-width: 0;
+  min-height: var(--dens-row-min);
+  padding: var(--dens-pad-y) var(--dens-pad-x);
+  border-block-end: 1px solid var(--dens-rule);
+}
+
+.row:last-child {
+  border-block-end: 0;
+}
+
+.about {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-direction: column;
+  gap: var(--space-05);
+  min-width: 0;
+}
+
+.when {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* How it stands: a glyph and the words that say it. The glyph is decoration beside its words, and
+   is muted for every status: none of them is told by a colour. */
+.status {
+  display: flex;
+  gap: var(--space-05);
+  align-items: flex-start;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.detail {
+  composes: caption from '../styles/type.module.css';
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+/* What is in an archive: closed until it is asked for, behind a line of a row's height. The line
+   keeps the platform's own display, a list item's, whose marker is what says that it opens: its
+   words are centred in the row's height as a block centres what it holds, and stand at its top
+   in a browser that centres none. */
+.contents {
+  min-width: 0;
+}
+
+.contents > summary {
+  align-content: center;
+  min-height: var(--dens-row-min);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* An entry's name as the archive writes it: the mono face, broken wherever the row asks. */
+.name {
+  composes: num from '../styles/type.module.css';
+  overflow-wrap: anywhere;
+}
+
+/* What stands above a list and the list itself, one under another: a refusal, what a household
+   is told of itself, and the body. And a body of the privacy centre in the place of its own that
+   takes the focus a control of it left behind. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* A screen's notices and its sections, one under another as a settings page sets them
+   (account/Settings.module.css), inside the place that takes the focus a control left behind. */
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* The lines of a list that is no list of rows: the households a member owns, the authorities
+   of their countries. Each is a name and its one way on. */
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.line {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* What an owner typed, as they typed it: its lines kept, and a long word broken. */
+.written {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

@@ -16,7 +16,7 @@ import { existsSync, globSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildFile, buildMeta } from '../src/update/build.ts'
-import { budgets, measure } from './budget.ts'
+import { budgets, isOwnWords, measure } from './budget.ts'
 import { metaPolicy } from './csp.ts'
 
 const root = resolve(
@@ -85,6 +85,13 @@ console.log(
 )
 
 for (const path of unwritten) fail(`index.html names ${path}, which the build did not write`)
+
+// The first download counts the app's own words by the name the build gives their file. A build
+// that names it otherwise, or wrote the words into another script, would be counted without
+// them, and pass.
+if (!scripts.some(isOwnWords)) {
+  fail("the build holds no file of the app's own words, which its first download is counted with")
+}
 
 // The encoding: a browser looks for it in a page's first 1024 bytes alone, and before it runs a
 // script. The build writes it first (plugin.ts), ahead of a policy that grows with each origin.

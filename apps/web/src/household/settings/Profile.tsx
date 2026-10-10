@@ -28,23 +28,25 @@
 // *Rejected* is a refusal said beside the field it is of, or under the form. *Withdrawn* is an
 // owner made a member while the screen was open: the controls leave when the household is read
 // again, and a change pressed before then is answered `403`, which is said on the page.
-// *Read-only* draws no control that changes anything, and the note above says why. *Empty* and
+// *Read-only* draws no control that changes anything, and the household's banner above the
+// screen says why (shell/EntitlementBanner.tsx). *Empty* and
 // *absent* have nothing to be: a household always has a name, a country and a currency, and
 // every member may read them.
 import { matchLocale } from '@household/i18n/lazy'
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { useData, useFocusKept, useSaid } from '../../account/common.ts'
 import styles from '../../account/Settings.module.css'
 import { inHousehold, paths } from '../../app/paths.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import { dayName, ownName } from '../../i18n/names.ts'
+import { DeletionNotice } from '../../privacy/DeletionNotice.tsx'
 import { Banner } from '../../ui/Banner.tsx'
 import { Button } from '../../ui/Button.tsx'
 import { KeyValue } from '../../ui/KeyValue.tsx'
 import { useCountries, useLocalized, useReread } from '../data.ts'
 import { useHousehold } from '../HouseholdContext.tsx'
 import { HouseholdSettingsPage, Section, useStanding } from './Page.tsx'
-import { useFocusKept, useGiven, useSaid } from './profile.ts'
 import { HouseholdCode, RenewCode } from './ProfileCode.tsx'
 import { EditHousehold, MoveCountry } from './ProfileEdit.tsx'
 
@@ -54,7 +56,7 @@ type Open = 'edit' | 'country' | 'code' | null
 export function Profile() {
   const t = useTranslate()
   const format = useFormat()
-  const given = useGiven()
+  const given = useData()
   const localized = useLocalized()
   const household = useHousehold()
   const { changes } = useStanding()
@@ -94,7 +96,10 @@ export function Profile() {
           {said.text}
         </Banner>
       )}
-      {/* Where the focus goes when the controls that held it have left (profile.ts). */}
+      {/* A deletion that is scheduled is said on the screen every member opens first (D-138),
+          with the control that keeps the household for an owner. */}
+      <DeletionNotice after={view} />
+      {/* Where the focus goes when the controls that held it have left (account/common.ts). */}
       <div ref={view} tabIndex={-1} className={styles.view}>
         <Section title={t('household.profile.household.title')}>
           <KeyValue

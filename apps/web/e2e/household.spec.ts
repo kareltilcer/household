@@ -66,13 +66,21 @@ const words = 'Přijď k nám, Víťo!'
  * module (D-167): its screens are every member's, and what *Can see* adds is the invitations.
  */
 const settingsSay = {
-  none: 'In their app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
+  none: 'In their app all the same, as in every member’s: the household’s profile, its members, its modules, its data and sync health. Its invitations and its storage are not.',
   noneYours:
-    'In your app all the same, as in every member’s: the household’s profile, its members and its modules. Its invitations are not.',
-  view: 'The household’s invitations, beside its profile, its members and its modules, which every member reads. Changing anything in the settings is for an owner.',
+    'In your app all the same, as in every member’s: the household’s profile, its members, its modules, its data and sync health. Its invitations and its storage are not.',
+  view: 'The household’s invitations and its storage, beside its profile, its members, its modules, its data and sync health, which every member reads. Changing anything in the settings is for an owner.',
   contribute:
     'No more than “Can see” gives: changing anything in the settings is for an owner, whatever is set here.',
 } as const
+
+/**
+ * The screens of household settings that are every member's, whatever they hold on it, in the
+ * order its navigation lists them: the three of plan item 26, and the household's data and
+ * sync health, which plan item 27 put beside them. What *Can see* adds, the invitations and the
+ * storage picture, and what is an owner's, billing and the apps, are not among them.
+ */
+const everyMembers = ['Household', 'Members', 'Modules', 'Data', 'Sync health']
 
 /** The page's one title, which a screen is known by. */
 function title(page: Page, name: string) {
@@ -652,7 +660,7 @@ test('a member leaves from their account, and the only owner who also pays is to
   ).toBeVisible()
   await expect(page.getByRole('heading', { name: 'You are the only owner' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Make somebody an owner' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'You pay for the subscription' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'You pay for the household' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'What you leave behind' })).toBeVisible()
   // No control that could only be refused: what it waits for is said above.
   await expect(page.getByRole('main').getByRole('button')).toHaveCount(0)
@@ -740,7 +748,7 @@ test('an owner lowers what a member holds, having read what that comes to, and t
     `${settingsSay.none} Changed from “Can see”.`,
   )
   await expect(save).toHaveAccessibleDescription(
-    `2 modules are lowered. Shopping leaves ${member.name}’s app entirely, and their devices drop their copy of it. Nothing they added is deleted. ${member.name} no longer reads the household’s invitations. Its profile, its members and its modules stay theirs to read. ${member.name} is told of the change.`,
+    `2 modules are lowered. Shopping leaves ${member.name}’s app entirely, and their devices drop their copy of it. Nothing they added is deleted. ${member.name} no longer reads the household’s invitations or its storage. Its profile, its members, its modules, its data and sync health stay theirs to read. ${member.name} is told of the change.`,
   )
   // Saved, which is said, and the focus goes where it went before.
   await save.click()
@@ -768,8 +776,9 @@ test('an owner lowers what a member holds, having read what that comes to, and t
   await expect(page.getByRole('definition').nth(2)).toContainText('Shopping')
   await expect(page.getByRole('definition').nth(2)).not.toContainText('Household settings')
   await expect(page.getByRole('definition').nth(3)).toHaveText(settingsSay.noneYours)
-  // What went with it is the invitations: the way between the settings' screens names none.
-  await expect(settings(page).getByRole('link')).toHaveText(['Household', 'Members', 'Modules'])
+  // What went with it is the invitations, and the storage picture beside them (plan item 27):
+  // the way between the settings' screens names neither, and nothing that is an owner's.
+  await expect(settings(page).getByRole('link')).toHaveText(everyMembers)
   // Nothing of theirs to change here, and the page says whose it is.
   await expect(page.getByRole('combobox')).toHaveCount(0)
   await expect(
@@ -799,8 +808,8 @@ test('a member who holds nothing on household settings reads its screens all the
   await expect(page.getByRole('heading', { name: 'The household code' })).toHaveCount(0)
   await expectAccessible(page)
 
-  // The way between its screens leads to the members and the modules, and names no invitations.
-  await expect(settings(page).getByRole('link')).toHaveText(['Household', 'Members', 'Modules'])
+  // The way between its screens leads to what every member reads, and names no invitations.
+  await expect(settings(page).getByRole('link')).toHaveText(everyMembers)
   await settings(page).getByRole('link', { name: 'Members' }).click()
   await expect(title(page, 'Members')).toBeVisible()
   // Everybody's access, visible to everybody: the owner's, and their own.
