@@ -20,6 +20,8 @@ command's first use is where it is checked.
 | The API | `HOUSEHOLD_MOBILE_API_URL`, `https://…/api/v1`. A staging or a production build that is told none is refused as it is configured; a development build told none asks the developer's machine (`10.0.2.2:8080` from an Android emulator, `127.0.0.1:8080` from an iOS simulator). The sync service's address is never configured: it arrives with the credentials the API mints, so it is the server's `HOUSEHOLD_POWERSYNC_URL` that a device must be able to reach |
 | The link host | `HOUSEHOLD_MOBILE_LINK_HOST`: the host whose `https` links open the app. None is set, and the scheme alone opens it |
 | The EAS project | `EAS_PROJECT_ID`, which `app.config.ts` reads into `extra.eas.projectId`. None exists |
+| The store pages | `HOUSEHOLD_MOBILE_STORE_URL_IOS` and `HOUSEHOLD_MOBILE_STORE_URL_ANDROID`: the app's own page in each store, which *please update* opens on that platform. Neither is set, the app being in no store: the screen is then drawn with no control, since one that cannot act is absent. Set each in the `env` of the `staging` and `production` profiles once its page exists |
+| What a build asks of its device | `apps/mobile/build/asked.ts`, with what each permission is for, and `unusedPermissions` in `apps/mobile/app.config.ts`, which every build removes |
 | The profiles | `apps/mobile/eas.json`: `development`, `staging`, `production`, on the Node and the pnpm the workspace names |
 | The generated sources | `packages/*/src/generated/` is never committed, so it is in no upload: `apps/mobile/package.json`'s `eas-build-post-install` runs the workspace's `gen` on the builder, after its install |
 | The bundle budget | `apps/mobile/build/budget.ts`: each platform's bytecode, and what it measured when the budget was set |
@@ -98,37 +100,49 @@ eas build --profile production --platform all
 ## What a build asks of its device
 
 FR-PR1: every permission the apps request is justified in a table in the release notes, and one no
-module uses is removed. Three places decide the list.
+module uses is removed. On Android the list a build ends with is in no file: the manifests of
+Expo's template and of every library are merged as the build is made. Two files decide it, and CI
+holds a build to them.
 
-- **`app.config.ts`** removes from a staging and a production build what Expo's template declares
-  for every app and nothing here uses: `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE` and
-  `SYSTEM_ALERT_WINDOW`. The manifest says of each that it is removed, whichever library asks for
-  it. A development build keeps the template's own. `apps/mobile/build/permissions.test.ts` holds
-  each variant to its list, by name.
-- **The libraries' own manifests** add theirs as a build is merged: `ACCESS_NETWORK_STATE` and
-  `ACCESS_WIFI_STATE` (NetInfo: whether the device is online), `POST_NOTIFICATIONS` and
-  `RECEIVE_BOOT_COMPLETED` (expo-notifications), and whatever the Firebase messaging and badge
-  libraries under it declare, which are in no file of the repository. So the list a build ends with
-  is read off the build:
-
-  ```bash
-  "$ANDROID_HOME"/build-tools/<version>/aapt2 dump permissions app.apk
-  ```
-
-  CI's `mobile-android` job prints it for the build it makes, which is the development variant: a
-  staging or a production build asks for that less the three above.
-- **iOS** asks through a sentence in `Info.plist`, and the configuration writes none of its own:
-  no Face ID (`expo-secure-store` is told so), no camera, no photographs, no location, no contacts.
-  The dev client's plugin writes one, `NSLocalNetworkUsageDescription`, with its Bonjour service,
-  into every variant's `Info.plist`, for finding the developer's machine, and adds the build phase
-  that takes both out of every build that is not a debug one. CI's `mobile-ios` job reads the
-  release build it makes and fails if either is still there. Read any build the same way:
+- **`apps/mobile/build/asked.ts`** is what a build asks for, by name, each with what it is for:
+  `INTERNET`, `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS`, `VIBRATE`, `RECEIVE_BOOT_COMPLETED`,
+  `WAKE_LOCK` and Google's messaging `RECEIVE`, and in a development build `SYSTEM_ALERT_WINDOW`,
+  by which React Native draws its errors over the app. It is the source of the table in the
+  release notes. Beside them every build holds one permission of its own making,
+  `<identifier>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, which asks its member nothing.
+- **`apps/mobile/app.config.ts`** (`unusedPermissions`) is what every build removes, whichever
+  library asks for it, each with why nothing needs it: shared storage (the template's and
+  expo-file-system's), a fingerprint or a face (androidx.biometric's, under expo-secure-store), the
+  Wi-Fi network's state (NetInfo's), the install referrer (under expo-application), and sixteen
+  that draw a count on the icon of one launcher or another (the badge library's, under
+  expo-notifications). The first build on a runner asked for thirty-one; a development build is
+  to ask for nine, and one a member installs for eight.
+- **CI's `mobile-android` job** reads the list off the build it makes and fails on a permission that
+  has no reason, and on a reason for a permission the build does not ask for. So **a new library
+  that brings a permission fails that job** until somebody decides: its reason in `asked.ts`, or
+  its name in `unusedPermissions`. The build is the development variant, and the flows run on it
+  with everything unused already removed; `apps/mobile/build/permissions.test.ts` holds each
+  variant's configuration to its list. To read any build:
 
   ```bash
-  plutil -p Household.app/Info.plist | grep -E 'UsageDescription|NSBonjourServices'
+  "$ANDROID_HOME"/build-tools/<version>/aapt2 dump permissions app.apk > asked.txt
+  node apps/mobile/build/apk.ts asked.txt production
   ```
 
-A new library is a new reader of this section: read what it declares before it is merged.
+- **A count on the app's icon** is the one thing here a later item may want back: it is taking the
+  sixteen launchers' names out of `unusedPermissions`, and giving each its reason.
+
+**iOS** asks through a sentence in `Info.plist`, and the configuration writes none of its own: no
+Face ID (`expo-secure-store` is told so), no camera, no photographs, no location, no contacts. The
+dev client's plugin writes one, `NSLocalNetworkUsageDescription`, with its Bonjour service, into
+every variant's `Info.plist`, for finding the developer's machine, and adds the build phase that
+takes both out of every build that is not a debug one. CI's `mobile-ios` job reads the release build
+it makes and fails if either is still there: neither was, on the first run. Read any build the same
+way:
+
+```bash
+plutil -p Household.app/Info.plist | grep -E 'UsageDescription|NSBonjourServices'
+```
 
 ## What CI builds
 
@@ -138,11 +152,11 @@ three others are skipped unless it names `apps/mobile/`, `packages/`, the lockfi
 settings, the root `package.json` or the workflow itself. The app's unit tests are Jest's and run in
 the `typescript` job, whatever changed.
 
-| Job | Runner | What it does |
-|---|---|---|
-| `mobile` | Linux | `export` and `check`: the production bundles of both platforms, under their budget and with no dev screen |
-| `mobile-android` | Linux, KVM | writes the Android project, builds a release APK for `x86_64`, starts the development services and the API, makes a member, boots an emulator at API 29 and runs the flows |
-| `mobile-ios` | `macos-26` | writes the iOS project, installs the pods, builds a release app for a simulator of its own, runs the flows, and reads the built `Info.plist` |
+| Job | Runner | What it does | The first run took |
+|---|---|---|---|
+| `mobile` | Linux | `export` and `check`: the production bundles of both platforms, under their budget and with no dev screen | 1 min |
+| `mobile-android` | Linux, KVM | writes the Android project, builds a release APK for `x86_64`, starts the development services and the API, makes a member, boots an emulator at API 29, runs the flows, asks the server for the member's devices, and holds the build's permissions to their reasons | 13 min: the build 9, with nothing cached; the services and the API under one; the emulator's boot and three flows two |
+| `mobile-ios` | `macos-26` | writes the iOS project, installs the pods, builds a release app for a simulator of its own, runs the flows, and reads the built `Info.plist` | the pods 1 min, the build 8, Maestro's driver and the app's first start 1 |
 
 **The build the flows walk** is the development variant, as a release build with its JavaScript in
 it, made with `EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS=1`: the dev screens are in it, which is what a
@@ -151,16 +165,43 @@ variable, so on one machine an export made with it and one made without are made
 cleared between them (`expo export --clear`, which the `export` script passes); CI makes each in a
 job of its own.
 
-**The flows** select by `testID` and never by a word. `apps/mobile/e2e/flows.test.ts` holds each to
-the app's own names, since nothing here runs them. Two tags keep a flow out of a run: `awaiting`, on
-a flow written ahead of its screens, and `stack`, on one that needs the API and a member, which
-only the Android job has (a macOS runner has no Docker).
+**The flows** (`apps/mobile/e2e/flows`) select by `testID` and never by a word.
+`apps/mobile/e2e/flows.test.ts` holds each to the app's own names, since nothing here runs them.
+
+| Flow | Reads | Runs on |
+|---|---|---|
+| `launch` | with nobody signed in, the app opens at sign-in | both |
+| `engine` | the engine screen's checks all hold on Hermes itself: the i18n vectors, the fonts, the random source, the client's name | both |
+| `theme` | the theme changes at a press | both |
+| `harness` | a cell of each kind of the twelve-state harness, at 200 % text, in both themes | both |
+| `primitives` | a sheet opens and closes; a menu's item opens a confirmation | both |
+| `hold` | hold to complete: let go early, and held | both |
+| `link` | a link opens the app at its address | Android |
+| `stack` | a member signs in against the real server, and is signed in still after a restart | Android, with the stack |
+| `replica` | the replica open and receiving, the offline bar | not yet: `awaiting` |
+
+Three tags keep a flow out of a run: `awaiting`, on a flow written ahead of its screens; `stack`,
+on one that needs the API and a member, which only the Android job has (a macOS runner has no
+Docker); and `android`, on one that does what only Android lets a flow do.
+
+**The way to a dev screen is by presses, and not by a link.** The sign-in screen has a control that
+leads to the dev sign-in form (`sign-in:dev`), and every dev screen leads to their index
+(`dev-screen:index`): `flows/parts/dev.yaml` walks that, and each flow runs it. iOS asks before it
+opens a link that came from outside the app, *Open in "Household Dev"?*, in a dialog of the
+system's own, which carries no `testID` and stays over the app until it is answered: on the first
+run it stayed over every flow after the one that sent a link. Answering it by its words is what
+Maestro's own suite does, and what its issue 2610 reports failing on a hosted runner. So a link
+is sent on Android alone, by `link`; that a link opens the app on iOS is for a person with a
+device to see.
 
 **What a run leaves** is the artifact `mobile-android-e2e` or `mobile-ios-e2e`, for seven days:
-Maestro's report (`report.xml`), its log and a screenshot of each failure (`debug/`), the
-screenshots the flows took (`kept/`), and the device's log (`device.log`); on iOS Xcode's whole
-output and the log of Maestro's driver too. It is kept of a run that passed as well: a screenshot is
-the one place the app's faces and its two themes are seen.
+Maestro's report (`report.xml`) and a folder a flow under `debug/`, with the screenshots the flow
+took (`takeScreenshot/`), what the device logged (`logs/`), and of a failure the screen and the
+hierarchy Maestro saw (`screenshots/`, `screen-hierarchy/`), which is where to look first: it says
+whether the app drew something else or something stood over it. Xcode's whole output is there
+where the build is what failed. It is kept of a run that passed as well: a screenshot is the one
+place the app's faces and its two themes are seen. A simulator's log is the whole simulator's,
+some hundred megabytes a flow before it is packed.
 
 ### On a developer's machine
 
@@ -172,7 +213,9 @@ pnpm --filter @household/mobile run e2e android                # or ios
 ```
 
 The build is the one the job makes, by the same commands, which are the job's steps: read them in
-the workflow.
+the workflow. The flows that sign in want the stack and a member: `pnpm run up`, `db:setup` and
+`up:sync`, the API started as the job starts it, `pnpm --filter @household/mobile run e2e:stack
+member`, its three lines exported, and `--stack` after the platform.
 
 ### Moving a pin
 
@@ -180,6 +223,7 @@ the workflow.
 |---|---|---|
 | Maestro | `apps/mobile/e2e/install-maestro.sh` | the version, and the digest GitHub publishes for the release's `maestro.zip` (the script says how to read it) |
 | An action | `.github/workflows/ci.yml` | the release's commit, `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`, with the version in the comment |
-| The emulator | `mobile-android`: `api-level`, `target`, `arch`, `profile` | API 29 is the oldest Android the app supports. Raise it only if that image stops booting, and say so here |
-| Xcode and the simulator | `mobile-ios`: `runs-on`, `XCODE`, `IOS_RUNTIME`, `IOS_DEVICE` | together: an Xcode the image holds, the runtime it builds for, a device type of that runtime (`xcrun simctl list runtimes` is printed by the job) |
+| The emulator | `mobile-android`: `api-level`, `target`, `arch`, `profile` | API 29 is the oldest Android the app supports, and on the first run its image booted in a quarter of a minute and ran the flows. Raise it only if that image stops booting, and say so here |
+| Xcode and the simulator | `mobile-ios`: `runs-on`, `XCODE`, `IOS_RUNTIME`, `IOS_DEVICE` | together: an Xcode the image holds, the runtime it builds for, a device type of that runtime (`xcrun simctl list runtimes` is printed by the job). `macos-26`, Xcode 26.6, `iOS26.5` and `iPhone 17` were right on the first run |
 | The budget | `apps/mobile/build/budget.ts` | `pnpm --filter @household/mobile run export`, then `run check`, and write what it measured |
+| A permission | `apps/mobile/build/asked.ts`, or `unusedPermissions` in `apps/mobile/app.config.ts` | [above](#what-a-build-asks-of-its-device) |
