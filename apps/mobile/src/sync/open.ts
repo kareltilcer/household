@@ -261,6 +261,8 @@ export async function openHouseholdReplica(options: OpenOptions): Promise<Opened
   try {
     return opened(await held.replica, release)
   } catch (error) {
+    // One that never opened is nothing to empty: it is waited for by nobody.
+    if (doomed.get(name) === held) doomed.delete(name)
     await release()
     throw error
   }
