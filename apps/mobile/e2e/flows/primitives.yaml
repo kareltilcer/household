@@ -5,9 +5,12 @@
 # can show. What a sheet does with the focus and with what is behind it is its own Jest test;
 # this reads that the native half of each is there.
 #
-# The names are the controls' own, of the light half of their section
-# (src/dev/primitives/controls): `controls:light:<what>`, and what a sheet or a dialog draws
-# under its own name, `:surface` and `:close` (src/ui/Dialog.tsx).
+# The page is narrowed to its overlays (`primitives:only:overlays`), so that nothing is
+# scrolled past to reach them: the page is every control in both themes, and on Android a
+# swipe that starts on a stepper's count moves nothing. The names are the controls' own, of
+# the light half of their section (src/dev/primitives/controls): `controls:light:<what>`, and
+# what a sheet or a dialog draws under its own name, `:surface` and `:close`
+# (src/ui/Dialog.tsx).
 appId: com.kareltilcer.household.dev
 ---
 - launchApp:
@@ -24,12 +27,18 @@ appId: com.kareltilcer.household.dev
     visible:
       id: 'household-dev-screen:primitives'
     timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: 'primitives:only:overlays'
+    direction: DOWN
+- tapOn:
+    id: 'primitives:only:overlays'
 # A sheet, opened and closed by its own control.
 - scrollUntilVisible:
     element:
       id: 'controls:light:sheet:open'
     direction: DOWN
-    timeout: 120000
+    timeout: 60000
 - tapOn:
     id: 'controls:light:sheet:open'
 - extendedWaitUntil:
