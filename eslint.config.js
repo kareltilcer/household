@@ -580,6 +580,29 @@ export default defineConfig(
     },
   },
   {
+    // The mobile app scales its own type (plan item 28): every text is its own `Text`, a step of
+    // the type scale at the reader's scale with the system's own scaling off. A text drawn with
+    // React Native's is scaled by the system instead, in the platform's face. The test of the
+    // accessibility rules draws one, to see the rule that finds it fail.
+    files: ['apps/mobile/**'],
+    ignores: ['apps/mobile/src/ui/Text.tsx', 'apps/mobile/src/test/a11y.test.tsx'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react-native',
+              importNames: ['Text'],
+              message:
+                'Draw text with the app’s own Text (apps/mobile/src/ui/Text.tsx): it is a step of the type scale at the reader’s scale, and React Native’s is neither.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.js', '**/*.mjs', '**/*.cjs', '**/*.jsx'],
     extends: [tseslint.configs.disableTypeChecked],
   },

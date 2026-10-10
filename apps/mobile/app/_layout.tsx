@@ -1,2 +1,2 @@
-// The root layout: whatever route is open, and nothing around it yet.
-export { Slot as default } from 'expo-router'
+// The root layout: the providers, and the stack every route is drawn in (src/app/Root.tsx).
+export { Root as default, RouteError as ErrorBoundary } from '../src/app/Root.tsx'

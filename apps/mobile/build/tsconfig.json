@@ -1,0 +1,9 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    // What runs on Node: the check of an export and, beside it, the bundle budget. The app
+    // itself is typechecked against React Native's globals alone, in the project above.
+    "types": ["node"]
+  },
+  "include": ["."]
+}

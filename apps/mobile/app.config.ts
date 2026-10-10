@@ -138,7 +138,10 @@ export default function config(): ExpoConfig {
           }),
     },
     plugins: [
-      'expo-router',
+      // The routes are the files under app/, said outright: left to find them, expo-router
+      // takes a folder named src/app before it, and that one holds the table of routes, the
+      // root layout and their tests, not a route.
+      ['expo-router', { root: 'app' }],
       [
         'expo-build-properties',
         {

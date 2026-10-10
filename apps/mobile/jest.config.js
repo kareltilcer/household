@@ -22,6 +22,12 @@ export default {
   // And a module named `.mjs` or `.cjs` is one Metro transforms too, where the preset's
   // pattern stops at `.js`: PowerSync's SDK ships such files.
   transform: { '\\.[cm]js$': babel },
-  // The replica's SQLite has a native half and no other: a stand-in is imported in its place.
-  moduleNameMapper: { '^@op-engineering/op-sqlite$': '<rootDir>/src/test/op-sqlite.ts' },
+  moduleNameMapper: {
+    // The replica's SQLite has a native half and no other: a stand-in is imported in its place.
+    '^@op-engineering/op-sqlite$': '<rootDir>/src/test/op-sqlite.ts',
+    // And so has the device's key-value store: the library's own stand-in, which keeps what a
+    // test wrote for as long as the test file runs.
+    '^@react-native-async-storage/async-storage$':
+      '@react-native-async-storage/async-storage/jest/async-storage-mock',
+  },
 }
