@@ -3,9 +3,9 @@
 import { describe, expect, it } from '@jest/globals'
 import { catalogs } from '@household/i18n'
 import { screen } from '@testing-library/react-native'
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import { View } from 'react-native'
 import { expectAccessible } from '../test/a11y.ts'
-import { render } from '../test/render.tsx'
+import { render, styleOf } from '../test/render.tsx'
 import { Panes, useBesideList } from './Panes.tsx'
 
 /** A phone held upright, and a tablet. */
@@ -20,10 +20,6 @@ function Detail() {
 }
 
 const empty = catalogs.en['device.shell.panes.empty']
-
-function styleOf(testID: string): ViewStyle {
-  return StyleSheet.flatten(screen.getByTestId(testID).props.style as StyleProp<ViewStyle>)
-}
 
 describe('two panes', () => {
   it('are one on a phone: the list, with nothing drawn of a second', async () => {

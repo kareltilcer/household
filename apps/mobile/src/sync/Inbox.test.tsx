@@ -16,7 +16,7 @@ import type { Me } from '../session/context.ts'
 import { account, SessionFixture } from '../session/fixture.tsx'
 import { HouseholdFixture } from '../shell/fixture.tsx'
 import { elementsOf, expectAccessible, textOf } from '../test/a11y.ts'
-import { households, people } from '../test/fixtures.ts'
+import { householdOf, households, people } from '../test/fixtures.ts'
 import { render, type DrawOptions } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Inbox, inboxState, InboxView, type InboxFacts } from './Inbox.tsx'
@@ -485,16 +485,7 @@ describe('the inbox', () => {
 })
 
 describe('the inbox’s screen', () => {
-  const home: Household = {
-    ...households.own,
-    country: 'CZ',
-    timezone: 'Europe/Prague',
-    base_currency: 'CZK',
-    locale: 'cs-CZ',
-    my_role: 'member',
-    my_grants: {},
-    entitlement: { state: 'active', can_write: true },
-  }
+  const home = householdOf()
   const members = {
     items: [
       { user_id: petr.toUpperCase(), display_name: people.member.name, role: 'member' },

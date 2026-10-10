@@ -16,10 +16,10 @@ import {
   screen,
   userEvent,
 } from '@testing-library/react-native'
-import { Animated, Easing, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import { Animated, Easing } from 'react-native'
 import type { TestInstance } from 'test-renderer'
 import { elementsOf, expectAccessible, violations } from '../test/a11y.ts'
-import { render, TestProviders, type DrawOptions } from '../test/render.tsx'
+import { render, root, styleOf, type DrawOptions } from '../test/render.tsx'
 import * as announcer from './announce.ts'
 import { HoldToComplete, stepped } from './HoldToComplete.tsx'
 
@@ -42,16 +42,6 @@ function ring(): TestInstance {
 
 function phase(): string {
   return String(control().props.testID).replace(/^hold:/, '')
-}
-
-function styleOf(element: TestInstance): ViewStyle {
-  return StyleSheet.flatten(element.props.style as StyleProp<ViewStyle>)
-}
-
-/** Everything the test drew. */
-function root(): TestInstance {
-  if (screen.root === null) throw new Error('nothing is drawn')
-  return screen.root
 }
 
 /** Where the ring stands on the test's screen, and a touch at a place in it. */
@@ -147,11 +137,7 @@ describe('holding', () => {
     await down()
     await advance(1000)
     // The row was drawn again under the hold: a sync brought it a newer version to complete.
-    await view.rerender(
-      <TestProviders>
-        <Hold onComplete={current} />
-      </TestProviders>,
-    )
+    await view.rerender(<Hold onComplete={current} />)
     expect(phase()).toBe('holding')
     await advance(1000)
     expect(current).toHaveBeenCalledTimes(1)
@@ -310,11 +296,7 @@ describe('holding', () => {
     await down()
     await advance(2000)
     expect(phase()).toBe('completed')
-    await view.rerender(
-      <TestProviders>
-        <HoldToComplete key={2} label={label} onComplete={onComplete} />
-      </TestProviders>,
-    )
+    await view.rerender(<HoldToComplete key={2} label={label} onComplete={onComplete} />)
     expect(phase()).toBe('idle')
     expect(screen.queryByText(en['ui.hold.completed'])).toBeNull()
     await down()

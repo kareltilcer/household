@@ -3,9 +3,8 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { screen, type RenderResult } from '@testing-library/react-native'
 import { View } from 'react-native'
-import type { TestInstance } from 'test-renderer'
-import { elementsOf, expectAccessible, rules, violations } from '../test/a11y.ts'
-import { render, TestProviders } from '../test/render.tsx'
+import { drawingsOf, elementsOf, expectAccessible, rules, violations } from '../test/a11y.ts'
+import { render, root } from '../test/render.tsx'
 import * as announcer from './announce.ts'
 import { Button } from './Button.tsx'
 import { StateFrame, type BodyContext } from './StateFrame.tsx'
@@ -50,22 +49,12 @@ function Framed({ state }: { readonly state: DataState }) {
 
 /** Draws the frame in `state` where `view` drew it in another: the body's state changed. */
 async function come(view: RenderResult, state: DataState): Promise<void> {
-  await view.rerender(
-    <TestProviders>
-      <Framed state={state} />
-    </TestProviders>,
-  )
-}
-
-/** Everything the test drew. */
-function root(): TestInstance {
-  if (screen.root === null) throw new Error('nothing is drawn')
-  return screen.root
+  await view.rerender(<Framed state={state} />)
 }
 
 /** The glyphs drawn: a banner's, a mark's. */
 function drawings(): number {
-  return elementsOf(root()).filter((element) => element.type === 'RNSVGSvgView').length
+  return drawingsOf(root()).length
 }
 
 let said: jest.SpiedFunction<typeof announcer.announce>

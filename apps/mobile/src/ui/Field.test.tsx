@@ -6,7 +6,7 @@ import { nativeThemes } from '@household/tokens/native'
 import { screen, userEvent } from '@testing-library/react-native'
 import { createRef } from 'react'
 import { Platform, StyleSheet, type StyleProp, type TextInput, type TextStyle } from 'react-native'
-import { expectAccessible, violations } from '../test/a11y.ts'
+import { expectAccessible, isDrawing, violations } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
 import { sample } from './controls.fixtures.ts'
 import { PasswordField, TextArea, TextField } from './Field.tsx'
@@ -42,7 +42,8 @@ describe('a text field', () => {
     // Never the edge alone: the sentence stands beside it, and a drawing before the sentence.
     expect(styleOf(sample.value).borderColor).toBe(nativeThemes.light.color.danger)
     const sentence = screen.getByText(sample.low)
-    expect(sentence.parent?.children[0]).toHaveProperty('type', 'RNSVGSvgView')
+    const before = sentence.parent?.children[0]
+    expect(typeof before === 'object' && isDrawing(before)).toBe(true)
     expectAccessible()
   })
 

@@ -6,7 +6,7 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { act, screen, waitFor } from '@testing-library/react-native'
 import { answering, json, problem, testClient, unanswered } from '../api/testing.ts'
 import { SessionFixture } from '../session/fixture.tsx'
-import { households, ids } from '../test/fixtures.ts'
+import { householdOf, households, ids, summaryOf } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import { dataStates } from '../ui/states.ts'
 import { Text } from '../ui/Text.tsx'
@@ -22,22 +22,12 @@ import {
   useHouseholds,
   useLastHousehold,
   writes,
-  type Household,
   type HouseholdRead,
   type HouseholdSummary,
   type Read,
 } from './data.ts'
 
-const household: Household = {
-  ...households.own,
-  country: 'CZ',
-  timezone: 'Europe/Prague',
-  base_currency: 'CZK',
-  locale: 'cs-CZ',
-  my_role: 'member',
-  my_grants: { shopping: 'contribute' },
-  entitlement: { state: 'active', can_write: true },
-}
+const household = householdOf({ my_grants: { shopping: 'contribute' } })
 
 let read: HouseholdRead | undefined
 let queries: QueryClient | undefined
@@ -197,10 +187,7 @@ describe('the household an address names', () => {
 
 describe('a member’s households', () => {
   it('are read in the server’s order, a suspended one among them', async () => {
-    const items: HouseholdSummary[] = [
-      { ...households.other, entitlement: { state: 'suspended' } },
-      { ...households.own, entitlement: { state: 'active' } },
-    ]
+    const items = [summaryOf(households.other, 'suspended'), summaryOf(households.own)]
     const api = answering({ 'GET /households': () => json(200, { items }) })
     function List() {
       const list = useHouseholds()
@@ -218,12 +205,9 @@ describe('a member’s households', () => {
 })
 
 describe('where the app opens', () => {
-  const own: HouseholdSummary = { ...households.own, entitlement: { state: 'active' } }
-  const other: HouseholdSummary = { ...households.other, entitlement: { state: 'grace' } }
-  const suspended = (each: HouseholdSummary): HouseholdSummary => ({
-    ...each,
-    entitlement: { state: 'suspended' },
-  })
+  const own = summaryOf(households.own)
+  const other = summaryOf(households.other, 'grace')
+  const suspended = (each: HouseholdSummary) => summaryOf(each, 'suspended')
 
   const rows: [
     name: string,

@@ -8,10 +8,9 @@ import { onlineManager, useQueryClient } from '@tanstack/react-query'
 import { act, screen, userEvent, waitFor } from '@testing-library/react-native'
 import { useState } from 'react'
 import { answering, json, problem, testClient, unanswered } from '../api/testing.ts'
-import type { Household } from '../household/data.ts'
 import type { SessionState } from '../session/context.ts'
 import { SessionFixture } from '../session/fixture.tsx'
-import { households, ids } from '../test/fixtures.ts'
+import { householdOf, households, ids } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import { Button } from '../ui/Button.tsx'
 import { Text } from '../ui/Text.tsx'
@@ -25,17 +24,8 @@ import {
 import { standIn } from './standIn.ts'
 import { conflict, registry, rejectionWith } from './sync.fixtures.ts'
 
-const home: Household = {
-  ...households.own,
-  country: 'CZ',
-  timezone: 'Europe/Prague',
-  base_currency: 'CZK',
-  locale: 'cs-CZ',
-  my_role: 'member',
-  my_grants: {},
-  entitlement: { state: 'active', can_write: true },
-}
-const other: Household = { ...home, ...households.other }
+const home = householdOf()
+const other = householdOf(households.other)
 
 const routes = {
   [`GET /households/${home.id}`]: () => json(200, home),

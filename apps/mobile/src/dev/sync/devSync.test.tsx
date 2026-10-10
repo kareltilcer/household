@@ -11,7 +11,7 @@ import { act, screen, userEvent, waitFor, within } from '@testing-library/react-
 import type { TestInstance } from 'test-renderer'
 import * as client from '../../api/client.ts'
 import { answering, json, testApi, testClient } from '../../api/testing.ts'
-import type { Household, HouseholdSummary } from '../../household/data.ts'
+import type { HouseholdSummary } from '../../household/data.ts'
 import { SessionFixture } from '../../session/fixture.tsx'
 import { inboxState } from '../../sync/Inbox.tsx'
 import { rejectionCodes } from '../../sync/rejection.ts'
@@ -23,7 +23,7 @@ import {
   rejections,
 } from '../../sync/sync.fixtures.ts'
 import { elementsOf, expectAccessible } from '../../test/a11y.ts'
-import { households, ids } from '../../test/fixtures.ts'
+import { householdOf, households, ids } from '../../test/fixtures.ts'
 import { render } from '../../test/render.tsx'
 import * as announcer from '../../ui/announce.ts'
 import { devMarker } from '../marker.ts'
@@ -298,16 +298,7 @@ describe('the sync screen', () => {
 })
 
 describe('this device’s replica, on the sync screen', () => {
-  const home: Household = {
-    ...households.own,
-    country: 'CZ',
-    timezone: 'Europe/Prague',
-    base_currency: 'CZK',
-    locale: 'cs-CZ',
-    my_role: 'owner',
-    my_grants: {},
-    entitlement: { state: 'active', can_write: true },
-  }
+  const home = householdOf({ my_role: 'owner' })
   const listed: HouseholdSummary[] = [
     { ...households.own, my_role: 'owner', entitlement: { state: 'active', can_write: true } },
   ]

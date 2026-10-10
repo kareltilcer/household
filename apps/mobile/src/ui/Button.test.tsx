@@ -5,19 +5,13 @@ import { controls } from '@household/icons'
 import { catalogs } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
 import { screen, userEvent } from '@testing-library/react-native'
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { expectAccessible, violations } from '../test/a11y.ts'
 import { words } from '../test/fixtures.ts'
-import { render } from '../test/render.tsx'
+import { render, styleOf } from '../test/render.tsx'
 import { Button, IconButton, type ButtonVariant } from './Button.tsx'
 import { BaseIcon } from './Icon.tsx'
 
 const close = catalogs.en[controls.close_sheet.labelKey]
-
-/** The style a pressable draws with when it is not pressed. */
-function styleOf(testID: string): ViewStyle {
-  return StyleSheet.flatten(screen.getByTestId(testID).props.style as StyleProp<ViewStyle>)
-}
 
 describe('Button', () => {
   it('is a button named by its words, and a press is heard once', async () => {

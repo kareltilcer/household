@@ -16,14 +16,13 @@ import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { answering, json, problem, testClient } from '../api/testing.ts'
 import { HouseholdNotAvailable, NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
-import type { Household } from '../household/data.ts'
 import { heldDestination, takeDestination } from '../links/destination.ts'
 import { linkArrived, resetSwitched } from '../links/switched.ts'
 import type { SessionState } from '../session/context.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { Inbox } from '../sync/Inbox.tsx'
 import { conflict, rejectionWith } from '../sync/sync.fixtures.ts'
-import { households, ids } from '../test/fixtures.ts'
+import { householdOf, households, ids } from '../test/fixtures.ts'
 import { TestProviders } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Screen } from '../ui/Screen.tsx'
@@ -71,16 +70,12 @@ jest.mock('../sync/HouseholdBars.tsx', () => ({ HouseholdBars: () => null }))
 const en = catalogs.en
 const t = createTranslator('en')
 
-const household = (of: { id: string; name: string }): Household => ({
-  ...of,
-  country: 'CZ',
-  timezone: 'Europe/Prague',
-  base_currency: 'CZK',
-  locale: 'cs',
-  my_role: 'owner',
-  my_grants: { dashboard: 'view', tasks: 'manage', chat: 'view' },
-  entitlement: { state: 'active', can_write: true },
-})
+const household = (of: { id: string; name: string }) =>
+  householdOf({
+    ...of,
+    my_role: 'owner',
+    my_grants: { dashboard: 'view', tasks: 'manage', chat: 'view' },
+  })
 const own = household(households.own)
 const other = household(households.other)
 /** A household the member is not in, by an id that is one. */

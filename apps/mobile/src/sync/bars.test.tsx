@@ -12,7 +12,7 @@ import { useHousehold, type Household } from '../household/data.ts'
 import type { SessionState } from '../session/context.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { expectAccessible } from '../test/a11y.ts'
-import { households } from '../test/fixtures.ts'
+import { householdOf, households } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Text } from '../ui/Text.tsx'
@@ -30,18 +30,9 @@ const en = catalogs.en
 const id = households.own.id
 
 function home(canWrite: boolean): Household {
-  return {
-    ...households.own,
-    country: 'CZ',
-    timezone: 'Europe/Prague',
-    base_currency: 'CZK',
-    locale: 'cs-CZ',
-    my_role: 'member',
-    my_grants: {},
-    entitlement: canWrite
-      ? { state: 'active', can_write: true }
-      : { state: 'read_only', can_write: false },
-  }
+  return canWrite
+    ? householdOf()
+    : householdOf({ entitlement: { state: 'read_only', can_write: false } })
 }
 
 interface Stands {

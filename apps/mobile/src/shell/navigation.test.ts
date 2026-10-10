@@ -1,9 +1,7 @@
 // The shell's module list and a member's arrangement of it: the web's cases, case for case
 // (apps/web/src/shell/navigation.test.ts), since the rule is one and each client computes it.
 import { describe, expect, it } from '@jest/globals'
-import { inHousehold } from '../app/paths.ts'
-import type { ModuleKey } from '../household/data.ts'
-import type { ModuleRegistry } from '../modules/registry.ts'
+import { fiveModules, screensOf } from '../test/fixtures.ts'
 import { arrangementKey, parseArrangement } from './arrangement.ts'
 import {
   arrangeable,
@@ -18,17 +16,8 @@ import {
   type Arrangement,
 } from './navigation.ts'
 
-const at = (module: ModuleKey) => ({
-  home: (household: string) => inHousehold.module(household, module),
-})
 /** A build with screens for five modules, the household's own settings among them. */
-const registry: ModuleRegistry = {
-  tasks: at('tasks'),
-  shopping: at('shopping'),
-  finance: at('finance'),
-  garden: at('garden'),
-  admin: at('admin'),
-}
+const registry = fiveModules
 
 /** A member who holds four of them, Finance at `none`, and Chat, which this build cannot open. */
 const household = {
@@ -85,7 +74,7 @@ describe('the shell’s module list', () => {
       hidden: [],
     })
     // And nothing at all in a build that has no screen for it.
-    const none = navigationOf({ my_grants: { dashboard: 'view' } }, { tasks: at('tasks') })
+    const none = navigationOf({ my_grants: { dashboard: 'view' } }, { tasks: screensOf('tasks') })
     expect(none).toEqual({ pinned: [], listed: [], hidden: [] })
     expect(arrangeable(none)).toBe(false)
   })

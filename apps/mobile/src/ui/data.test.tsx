@@ -10,8 +10,15 @@ import { nativeThemes } from '@household/tokens/native'
 import { fireEvent, screen, userEvent, within } from '@testing-library/react-native'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import type { TestInstance } from 'test-renderer'
-import { elementsOf, expectAccessible, nameOf, statusTestID, textOf } from '../test/a11y.ts'
-import { render, TestProviders } from '../test/render.tsx'
+import {
+  drawingsOf,
+  elementsOf,
+  expectAccessible,
+  nameOf,
+  statusTestID,
+  textOf,
+} from '../test/a11y.ts'
+import { render, root, styleOf } from '../test/render.tsx'
 import { Badge } from './Badge.tsx'
 import { Button } from './Button.tsx'
 import { Composition, Flow, TimeSeries } from './charts/Charts.tsx'
@@ -60,16 +67,6 @@ const words = {
   picture: 'https://files.dum.test/eva.jpg',
 } as const
 
-function styleOf(element: TestInstance): ViewStyle {
-  return StyleSheet.flatten(element.props.style as StyleProp<ViewStyle>)
-}
-
-/** Everything the test drew. */
-function root(): TestInstance {
-  if (screen.root === null) throw new Error('nothing is drawn')
-  return screen.root
-}
-
 /** The elements under `element` that a `role` names, in the order they are drawn. */
 function byRole(element: TestInstance, role: string): TestInstance[] {
   return elementsOf(element).filter((inner) => inner.props.role === role)
@@ -85,11 +82,6 @@ function drawn(element: TestInstance | undefined): string {
     .map((child) => (typeof child === 'string' ? child : drawn(child)))
     .join('')
     .replace(/\s/g, ' ')
-}
-
-/** The drawings under `element`: every glyph. */
-function drawings(element: TestInstance): TestInstance[] {
-  return elementsOf(element).filter((inner) => inner.type === 'RNSVGSvgView')
 }
 
 afterEach(() => {
@@ -146,13 +138,11 @@ describe('a list row', () => {
         <ListRow title={words.electricity} />
       </List>,
     )
-    expect(drawings(root())).toEqual([])
+    expect(drawingsOf(root())).toEqual([])
     await view.rerender(
-      <TestProviders>
-        <List label={words.meters}>
-          <ListRow title={words.electricity} mark="pending" />
-        </List>
-      </TestProviders>,
+      <List label={words.meters}>
+        <ListRow title={words.electricity} mark="pending" />
+      </List>,
     )
     expect(screen.getByText(en['a11y.status.pending'])).toBeOnTheScreen()
     expectAccessible()
@@ -212,11 +202,9 @@ describe('a list row', () => {
     expectAccessible()
     // A member who may not write: the action is absent, and nothing stands in for it.
     await view.rerender(
-      <TestProviders>
-        <List label={words.meters}>
-          <ListRow title={words.electricity} />
-        </List>
-      </TestProviders>,
+      <List label={words.meters}>
+        <ListRow title={words.electricity} />
+      </List>,
     )
     expect(screen.queryByRole('button')).toBeNull()
   })
@@ -231,7 +219,7 @@ describe('a module chip, an avatar, a portrait and a badge', () => {
       const accent = nativeThemes[theme].color['accent-finance']
       // The accent is the rule's and the glyph's, never the name's ink.
       expect(styleOf(chip).borderColor).toBe(accent)
-      expect(drawings(chip)[0]?.props.color).toBe(accent)
+      expect(drawingsOf(chip)[0]?.props.color).toBe(accent)
       expect(StyleSheet.flatten(name.props.style as StyleProp<ViewStyle>)).toMatchObject({
         color: nativeThemes[theme].color['text-primary'],
       })
@@ -361,11 +349,7 @@ describe('a key–value block', () => {
       { key: words.phone, value: second },
     ]
     const view = await render(<KeyValue pairs={phones('602 111 222', '603 333 444')} />)
-    await view.rerender(
-      <TestProviders>
-        <KeyValue pairs={phones('602 111 222', '604 555 666')} />
-      </TestProviders>,
-    )
+    await view.rerender(<KeyValue pairs={phones('602 111 222', '604 555 666')} />)
     expect(read()).toEqual([`${words.phone} 602 111 222`, `${words.phone} 604 555 666`])
     // React says so, on the console, where two of a list's elements share a key.
     expect(complained).not.toHaveBeenCalled()
@@ -459,7 +443,7 @@ describe('a metric tile', () => {
     expect(screen.getByText('kWh')).toBeOnTheScreen()
     expect(screen.getByText(words.more)).toBeOnTheScreen()
     // The arrow repeats the words, and says nothing alone.
-    expect(drawings(root())).toHaveLength(1)
+    expect(drawingsOf(root())).toHaveLength(1)
     expectAccessible()
   })
 
@@ -472,7 +456,7 @@ describe('a metric tile', () => {
       />,
     )
     expect(screen.getByText(words.more)).toBeOnTheScreen()
-    expect(drawings(root())).toEqual([])
+    expect(drawingsOf(root())).toEqual([])
   })
 
   it('says there is not enough information, and what is missing, where it has no figure', async () => {
@@ -480,7 +464,7 @@ describe('a metric tile', () => {
     // The no-history status, said three ways: its colour, its glyph and the tile's words for it.
     const status = screen.getByTestId(statusTestID('no_history'))
     expect(within(status).getByText(notEnough)).toBeOnTheScreen()
-    expect(drawings(status)[0]?.props.color).toBe(nativeThemes.light.color['status-no-history'])
+    expect(drawingsOf(status)[0]?.props.color).toBe(nativeThemes.light.color['status-no-history'])
     expect(screen.getByText(words.missing)).toBeOnTheScreen()
     // Not a zero: a figure the product has not earned is not shown at all.
     expect(screen.queryByText('0')).toBeNull()
@@ -585,11 +569,7 @@ describe('a time series', () => {
     const view = await render(<TimeSeries caption={words.perMonth} points={points} approximate />)
     expect(screen.getByTestId(statusTestID('estimated'))).toBeOnTheScreen()
     expect(screen.getByText(en['ui.chart.approximate'])).toBeOnTheScreen()
-    await view.rerender(
-      <TestProviders>
-        <TimeSeries caption={words.perMonth} points={points.slice(0, 1)} />
-      </TestProviders>,
-    )
+    await view.rerender(<TimeSeries caption={words.perMonth} points={points.slice(0, 1)} />)
     expect(screen.queryByTestId(statusTestID('estimated'))).toBeNull()
     expect(screen.queryByText(en['ui.chart.approximate'])).toBeNull()
   })
@@ -605,11 +585,7 @@ describe('a time series', () => {
       }))
     const view = await render(<TimeSeries caption={words.perMonth} points={year(1)} />)
     // The next year's figures, under the same letters.
-    await view.rerender(
-      <TestProviders>
-        <TimeSeries caption={words.perMonth} points={year(20)} />
-      </TestProviders>,
-    )
+    await view.rerender(<TimeSeries caption={words.perMonth} points={year(20)} />)
     expect(said()).toEqual(year(20).map((point) => `${point.label}: ${point.text}`))
     // React says so, on the console, where two of a list's elements share a key.
     expect(complained).not.toHaveBeenCalled()

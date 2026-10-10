@@ -5,8 +5,8 @@ import { nativeThemes } from '@household/tokens/native'
 import { screen, userEvent } from '@testing-library/react-native'
 import { createRef, useState } from 'react'
 import { StyleSheet, type StyleProp, type View, type ViewStyle } from 'react-native'
-import { elementsOf, expectAccessible, violations } from '../test/a11y.ts'
-import { render } from '../test/render.tsx'
+import { drawingsOf, elementsOf, expectAccessible, violations } from '../test/a11y.ts'
+import { render, styleOf } from '../test/render.tsx'
 import { Checkbox, RadioGroup, Switch } from './Choice.tsx'
 import { intervals, sample } from './controls.fixtures.ts'
 
@@ -21,15 +21,9 @@ function Both() {
   )
 }
 
-function styleOf(testID: string): ViewStyle {
-  return StyleSheet.flatten(screen.getByTestId(testID).props.style as StyleProp<ViewStyle>)
-}
-
 /** Whether anything is drawn in the mark of the choice called `name`: a check, or a dash. */
 function glyphIn(role: 'checkbox' | 'radio', name: string): boolean {
-  return elementsOf(screen.getByRole(role, { name })).some(
-    (element) => element.type === 'RNSVGSvgView',
-  )
+  return drawingsOf(screen.getByRole(role, { name })).length > 0
 }
 
 describe('a checkbox and a switch', () => {

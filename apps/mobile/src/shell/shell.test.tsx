@@ -9,14 +9,13 @@ import { router } from 'expo-router'
 import { Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { HouseholdNotAvailable, NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold, paths } from '../app/paths.ts'
-import type { Household, ModuleKey } from '../household/data.ts'
-import type { ModuleRegistry } from '../modules/registry.ts'
+import type { ModuleKey } from '../household/data.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { SyncFixture, type Sync } from '../sync/ReplicaProvider.tsx'
 import { standIn } from '../sync/standIn.ts'
 import { conflict, overriddenMerge, registry as entities } from '../sync/sync.fixtures.ts'
 import { expectAccessible } from '../test/a11y.ts'
-import { households, ids, words } from '../test/fixtures.ts'
+import { fiveModules, householdOf, households, ids, words } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { AppBar, HouseholdName } from './AppBar.tsx'
@@ -45,13 +44,7 @@ jest.mock('expo-router', () => ({
 const en = catalogs.en
 const t = createTranslator('en')
 
-const household: Household = {
-  ...households.own,
-  country: 'CZ',
-  timezone: 'Europe/Prague',
-  base_currency: 'CZK',
-  locale: 'cs',
-  my_role: 'member',
+const household = householdOf({
   // Four modules held, Finance at none, and Chat, which the fixture's build cannot open.
   my_grants: {
     dashboard: 'view',
@@ -62,20 +55,10 @@ const household: Household = {
     chat: 'view',
     admin: 'view',
   },
-  entitlement: { state: 'active', can_write: true },
-}
-
-const at = (module: ModuleKey) => ({
-  home: (id: string) => inHousehold.module(id, module),
 })
+
 /** A build with screens for five modules, the household's own settings among them. */
-const registry: ModuleRegistry = {
-  tasks: at('tasks'),
-  shopping: at('shopping'),
-  finance: at('finance'),
-  garden: at('garden'),
-  admin: at('admin'),
-}
+const registry = fiveModules
 
 const name = (module: ModuleKey) => en[`module.${module}.name`]
 

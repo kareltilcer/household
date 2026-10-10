@@ -4,10 +4,9 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { catalogs, createTranslator } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
 import { fireEvent, screen, userEvent, within } from '@testing-library/react-native'
-import { Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
-import type { TestInstance } from 'test-renderer'
-import { elementsOf, expectAccessible } from '../test/a11y.ts'
-import { render } from '../test/render.tsx'
+import { Platform, StyleSheet } from 'react-native'
+import { drawingsOf, expectAccessible } from '../test/a11y.ts'
+import { render, styleOf } from '../test/render.tsx'
 import { TabBar, type TabBarProps } from './TabBar.tsx'
 import type { Destination } from './tabs.ts'
 
@@ -41,15 +40,6 @@ function bar(over: Partial<TabBarProps> = {}) {
   )
 }
 
-function styleOf(element: TestInstance): ViewStyle {
-  const style: unknown = element.props.style
-  return StyleSheet.flatten(
-    (typeof style === 'function'
-      ? (style as (state: { pressed: boolean }) => unknown)({ pressed: false })
-      : style) as StyleProp<ViewStyle>,
-  )
-}
-
 const slot = (destination: Destination) => screen.getByTestId(`tab-bar:${destination}`)
 /** What holds the slots: the list of tabs itself. */
 const tabs = () => screen.getByTestId('tab-bar:tabs')
@@ -72,7 +62,7 @@ describe('the tab bar', () => {
     for (const each of slots) {
       // The word is drawn, and a glyph beside it: never one without the other.
       expect(within(slot(each)).getByText(labels[each])).toBeOnTheScreen()
-      expect(elementsOf(slot(each)).some((inner) => inner.type === 'RNSVGSvgView')).toBe(true)
+      expect(drawingsOf(slot(each))).not.toEqual([])
     }
     expectAccessible()
   })

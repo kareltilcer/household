@@ -12,7 +12,7 @@ import type { SessionState } from '../session/context.ts'
 import { account, SessionFixture } from '../session/fixture.tsx'
 import { forget } from '../session/forget.ts'
 import { ids } from '../test/fixtures.ts'
-import { render, TestProviders } from '../test/render.tsx'
+import { render } from '../test/render.tsx'
 import { Text } from '../ui/Text.tsx'
 import { addressOf, type Own } from './address.ts'
 import {
@@ -248,11 +248,7 @@ describe('a household a link switched to', () => {
     const view = await render(<Frame household={household} />)
     return {
       opens: (next: string, inFront = true) =>
-        view.rerender(
-          <TestProviders>
-            <Frame household={next} inFront={inFront} />
-          </TestProviders>,
-        ),
+        view.rerender(<Frame household={next} inFront={inFront} />),
     }
   }
 

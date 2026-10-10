@@ -5,10 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { catalogs, pseudolocalize } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
 import { screen, userEvent, within } from '@testing-library/react-native'
-import { Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
-import type { TestInstance } from 'test-renderer'
+import { Platform } from 'react-native'
 import { expectAccessible } from '../../test/a11y.ts'
-import { render } from '../../test/render.tsx'
+import { render, styleOf } from '../../test/render.tsx'
 import * as announcer from '../../ui/announce.ts'
 import { devMarker } from '../marker.ts'
 import { drawings, widths, type Width } from './fixtures.ts'
@@ -24,15 +23,6 @@ const en = catalogs.en
 const themes = ['light', 'dark'] as const
 const scales = [1, 2] as const
 const rooms = Object.keys(widths) as Width[]
-
-function styleOf(element: TestInstance): ViewStyle {
-  const style: unknown = element.props.style
-  return StyleSheet.flatten(
-    (typeof style === 'function'
-      ? (style as (state: { pressed: boolean }) => unknown)({ pressed: false })
-      : style) as StyleProp<ViewStyle>,
-  )
-}
 
 let said: jest.SpiedFunction<typeof announcer.announce>
 

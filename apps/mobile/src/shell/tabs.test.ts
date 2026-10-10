@@ -4,14 +4,11 @@ import { describe, expect, it } from '@jest/globals'
 import { inHousehold } from '../app/paths.ts'
 import type { Household, ModuleKey } from '../household/data.ts'
 import { modules, type ModuleRegistry } from '../modules/registry.ts'
-import { ids } from '../test/fixtures.ts'
+import { ids, screensOf } from '../test/fixtures.ts'
 import { addressOf, canAdd, destinations, hasChat, placeOf, routeName, tabsOf } from './tabs.ts'
 
-const at = (module: ModuleKey) => ({
-  home: (household: string) => inHousehold.module(household, module),
-})
 const taking = (module: ModuleKey) => ({
-  ...at(module),
+  ...screensOf(module),
   capture: (household: string) => inHousehold.module(household, module, 'new'),
 })
 
@@ -19,8 +16,8 @@ const taking = (module: ModuleKey) => ({
 const built: ModuleRegistry = {
   shopping: taking('shopping'),
   tasks: taking('tasks'),
-  chat: at('chat'),
-  admin: at('admin'),
+  chat: screensOf('chat'),
+  admin: screensOf('admin'),
 }
 
 type Asked = Pick<Household, 'my_grants' | 'entitlement'>
@@ -77,13 +74,13 @@ const cases: readonly (readonly [string, Asked, ModuleRegistry, readonly string[
   [
     'a module the build has no capture surface for offers nothing to create',
     everything,
-    { shopping: at('shopping'), chat: at('chat') },
+    { shopping: screensOf('shopping'), chat: screensOf('chat') },
     ['home', 'today', 'chat', 'more'],
   ],
   [
     'a capture surface for a module the member only reads offers them nothing',
     everything,
-    { tasks: taking('tasks'), chat: at('chat') },
+    { tasks: taking('tasks'), chat: screensOf('chat') },
     ['home', 'today', 'chat', 'more'],
   ],
   [
