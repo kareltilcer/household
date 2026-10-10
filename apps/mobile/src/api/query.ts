@@ -12,6 +12,7 @@ import {
   onlineManager,
   QueryCache,
   QueryClient,
+  type FetchStatus,
   type Query,
 } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
@@ -128,6 +129,19 @@ export function watchConnection(): () => void {
     stop()
     onlineManager.setOnline(true)
   }
+}
+
+/**
+ * Whether a read that holds nothing could not be made: it failed, or it was asked with no
+ * connection and waits for one, which is neither loading nor failed. To a member the two are
+ * the same, and it is said so: no skeleton stands for a read that is not on its way. Every
+ * reader that has something to draw in a read's place asks this, and none decides it again.
+ */
+export function couldNotBeRead(read: {
+  readonly isError: boolean
+  readonly fetchStatus: FetchStatus
+}): boolean {
+  return read.isError || read.fetchStatus === 'paused'
 }
 
 const hearConnection = (notify: () => void) => onlineManager.subscribe(notify)

@@ -22,7 +22,8 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
-import { useSession } from '../session/context.ts'
+import { couldNotBeRead } from '../api/query.ts'
+import { sameId, useSession } from '../session/context.ts'
 import type { DataState } from '../ui/states.ts'
 
 export type HouseholdSummary = components['schemas']['HouseholdSummary']
@@ -156,11 +157,7 @@ export function useHousehold(household: string): HouseholdRead {
   if (!named || refused || (wasRefused && asking)) return { status: 'gone' }
   if (!member) return { status: 'reading' }
   if (read.data !== undefined) return { status: 'read', household: read.data }
-  // A read asked for with no connection may wait for one, neither loading nor failed: to a
-  // member it could not be made, and is said so.
-  return read.isError || read.fetchStatus === 'paused'
-    ? { status: 'unread', retry }
-    : { status: 'reading' }
+  return couldNotBeRead(read) ? { status: 'unread', retry } : { status: 'reading' }
 }
 
 /** Where the household a member was last in is kept, on this device, for each member. */
@@ -216,11 +213,7 @@ export function opening(
   last: string | null,
 ): HouseholdSummary | undefined {
   const open = households.filter((household) => household.entitlement?.state !== 'suspended')
-  return (
-    open.find((household) => household.id.toLowerCase() === last?.toLowerCase()) ??
-    open[0] ??
-    households[0]
-  )
+  return open.find((household) => sameId(household.id, last)) ?? open[0] ?? households[0]
 }
 
 /** What a read tells of itself, as TanStack Query holds it. */
@@ -238,9 +231,7 @@ export interface Read {
  * for it (`useOnline`, api/query.ts).
  */
 export function readState(read: Read, online: boolean, empty = false): DataState {
-  if (read.data === undefined) {
-    return read.isError || read.fetchStatus === 'paused' ? 'error' : 'loading'
-  }
+  if (read.data === undefined) return couldNotBeRead(read) ? 'error' : 'loading'
   if (empty) return 'empty'
   return online ? 'populated' : 'offline'
 }

@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useProblems } from '../api/ApiProvider.tsx'
 import { createKeep, removeKept, type Keep } from '../api/keep.ts'
 import { unwrap } from '../api/problem.ts'
+import { couldNotBeRead } from '../api/query.ts'
 import { useI18n } from '../i18n/I18nProvider.tsx'
 import { restoreDestination, takeDestination } from '../links/destination.ts'
 import { forgetPush } from '../push/registration.ts'
@@ -171,7 +172,7 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
     account.data !== undefined && sameId(account.data.id, member) ? account.data : undefined
   // Asked with no connection the question may wait for one, neither answered nor failed: with
   // nothing kept, the server could not be asked, and no skeleton says otherwise.
-  const unasked = account.isError || account.fetchStatus === 'paused'
+  const unasked = couldNotBeRead(account)
 
   const state = useMemo<SessionState>(() => {
     if (!read) return { status: 'unknown' }
