@@ -38,7 +38,8 @@ jest.mock('expo-router', () => ({
   Redirect: () => null,
 }))
 
-// The sync group's bars, as a mark of where the frame draws them and for which household.
+// The bars above the screens (sync/HouseholdBars.tsx), as a mark of where the frame draws them
+// and for which household: what they say has a test of its own.
 jest.mock('../sync/HouseholdBars.tsx', () => {
   const { createElement } = jest.requireActual<typeof import('react')>('react')
   const { View: Mark } = jest.requireActual<typeof import('react-native')>('react-native')
@@ -217,7 +218,7 @@ describe('a household’s frame, once its household is read', () => {
     await drawn()
     const frame = screen.getByTestId('household-frame')
     const order = elementsOf(frame).map((element) => String(element.props.testID))
-    // The sync group's bars first, told whose they are; the screens under them.
+    // The household's bars first, told whose they are; the screens under them.
     expect(order.indexOf(`bars:${ids.household}`)).toBeGreaterThan(-1)
     expect(order.indexOf(`bars:${ids.household}`)).toBeLessThan(order.indexOf('inside'))
     expect(screen.getByTestId(`inside:name:${households.own.name}`)).toBeOnTheScreen()

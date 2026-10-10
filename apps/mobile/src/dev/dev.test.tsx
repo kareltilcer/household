@@ -1,6 +1,7 @@
-// The dev screens the core draws: the engine's lines, the toolbar, the index and the page of
-// primitives. Their words are fixtures (D-154), so a test reads them by `testID`, as the
-// end-to-end flow does.
+// The dev screens every other one stands on: the engine's lines, the toolbar, the index and the
+// page of primitives. Their words are fixtures (D-154), so a test reads them by `testID`, as the
+// end-to-end flow does. The harness, the shell's page, the sync UI's and the sign-in form each
+// have a test beside them.
 import { describe, expect, it, jest } from '@jest/globals'
 import { pseudolocalize } from '@household/i18n'
 import { fonts } from '@household/tokens'
@@ -148,9 +149,12 @@ describe('the dev index and the page of primitives', () => {
     expectAccessible()
   })
 
-  it.each([1, 2])('draw what the core built accessibly, at a text scale of %i', async (scale) => {
-    await render(<Primitives />, { scale })
-    expect(screen.getByTestId(`${devMarker}:primitives`)).toBeOnTheScreen()
-    expectAccessible()
-  })
+  it.each([1, 2])(
+    'draw the page of primitives accessibly, at a text scale of %i',
+    async (scale) => {
+      await render(<Primitives />, { scale })
+      expect(screen.getByTestId(`${devMarker}:primitives`)).toBeOnTheScreen()
+      expectAccessible()
+    },
+  )
 })

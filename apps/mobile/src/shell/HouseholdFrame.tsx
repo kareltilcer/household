@@ -10,8 +10,9 @@
 //   household's id asks the server nothing. Item 29 draws the lockout here, for a household the
 //   member's own list still names.
 // - Once it is read, the screens, and above them the bars that are the household's and no one
-//   screen's: the sync group's first (offline, and *not receiving*), then the place for item
-//   29's one entitlement banner, then the notice that a link changed the household.
+//   screen's: the connection's first (offline, and *not receiving*: sync/HouseholdBars.tsx),
+//   then the place for item 29's one entitlement banner, then the notice that a link changed
+//   the household.
 //
 // It also remembers the household as the one its member was last in on this device, which is
 // where the app opens next (D-162), and reads their arrangement of its modules, so that no

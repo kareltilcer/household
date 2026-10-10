@@ -406,7 +406,7 @@ export const neverTruncated: Rule = (tree) =>
       failure('truncated', element, 'is a text held to a number of lines, and cut off past them'),
     )
 
-/** Every rule, in the order a failure is listed. A group that adds a rule adds it here. */
+/** Every rule, in the order a failure is listed. A rule that is added is added here. */
 export const rules: readonly Rule[] = [
   named,
   registeredName,
