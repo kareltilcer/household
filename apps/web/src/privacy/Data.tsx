@@ -109,6 +109,10 @@ export function Data() {
   // leaves: the one that restricts for the one that lifts, the one that deletes for the day it
   // is scheduled for. The focus it held, or that its question gave back to it, goes to the
   // screen's own place, once the question is closed and the household is drawn as it now stands.
+  // That may be before the question closes: another owner made the same change, the household
+  // was read again under the open question, and the control that opened it is gone by the time
+  // it is closed, answered or not. So the focus is looked for whenever a question has closed,
+  // and again when the household then changes, until it has.
   const before = useRef<{ readonly restricted: boolean; readonly scheduled: boolean } | null>(null)
   const done = () => {
     before.current = { restricted, scheduled: scheduled !== null }
@@ -117,9 +121,10 @@ export function Data() {
   useEffect(() => {
     const was = before.current
     if (was === null || open !== null) return
+    // Moved only where it fell to the page: given back to a control that is still here, it stays.
+    refocus(view.current)
     if (was.restricted === restricted && was.scheduled === (scheduled !== null)) return
     before.current = null
-    refocus(view.current)
   }, [open, restricted, scheduled, view])
 
   const show = (next: Open) => {
@@ -127,9 +132,9 @@ export function Data() {
     say(null)
     setOpen(next)
   }
-  const close = () => {
-    setOpen(null)
-  }
+  // A question closed unanswered is closed all the same, over whatever the household came to
+  // under it.
+  const close = done
   // Refused for where the member now stands: said on the page, which is read again and then
   // draws no control for them.
   const ended = (text: string) => {

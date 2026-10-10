@@ -21,10 +21,14 @@
 // processor has not said yet, and who pays meanwhile. An offer that was taken back or lapsed
 // while the form stood open moves nothing, whatever the processor confirmed, and is said so.
 //
-// Declining leaves the subscription as it is, and the payer is told of it. Only an owner whose
-// address is verified takes billing over: an unverified one is refused where they press, with
-// the link offered again in that press's place (A-4), and declining, which asks for no verified
-// address, stays beside it.
+// Declining leaves the subscription as it is, and the payer is told of it. But a decline is
+// answered the same where no offer was open any more, and an acceptance is refused where none
+// is; and an offer is spent as billing moves, so either answer is also what an acceptance of
+// this owner's own leaves behind once it has landed. Neither is taken, then, to mean that
+// nothing changed or that somebody goes on paying: after a decline who pays is read, and said
+// only as it is read. Only an owner whose address is verified takes billing over: an unverified
+// one is refused where they press, with the link offered again in that press's place (A-4), and
+// declining, which asks for no verified address, stays beside it.
 //
 // Everybody else who opens the address is told how it stands and nothing is offered: the payer,
 // that there is nothing to take over from themself; another owner, that no offer is waiting for
@@ -51,6 +55,7 @@ import { NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
 import {
   notTheirs,
+  subscriptionQuery,
   useReread,
   useRereadWhereRefused,
   useSubscription,
@@ -113,9 +118,11 @@ function Offered({
   const day = (at: string) => format.dayOf(at, zone)
 
   /**
-   * The offer is open no longer: taken back, lapsed, or made to somebody else since. Said in a
-   * toast: the household read again draws no offer, and a banner beside these presses would
-   * leave with them.
+   * The offer is open no longer: taken back, lapsed, made to somebody else since, or spent by
+   * an acceptance of this owner's own that landed, in another tab or with its answer lost, the
+   * server spending an offer as billing moves. So nothing is said of whether anything changed:
+   * what is read again says how billing stands. Said in a toast: the household read again draws
+   * no offer, and a banner beside these presses would leave with them.
    */
   const gone = () => {
     refusals.clear()
@@ -131,12 +138,15 @@ function Offered({
         await api.POST('/households/{household_id}/billing/transfer/accept', { params: { path } }),
       ),
     onSuccess: (answer) => {
+      // The subscription as the answer has it, whichever follows: a household that subscribed
+      // since this page read it is asked for a card, which is not drawn under the sentence that
+      // none is asked for.
+      queries.setQueryData(subscriptionKey(id), answer.subscription)
       if (answer.confirmation !== null) {
         setIntent(answer.confirmation)
         return
       }
       // No subscription, and so no card to confirm: billing has moved already.
-      queries.setQueryData(subscriptionKey(id), answer.subscription)
       toast({ message: t('billing.takeover.done', { household: name }) })
       void reread()
     },
@@ -152,11 +162,34 @@ function Offered({
   })
   const decline = useMutation({
     ...askedNow,
-    mutationFn: async () => {
+    // The server answers the same where no offer was open any more, one that an acceptance of
+    // this owner's own had spent among them, so who pays is read, and what is said is what that
+    // reads: that somebody goes on paying only of a payer the subscription then names who is not
+    // its reader, and by the name it gives them. It answers that name, or null.
+    mutationFn: async (): Promise<string | null> => {
       unwrap(await api.DELETE('/households/{household_id}/billing/transfer', { params: { path } }))
+      // The answer itself says that no offer is open now: kept so before who pays is read, or a
+      // read that failed would leave the offer and its two presses drawn under the sentence that
+      // none is open.
+      queries.setQueryData<Subscription>(subscriptionKey(id), (kept) =>
+        kept === undefined ? kept : { ...kept, transfer: null },
+      )
+      try {
+        const stands = await queries.query({ ...subscriptionQuery(api, id), staleTime: 0 })
+        const payer = stands.payer?.label ?? ''
+        return payer === '' || isPayer(stands, me.id) ? null : payer
+      } catch {
+        // Unread: nothing is said of who pays.
+        return null
+      }
     },
-    onSuccess: () => {
-      toast({ message: t('billing.takeover.declined', { name: from }) })
+    onSuccess: (payer) => {
+      toast({
+        message:
+          payer === null
+            ? t('billing.offer.closed')
+            : t('billing.takeover.declined', { name: payer }),
+      })
       void reread()
     },
     onError: (error) => {
@@ -348,14 +381,20 @@ function Read() {
             if (subscription === undefined) return null
             const theirs = offer !== null && sameId(offer.offered_to.user_id, me.id)
             if (confirmed) {
+              // Taken back, or lapsed, while the form stood open: the processor has their
+              // method, and billing moves on no offer. Nothing is waited for then, and the
+              // section is not titled as if something were.
+              const none = !pays && !theirs
               return (
-                <Section title={t('billing.takeover.confirmed.title')}>
+                <Section
+                  title={
+                    none ? t('billing.takeover.none.title') : t('billing.takeover.confirmed.title')
+                  }
+                >
                   {/* A status from the press on: one element, whose words change in place. */}
                   <p role="status" className={account.text}>
-                    {!pays && !theirs
-                      ? // Taken back, or lapsed, while the form stood open: the processor has
-                        // their method, and billing moves on no offer.
-                        t('billing.takeover.gone')
+                    {none
+                      ? t('billing.takeover.gone')
                       : wait.state === 'unsaid' && !pays
                         ? payerName === null
                           ? t('billing.takeover.unsaid')

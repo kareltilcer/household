@@ -141,7 +141,7 @@ export function useSaid(): readonly [Said | null, (text: string | null) => void]
  * away once the household is read, from a member whose focus was never on one.
  *
  * It is the screen's whole page that is watched, and one place that the focus is given. A screen
- * of several parts, each with a place of its own, keeps the focus by part (billing/parts.tsx).
+ * of several parts, each with a place of its own, keeps the focus by part (`usePartFocusKept`).
  */
 export function useFocusKept(changes: boolean, open: unknown): RefObject<HTMLDivElement | null> {
   const view = useRef<HTMLDivElement>(null)
@@ -161,6 +161,50 @@ export function useFocusKept(changes: boolean, open: unknown): RefObject<HTMLDiv
     if (last.current?.isConnected === false) refocus(view.current)
   }, [changes, open])
   return view
+}
+
+/**
+ * Where the focus goes when a control of one part of a screen has left the page with the focus
+ * on it: to the part's own place, which takes the ref this answers and a `tabIndex` of -1. A
+ * button gives its place to the payment form, the form to a sentence, *Cancel* to *Resume*, a
+ * question closes over a control that is gone: each took the focus with it, and nothing else
+ * says where its member is (D-166).
+ *
+ * It is moved only where it was last on something inside the part that is on the page no
+ * longer. A focus that went anywhere else meanwhile is its member's and is left alone, and so
+ * is one that was never here: what changes under a member who is reading moves nothing. The
+ * look is taken after every drawing of the part, since a control may leave under a question
+ * that is still open and be missed only when the question closes.
+ *
+ * It is one part that is watched, of a screen that has several, each with a place of its own:
+ * billing's sections (billing/parts.tsx names it `useFocusKept` there), and the bodies of the
+ * privacy centre, each of which reads for itself. A screen with one place for its whole page,
+ * whose controls leave together, keeps the focus by whether they are drawn (`useFocusKept`,
+ * above): the two are not one hook, since that one watches the whole page and would move the
+ * focus to the wrong part here. The look is this component's own, after each of its drawings: a
+ * part whose read is another component's is not seen from here, and has a place of its own.
+ */
+export function usePartFocusKept(): RefObject<HTMLDivElement | null> {
+  const place = useRef<HTMLDivElement>(null)
+  /** The control inside the part that took the focus last, until the focus goes elsewhere. */
+  const held = useRef<Element | null>(null)
+  useEffect(() => {
+    const note = (event: FocusEvent) => {
+      const part = place.current
+      const target = event.target instanceof Element ? event.target : null
+      held.current = target !== null && target !== part && part?.contains(target) ? target : null
+    }
+    document.addEventListener('focusin', note)
+    return () => {
+      document.removeEventListener('focusin', note)
+    }
+  }, [])
+  useEffect(() => {
+    if (held.current?.isConnected !== false) return
+    held.current = null
+    refocus(place.current)
+  })
+  return place
 }
 
 /** A run of plain letters, each accented as the pseudo-locale accents it, and nothing added. */

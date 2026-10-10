@@ -501,4 +501,63 @@ describe('the words this page holds', () => {
     expect(holdsCatalog('cs')).toBe(false)
     expect(holdsCatalog('en')).toBe(false)
   })
+
+  // A fetch that fails part-way leaves the language held in part. A browser may answer a file
+  // asked for again with the failure it kept, as the files here do: asked for in that language
+  // again with a later screen, the part that failed would fail the screen, in a language that
+  // is shown and whole.
+  it('are a screen’s in the language shown, where a switch to another failed part-way', async () => {
+    dropCatalogs()
+    // A household's screen is drawn, in English.
+    holdCatalog('en', withHousehold('en'), ['app', 'household'])
+    await needWords(['household'])
+    const files = heldBack()
+    const czech = fetchCatalog('cs')
+    const unfetched = expect(czech).rejects.toThrow('Failed to fetch')
+    await files.arrive('cs.app')
+    await files.fail('cs.household')
+    await unfetched
+    // What arrived of Czech is held, and Czech is shown to nobody.
+    expect(heldCatalog('cs')).toEqual(partOfCatalog('cs', 'app'))
+    expect(holdsCatalog('cs')).toBe(false)
+
+    // A screen that reads the part that failed, and one more, opens in English.
+    const words = needWords(['household', 'billing'])
+    expect(files.asked()).toEqual(['cs.app', 'cs.household', 'en.billing'])
+    await files.arrive('en.billing')
+    await words
+    expect(holdsCatalog('en')).toBe(true)
+    expect(heldCatalog('en')).toEqual({ ...withHousehold('en'), ...partOfCatalog('en', 'billing') })
+  })
+
+  it('are fetched again in a language whose fetch failed part-way once it has come whole', async () => {
+    dropCatalogs()
+    holdCatalog('en', partOfCatalog('en', 'app'), ['app'])
+    // Of Czech the app's own words arrive, and no other part until the connection is back.
+    let reachable = false
+    const load = vi
+      .spyOn(lazy, 'loadCatalog')
+      .mockImplementation((locale, part) =>
+        reachable || locale === 'en' || part === 'app'
+          ? Promise.resolve(partOfCatalog(locale, part))
+          : Promise.reject(new TypeError('Failed to fetch dynamically imported module')),
+      )
+    await needWords(['household'])
+    await expect(fetchCatalog('cs')).rejects.toThrow('Failed to fetch')
+    expect(heldCatalog('cs')).toEqual(partOfCatalog('cs', 'app'))
+    load.mockClear()
+    await needWords(['billing'])
+    expect(load.mock.calls).toEqual([['en', 'billing']])
+    // Asked for again, Czech is fetched in every part needed by then, and is whole.
+    reachable = true
+    await fetchCatalog('cs')
+    expect(holdsCatalog('cs')).toBe(true)
+    // From then on a part a screen needs is fetched in it too: it may be shown.
+    load.mockClear()
+    await needWords(['storage'])
+    expect(load.mock.calls).toEqual([
+      ['en', 'storage'],
+      ['cs', 'storage'],
+    ])
+  })
 })

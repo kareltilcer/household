@@ -50,11 +50,15 @@ A route names the parts its screen reads beside the app's own, `words` on its li
 screen's file failing, which the route's boundary already says to reload for. The web's store of
 what has arrived (`i18n/catalogs.ts`) keeps, for each language, the merged messages and which
 parts they are, and the parts this page has needed so far: a language asked for is fetched in
-every part needed, a part that becomes needed is fetched in every language the page holds or is
-fetching, and a language is shown once every needed part of it is held, so that a language
+every part needed, a part that becomes needed is fetched in every language the page has held
+whole or is fetching, and a language is shown once every needed part of it is held, so that a language
 switched to while a screen is on its way ends, in either order, with the screen's words in the
-language then shown. The provider reads the store through `useSyncExternalStore`, and a
-translator asked for a key it was not given throws, naming the key and its part.
+language then shown. A language whose fetch
+failed part-way is held in part and shown to nobody, and is asked for nothing more until it is
+fetched whole: asked for a route's parts too, a switch that failed without a word (the
+account's language, as it is read) would fail every screen that names the part it lacked, in the
+language that is shown and whole. The provider reads the store through `useSyncExternalStore`,
+and a translator asked for a key it was not given throws, naming the key and its part.
 
 **No screen reads a word its route does not fetch, and a test holds that statically**
 (`i18n/words.test.ts`). It reads every source file of `apps/web/src` with TypeScript's parser for
@@ -149,24 +153,48 @@ and a second press of one it took is refused in that same kind (the browser show
 had been charged told twice that nothing was). The form then says that it cannot tell yet,
 never that nothing was charged or that the household is as it was, and reads the household
 again, by which its screen draws: once the processor has told the server, the form gives way to
-what is so. A confirmation on its way holds whatever would put the form away, the choice of how
-often to pay among it. `503 billing_unavailable` is answered too once the processor has taken a
+what is so. Subscribing and taking billing over are drawn by the subscription, and give way as it
+is read. A method's replacement is drawn by nothing that says a method is being confirmed, so it
+keeps how the subscription stood when its form was asked for, and where a confirmation came to
+such an end it gives way, saying that the new method is in use, once what is read since names
+another method, or a payment that was owed then as gone through (the browser showed the summary
+naming the new method above a form that said at every press that it could not tell). Those two
+are what says a new method is in use, and nothing else that moves under the page is. A
+confirmation on its way holds whatever would put the form away, the choice of how often to pay
+among it. `503 billing_unavailable` is answered too once the processor has taken a
 change that could not then be read back, and the contract says of it only that the request may
 be sent again: its sentence claims nothing of what was charged or changed, and billing is read
-again after it. An offer taken back is answered `204` as one that was no longer open is, an
+again after it. A question that stays open over such an answer keeps what it was asked for:
+drawn from the subscription read again behind it, the question of how often to pay asked for the
+opposite change once the server had taken the first, and the press that tried again changed the
+plan back and was charged for it (seen in a browser). An offer taken back is answered `204` as one that was no longer open is, an
 accepted one among them, so who pays is read before a payer is told that they go on paying.
+An offer declined is answered the same, and one accepted is answered `404` where the reader's
+own acceptance has landed and its answer was lost on the way: a decline reads who pays before
+it says that anybody goes on paying, and an offer that is open no longer is said to be that and
+no more, never that nothing has changed.
 And the day a new payer's own subscription starts is named, with *nobody pays twice*, only in a
 household that is `active`: where the period's own payment is owed the server starts it at once
-and charges their method (D-133), and a restriction's state does not say whether one is.
+and charges their method (D-133), and a restriction's state does not say whether one is. So is
+the day a cancelled subscription ends on, with *nothing changes until then*: with a payment owed
+the household loses its uploads, and then its writes, by the server's own clock, whatever day
+the period ends on, and the question, its toast and the sentence that stands afterwards say
+that the last payment is owed and name no day.
 
 **The entitlement is said in the shell, from the household's own answer** (D-180).
 `shell/EntitlementBanner.tsx` draws one banner under the offline bar's place
 (`shell/HouseholdBars.tsx`) for the state `useHousehold().entitlement` resolves, to the reader
 it is drawn for: the payer, another owner, or a member, who is who being read off the members
 (`useReader`, `household/data.ts`). It reads no billing and names no price. The day a lapse
-keeps a household's data until is said of no household whose own deletion is scheduled, here,
-on billing, or where a restriction is lifted: the deletion comes first, the erasure taking
-whichever does, and a payment does not take it back. The settings'
+keeps a household's data until is not said where the household's own deletion is scheduled for a
+day no later, here, on billing, or where a restriction is lifted: the erasure takes whichever of
+the two is due first and neither holds the other back, so a deletion scheduled in the last
+thirty days of a lapse comes after the lapse's day, which then stands as the day the data goes
+(`keptUntil`, `household/households.ts`; the first reading, that a deletion always comes first,
+hid the earlier day from every member). The deletion's own notice names the deletion's day, as
+the server gives it, under a banner that then names the earlier one; and an export's row names
+the earlier of its own last moment and the moment its household goes. A payment takes no
+scheduled deletion back. The settings'
 frame, which said that a household takes no writes, says only whose changing what is there is.
 In a household that takes no writes the offline bar promises nothing of a change, the conflict
 panel draws no answer, and the refused-change panel keeps *Discard*.
@@ -195,7 +223,9 @@ has caught up, holds nothing queued and the household takes writes. Caught up is
 applied since the replica's stream came up (`Replica.caughtUp`, `@household/sync`), and not one
 from the visit before: reported as the stream came up, a copy that had yet to receive what
 changed while it was closed read to the server as one that does not match, and its row said so
-with *Download again* beside it (seen in a browser, at every visit after a change). The diagnostic bundle
+with *Download again* beside it (seen in a browser, at every visit after a change). Nor does
+this browser's row say *In sync* before its stream has said anything: until then it draws no
+standing, unless something else is so, a change waiting or a copy that does not match. The diagnostic bundle
 (`health/bundle.ts`) is composed from that state and the last outcomes projected to their id,
 entity type, operation, outcome, code and time; it is drawn part by part and as the very text
 that is sent, and its id is made anew whenever a part is taken out or put back, so that a
@@ -231,7 +261,7 @@ with its runs of spaces folded (D-182), a page drawing two in a row as one.
 | The stand-in's events sent by the spec, as the server's tests post them | Every spec would sign and order Stripe's events by hand, and get the order wrong in its own way. The stand-in knows what it changed, and an act that answers once the household is settled leaves a spec nothing to wait for |
 | FR-HH4 as written, the server changed to let a payer whose subscription will not charge again leave | D-174 |
 | Billing told who pays by its reader's own row among the members, as the banner is (`useReader`) | The banner reads no billing, and the members are what every member may read. Billing draws the subscription, which names its payer, and reads it again by itself while it waits for the processor's word: told by the members beside it, the page would say two things of one payer for as long as the two reads differ. The two share how two ids are compared, and nothing else |
-| One hook for where the focus goes once the control that held it has left | They are two rules. A settings screen has one place for its whole page and controls that leave together, with its member's standing: it watches the page, a notice above that place and a dialog beside it among it. A billing screen has several parts, each with a place and controls of its own that come and go: watched as a page, a control that left one part would send the focus to another's. Both are kept, the first where every screen may import it (`account/common.ts`) |
+| One hook for where the focus goes once the control that held it has left | They are two rules. A settings screen has one place for its whole page and controls that leave together, with its member's standing: it watches the page, a notice above that place and a dialog beside it among it. A billing screen has several parts, each with a place and controls of its own that come and go: watched as a page, a control that left one part would send the focus to another's. Both are kept, where every screen may import them (`account/common.ts`: `useFocusKept` for a page, `usePartFocusKept` for a part of one, which billing's sections and the privacy centre's bodies are) |
 | The billing screen's word for a state read from the switcher's, which every page has fetched | They are not the same words: the switcher's stand after a role in the middle of a line and are written small, and in Polish they agree with the household where billing's agree with the subscription. A capital put on by code is a word no translator wrote |
 | A word that is no catalog's bracketed and padded under the pseudo-locale, as a message is | To be so it was read as a message, and what the server gave, an archive's own name for an entry, may hold a brace. Data is accented letter for letter and nothing more (`useData`), which is all the pass asks of it: it tells data from a word nobody translated. A day's name and a language's lose their padding there |
 | A size under a thousand bytes said in bytes, and billing's sizes in gigabytes whatever they hold | `Intl` writes a byte as an English word in whichever language is shown. Sizes are said by one formatter (`format.bytes`), in the largest unit of those storage is sold in that the size fills, so that the storage screen and the billing screen say one figure in one way |
@@ -265,12 +295,25 @@ with its runs of spaces folded (D-182), a page drawing two in a row as one.
 | A table or a list behind the storage trend's columns, a value a column | The plot draws no figure a sighted reader could take from it, no axis and no value, and what it shows, the first day, the last and the fullest, is said in words. Ninety rows of sizes would be a second screen |
 | *In sync* held back on this browser's row while its replica is still downloading | A replica holds four of the household's own entities today and is whole before the row is drawn. It is the first module of size's to settle (Consequences) |
 | The mismatch's sentence not promising that downloading again puts it right; the row of a replica already told to download again saying that it has | A type the server does not sync is listed for a client newer than its server, which the web, served with its API, is not; and the contract answers one word for a replica marked and one told (plan Q11). The row says that it says so until the report after |
-| A read-only strip over an empty list of replicas or of clients | This browser's own row is drawn from the replica itself, so the list is empty only in a tab that holds none, where the sentence that nothing has reported is true as it stands |
+| A read-only strip over an empty list of replicas | This browser's own row is drawn from the replica itself, so the list is empty only in a tab that holds none, where the sentence that nothing has reported is true as it stands. The clients' list is the server's alone, and is drawn under the strip where it is empty too: its teaching sentence promised a listing that no report makes true in a household that takes none |
 | *Download again* withheld from the rows of this browser's earlier sign-ins | Nothing says which replica will never report again: each is its member's, listed for ninety days after its last report (D-128), and marking one asks nothing of a browser that is gone |
 | *Card* never said of a method the catalog cannot name | A card of a brand this build has no word for is a card, and is said to be one; only a kind with no expiry, which no card is, is said to be another method |
 | The take-over's screen holding, across a reload, that a method is being confirmed | The contract has no word for a setup on its way (Consequences): the offer is drawn again with its presses, and a second setup is inert |
 | A size under fifty bytes written as a tenth of a kilobyte, so that something is never written as nothing | Every size is rounded to a tenth of its unit, and a floor would write more than is stored. What rounds to a thousand of one unit is written as one of the next |
 | One word for a subscription in German, the six older messages moved to *Abo*; one verb for making an owner in Czech, Slovak and Polish | Both words are right in each, and every one of them is a draft in its ledger: which of two a language keeps is its reviewer's pass, with the rest of the catalog before them |
+| The focus kept by `StateFrame` itself, in one place for every frame, where *Try again* leaves with its sentence | The frame draws a skeleton, an empty state or a body in the banner's place, and has no element of its own to hand the focus to: a wrapper in the primitive is another element round every body of the app, items 24 to 26's among them, and round the one locator the suite finds a screen's place by. Each body of this item is given its place, as storage, sync health and the clients had theirs (`useFocusKept`); the older screens' are handed on (Consequences) |
+| The name typed to delete a household compared in one normal form, with the characters no page draws taken out of it | D-182 folds what a page folds, a run of white space, so that the name as it is read is the name as it is typed. A name saved with a decomposed letter or a zero-width character is drawn as it was saved, and is typed by copying it from the sheet that shows it: folding more is a rule of which two names are the same, which is a name's own to have (`text.Name`) and no comparison's. The contract says *the number of spaces*, and the server folds every white space: more than it promises, and nothing a client leans on |
+| A promise that holds only without a second condition hedged in each sentence that makes it: *until a subscription is paid for* beside a restriction, *until an owner lifts the restriction* over a grace, *brings writing back* under a lapse that is also restricted, *the subscription is not affected* where there is none, *stays downloadable for seven days* where the household goes sooner | Each stands beside the sentence of the other condition, in the same banner or on the next line, and the control that would act says what it comes to before it is pressed (`data.lift.after.*`, `billing.means.restricted`). A sentence for each pair of conditions is four variants of four messages in five languages, for a household that is restricted and lapsed at once. Where a sentence was false by itself it was changed: the lift's, a trial that ran out being no subscription that lapsed, and an export's own row, which names the earlier moment |
+| The cancel's question, and a trial's notice, varied where the household's deletion is scheduled, each speaking of a time the household may not reach | The deletion's own notice says its day on the settings' first screen and on the data screen, and whoever scheduled it knows. The banner's two dated promises, a lapse's day and a grace's, are held against the deletion's; a variant of each sentence that carries no date is declined |
+| *Is told* taken out of what declining an offer comes to, as it was taken out of the toast; *until they accept* written out as *until they accept and confirm a payment method* | The toast followed a `204` that does not say a decline happened. The sentence before the press is of a decline that does, which the server tells the payer of by a push, to a browser or a device that registered for one: the same gap as an email to an unverified address (Consequences). The shorter phrase stands on screens whose next sentence says the two steps |
+| What a lifted suspension draws for the moment between two answers held as it was | The list may answer before the household does, and *not available* is then drawn until the household's own answer takes its place, a moment later. Holding what was last drawn is a second memory beside the one that keeps the lockout standing, for a flash nobody has met |
+| A state or a status this build does not know drawn as none wherever a screen switches on one | The contract's states are a closed list, and a build that lacks one fails its own type check. A page loaded before a deployment that adds one is the case: the banner, which stands above every screen's boundary, draws none for it, and a screen that meets it fails inside its own boundary, which says to reload, and the reload is the build that knows it |
+| The status under a card confirmed for a take-over drawn as a region that is in the page before its words; the bundle built again once the connection is known; the consents sent with the version they were read at | A screen reader that passes over a region arriving with its words was not heard, the suite running none, and the focus is put on the screen's place as the form leaves, where the sentence is. The bundle is its member's to read before it is sent, and one that changed under them is not the one they read: it says *not known yet* of a connection that was not. The contract takes both consents and no version (D-142): the page sends what it shows |
+| A download begun in a new tab, or said only once the browser has it | A tab opened after the job was read again is a pop-up to the browser, and the policy admits no frame of the object store's. A navigation to a link that answers an attachment keeps the page; one to a store that cannot be reached draws the browser's own error in the app's tab, from which *Back* returns (Consequences). Nothing tells a page that a download began, so the toast says what the page did |
+| A confirmation the bank's own challenge refused told apart from one whose answer was lost, by the processor's code | The app is handed the kind of a refusal and no more (`billing/stripe.ts`), and a challenge that failed and an answer that was lost are one kind. That the page cannot tell yet is true of both, and its way on, to try again, is the right one for the first |
+| What the storage screen says of *the month's bill* left out of a household with no subscription | The month's own section there says that nothing is billed without one, beside the figures; billing's own projected charge is left out where there is none. Nothing is stored anywhere until a module writes files |
+| Several *Try again*s of one page given names of their own; *Go to billing* left out of the banner on billing itself; an entry of the settings' navigation marked on the exports' screen; a restriction's reason and a suspension's notice drawn as data; `billing.refused.already_subscribed` taken out | Each *Try again* stands inside a section that is named. The others are differences no member is misled by, and each is a branch or a property for it |
+| The web job's time limit raised for the larger suite | main's web job took six and a half minutes on 2026-10-09 under a limit of thirty, and this item's suite is a fifth larger, not three times |
 
 ## Consequences
 
@@ -307,6 +350,25 @@ with its runs of spaces folded (D-182), a page drawing two in a row as one.
   does it say that a method is being confirmed for a hand-over, so a reload meanwhile draws the
   offer again; whether a restricted household's payment is owed; or that an email it promises,
   of an offer or of billing having moved, reaches only a verified address.
+- Items 25's and 26's screens were not held to what this item's now are, and each is its own
+  item's to mend: *Try again* drops the focus to the page on the leave screen, the devices and
+  the account's deletion, and *Dismiss* on the notifications' refused strip and on the *switched
+  household* banner (D-166); the account's deletion still tells a payer to *cancel the
+  subscription*, which the server does not take from the payer of a household that goes on (the
+  sibling of D-174); and the leave screen says *nothing has changed* after a request that got no
+  answer.
+- The server's `deletion_scheduled_at`, the `executes_at` its request is answered with and its
+  email name the deletion's own day where a lapse's earlier day is the one the data goes on. The
+  banner names the earlier day; the deletion's notice and its sheet's *thirty days* do not.
+- A download from an object store that cannot be reached draws the browser's own error page in
+  the app's tab, and *Back* returns to the app.
+- Taking billing over in a household whose first payment is a bank debit still on its way moves
+  the payer while the debit clears into a subscription that is the former payer's.
+- What an owner reads of a member's client, its label or its User-Agent, its version and its
+  last report, is in no export of that member: `sync_replicas` has no `ExportSource`.
+- `postSyncDigest`'s description in the contract speaks of a re-download *an owner asked for*;
+  any member asks it of their own replicas (D-177). And no test holds the plural categories each
+  language needs: one of the server's emails lacks Czech's and Slovak's *many*.
 - A browser's own row says *In sync* from its connection alone. A replica holds four of the
   household's own entities today and is whole at once: the first module of size makes the row
   wait for the download (**item 28** on).

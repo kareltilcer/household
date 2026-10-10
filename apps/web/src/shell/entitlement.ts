@@ -7,7 +7,7 @@
 // the state. `suspended` is no banner either: its household answers nothing at all, and the
 // shell draws the lockout in its place. `past_due` restricts nothing and is its owners' to know
 // (PRD 04 §6), so a member who is none is shown none.
-import type { Household } from '../household/households.ts'
+import { deletedBy, keptUntil, type Household } from '../household/households.ts'
 
 export type Entitlement = NonNullable<Household['entitlement']>
 export type Restriction = NonNullable<Entitlement['restriction']>
@@ -28,14 +28,16 @@ export type Shown =
 
 /**
  * The banner `entitlement` asks for, to a reader who is an owner or is not: one, or none.
- * `deleting` is whether the household's deletion is scheduled: it then goes on that day, which is
- * sooner than the day a lapse keeps its data until, so that day is not said (the erasure takes
- * whichever comes first, and the deletion's own notice says its day).
+ * `deletion` is when the household's own deletion is scheduled for, or null where none is. A day
+ * the state promises is said only where the household reaches it: the erasure takes whichever is
+ * due first of a deletion and the day a lapse keeps its data until, so that day is not said where
+ * the deletion comes no later, whose own notice says its day, and stands where it comes later;
+ * nor is the day a household in grace becomes read-only said of one that is gone by then.
  */
 export function bannerOf(
   entitlement: Entitlement | undefined,
   owner: boolean,
-  deleting = false,
+  deletion: string | null = null,
 ): Shown | null {
   const restriction = entitlement?.restriction ?? null
   switch (entitlement?.state) {
@@ -48,13 +50,16 @@ export function bannerOf(
     }
     case 'past_due':
       return owner ? { kind: 'past_due' } : null
-    case 'grace':
-      return { kind: 'grace', endsAt: entitlement.grace_ends_at ?? null }
+    case 'grace': {
+      const endsAt = entitlement.grace_ends_at ?? null
+      const gone = endsAt !== null && deletedBy({ deletion_scheduled_at: deletion }, endsAt)
+      return { kind: 'grace', endsAt: gone ? null : endsAt }
+    }
     case 'read_only':
     case 'canceled':
       return {
         kind: entitlement.state,
-        retainedUntil: deleting ? null : (entitlement.data_retained_until ?? null),
+        retainedUntil: keptUntil({ entitlement, deletion_scheduled_at: deletion }),
         restriction,
       }
     case 'restricted':

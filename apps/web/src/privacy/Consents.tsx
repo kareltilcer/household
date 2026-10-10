@@ -9,8 +9,10 @@
 // come in, so only the answer to the change made last is drawn, and once every one of them is
 // answered, and not before, what the server holds is read: read after the last one made but
 // before an earlier one landed, it would be drawn over by nothing when that one did. A change
-// that was refused is said, and put back where it was the last one made; an earlier one's
-// refusal leaves what the later one chose, which the read then settles.
+// that was refused is put back and said where it was the last one made, and only there. An
+// earlier one's refusal leaves what the later one chose and says nothing: the later one sent
+// its value too, so whether it is saved is that one's answer to give, and what the server came
+// to hold is what the read then settles.
 //
 // The switch for statistics says what they would hold and what they never would, and claims no
 // more than is so: the web app collects none yet, and the switch records the choice. A child
@@ -19,7 +21,7 @@
 import type { components } from '@household/api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId, useRef, useState } from 'react'
-import { readState, useNoWithdrawal, useOwnZone } from '../account/common.ts'
+import { readState, usePartFocusKept, useNoWithdrawal, useOwnZone } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
@@ -29,10 +31,12 @@ import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import { Button } from '../ui/Button.tsx'
 import { Switch } from '../ui/Choice.tsx'
+import { cx } from '../ui/cx.ts'
 import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import { SyncMark } from '../ui/StatusMark.tsx'
+import styles from './Privacy.module.css'
 
 type Kept = components['schemas']['Consents']
 
@@ -85,11 +89,12 @@ function Choices() {
       if (context.turn === sent.current) queries.setQueryData(consentsKey, saved)
     },
     onError: (error, _next, context) => {
-      // Put back, where no change was made after it: what the screen shows is what the server
-      // holds. Under a later change it is that one's choice that stands until the read.
-      if (context?.before !== undefined && context.turn === sent.current) {
-        queries.setQueryData(consentsKey, context.before)
-      }
+      // Put back and said, where no change was made after it: what the screen shows is what the
+      // server holds. Under a later change it is that one's choice that stands until the read,
+      // and nothing is said of this one: the later one carried its value, and where the server
+      // took that, *not saved* would be said over two switches that are both as it holds them.
+      if (context?.turn !== sent.current) return
+      if (context.before !== undefined) queries.setQueryData(consentsKey, context.before)
       setRefusal(say(error))
     },
     onSettled: () => {
@@ -107,92 +112,99 @@ function Choices() {
     : refusal !== null && consents !== undefined
       ? 'rejected'
       : readState(read, online)
+  // A control that leaves with the sentence it stands in takes the focus it held to the page:
+  // *Try again* as soon as the consents are asked for again, and *Dismiss* with the refusal it
+  // puts away. The focus is put on this body's own place, where the switches are, and no other
+  // body's of the page it stands on (account/common.ts).
+  const view = usePartFocusKept()
 
   return (
-    <StateFrame
-      state={state}
-      skeleton={
-        <Skeleton
-          bars={[
-            [60, 1.5],
-            [90, 1],
-            [55, 1.5],
-            [80, 1],
-          ]}
-        />
-      }
-      // Two consents, always both: there is no empty state to teach.
-      empty={null}
-      texts={{
-        error: {
-          text: t('privacy.consent.error'),
-          actions: (
-            <Button
-              onClick={() => {
-                void read.refetch()
-              }}
-            >
-              {t('ui.retry')}
-            </Button>
-          ),
-        },
-        withdrawn,
-        rejected: {
-          title: t('privacy.consent.not_saved'),
-          text: refusal ?? '',
-          actions: (
-            <Button
-              onClick={() => {
-                setRefusal(null)
-              }}
-            >
-              {t('ui.dismiss')}
-            </Button>
-          ),
-        },
-      }}
-    >
-      {({ mark }) => {
-        if (consents === undefined) return null
-        const both: Both = {
-          analytics: consents.analytics,
-          marketing_email: consents.marketing_email,
+    <div ref={view} tabIndex={-1} className={cx(account.view, styles.stack)}>
+      <StateFrame
+        state={state}
+        skeleton={
+          <Skeleton
+            bars={[
+              [60, 1.5],
+              [90, 1],
+              [55, 1.5],
+              [80, 1],
+            ]}
+          />
         }
-        return (
-          <div className={account.group}>
-            <div className={account.group}>
-              <Switch
-                label={t('privacy.consent.analytics.label')}
-                checked={both.analytics}
-                aria-describedby={`${ids}-analytics`}
-                onChange={(event) => {
-                  save.mutate({ ...both, analytics: event.currentTarget.checked })
+        // Two consents, always both: there is no empty state to teach.
+        empty={null}
+        texts={{
+          error: {
+            text: t('privacy.consent.error'),
+            actions: (
+              <Button
+                onClick={() => {
+                  void read.refetch()
                 }}
-              />
-              <div id={`${ids}-analytics`} className={account.group}>
-                <p className={account.note}>{t('privacy.consent.analytics.says')}</p>
-                <p className={account.note}>{t('privacy.consent.analytics.now')}</p>
+              >
+                {t('ui.retry')}
+              </Button>
+            ),
+          },
+          withdrawn,
+          rejected: {
+            title: t('privacy.consent.not_saved'),
+            text: refusal ?? '',
+            actions: (
+              <Button
+                onClick={() => {
+                  setRefusal(null)
+                }}
+              >
+                {t('ui.dismiss')}
+              </Button>
+            ),
+          },
+        }}
+      >
+        {({ mark }) => {
+          if (consents === undefined) return null
+          const both: Both = {
+            analytics: consents.analytics,
+            marketing_email: consents.marketing_email,
+          }
+          return (
+            <div className={account.group}>
+              <div className={account.group}>
+                <Switch
+                  label={t('privacy.consent.analytics.label')}
+                  checked={both.analytics}
+                  aria-describedby={`${ids}-analytics`}
+                  onChange={(event) => {
+                    save.mutate({ ...both, analytics: event.currentTarget.checked })
+                  }}
+                />
+                <div id={`${ids}-analytics`} className={account.group}>
+                  <p className={account.note}>{t('privacy.consent.analytics.says')}</p>
+                  <p className={account.note}>{t('privacy.consent.analytics.now')}</p>
+                </div>
               </div>
+              <div className={account.group}>
+                <Switch
+                  label={t('privacy.consent.marketing.label')}
+                  checked={both.marketing_email}
+                  aria-describedby={`${ids}-marketing`}
+                  onChange={(event) => {
+                    save.mutate({ ...both, marketing_email: event.currentTarget.checked })
+                  }}
+                />
+                <p id={`${ids}-marketing`} className={account.note}>
+                  {t('privacy.consent.marketing.says')}
+                </p>
+              </div>
+              {/* After everything else, so that nothing above it moves when it comes and goes. */}
+              {mark === 'syncing' ? <SyncMark state="syncing" /> : null}
             </div>
-            <div className={account.group}>
-              <Switch
-                label={t('privacy.consent.marketing.label')}
-                checked={both.marketing_email}
-                aria-describedby={`${ids}-marketing`}
-                onChange={(event) => {
-                  save.mutate({ ...both, marketing_email: event.currentTarget.checked })
-                }}
-              />
-              <p id={`${ids}-marketing`} className={account.note}>
-                {t('privacy.consent.marketing.says')}
-              </p>
-            </div>
-            {/* After everything else, so that nothing above it moves when it comes and goes. */}
-            {mark === 'syncing' ? <SyncMark state="syncing" /> : null}
-          </div>
-        )
-      }}
-    </StateFrame>
+          )
+        }}
+      </StateFrame>
+    </div>
   )
 }
 

@@ -442,7 +442,8 @@ describe('a suspended household’s lockout', () => {
     ).toBeInTheDocument()
     expect(
       within(page).getByText(
-        'Each owner was told by email. An owner who thinks it is a mistake contacts Household support.',
+        // An email reaches a verified address alone: no other owner is said to have been told.
+        'Each owner with a verified address was told by email. An owner who thinks it is a mistake contacts Household support.',
       ),
     ).toBeInTheDocument()
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)

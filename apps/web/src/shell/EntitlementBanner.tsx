@@ -23,8 +23,10 @@
 // - No one-press *resume*: a household that lapsed subscribes again, in the payment form.
 // - A day of deletion on a lapse alone (`data_retained_until`, as given): on any other state it
 //   would tell a household it is about to lose data that is in no danger. And none where the
-//   household's own deletion is scheduled, which comes first: the day a lapse would keep its data
-//   until is then a day it does not reach.
+//   household's own deletion is scheduled for no later: the day a lapse would keep its data until
+//   is then a day it does not reach. A deletion scheduled for later leaves that day standing,
+//   since it is the lapse's day the household then goes on; and the day a household in grace
+//   becomes read-only is said by the same rule.
 // - No *everybody can export*: the household's export is an owner's, and a member's is of
 //   their own data.
 //
@@ -260,11 +262,14 @@ function Drawn({ shown, announce }: { readonly shown: Shown; readonly announce: 
 /** The banner of the household the shell is around, or nothing where its state asks for none. */
 export function EntitlementBanner() {
   const household = useHousehold()
-  const shown = bannerOf(
-    household.entitlement,
-    household.my_role === 'owner',
-    (household.deletion_scheduled_at ?? null) !== null,
-  )
+  // A state this build does not know has no banner: a server newer than the page may name one,
+  // which `bannerOf` has no case for, and nothing drawn above every screen's boundary may fail.
+  const shown =
+    bannerOf(
+      household.entitlement,
+      household.my_role === 'owner',
+      household.deletion_scheduled_at ?? null,
+    ) ?? null
   const id = shown === null ? null : bannerId(shown)
   // What stood when the household was opened, a banner or none, is read in its place. Anything
   // it comes to afterwards arrived while the member was here, and nothing moved the focus to it.

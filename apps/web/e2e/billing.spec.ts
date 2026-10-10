@@ -237,7 +237,8 @@ test('an owner subscribes, the subscription lapses, and the read-only household 
   })
   await page.route(`**/households/${household}/exports`, async (route) => {
     if (route.request().method() === 'GET') await held
-    await route.continue()
+    // On to the suite's own route, which names this test's network to the API (fixtures.ts).
+    await route.fallback()
   })
   await page.getByRole('button', { name: 'Make an export' }).click()
   await expectSaid(page, 'The export was asked for. It is usually ready within a day.')
@@ -368,6 +369,50 @@ test('a payment the processor took, whose answer never came, is not said to have
   await already.getByRole('link', { name: 'Billing' }).click()
   await expect(section(page, 'Subscription')).toContainText('Active')
   await expect(valueOf(page, 'Plan')).toHaveText(`${monthly} a month`)
+  // The answer that never came is the fault this test makes on purpose, which the browser logs.
+  expect(faults.every((fault) => fault.includes('ERR_CONNECTION_FAILED'))).toBe(true)
+  faults.length = 0
+})
+
+// The same of a payment method's replacement. The processor took the new method and its answer
+// never reached the page: the summary then named the new method above a form that went on
+// saying, at every press, that it could not tell yet, for as long as it stood. The form gives
+// way to what billing reads, and that is said.
+test('a method the processor took, whose answer never came, is said to be in use once billing reads it, and its form gives way', async ({
+  page,
+  faults,
+}) => {
+  const { household } = await owner(page)
+  await subscribeNow(page, household, 'year')
+  await open(page, inHousehold.billing(household))
+  const method = section(page, 'Payment method')
+  await expect(method).toContainText(card)
+  await method.getByRole('button', { name: 'Replace the payment method' }).click()
+  const save = paymentForm(page).getByRole('button', { name: 'Save the payment method' })
+  await expect(save).toBeVisible()
+  await payBy(page, 'debit')
+  // The confirmation reaches the stand-in for Stripe's server, which takes the method and tells
+  // the API of it, and the browser is handed no answer.
+  await page.route('https://api.stripe.com/**', async (route) => {
+    const sent = new URLSearchParams(route.request().postData() ?? '')
+    await fetch(`${stripeStandInOrigin}/_standin/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_secret: sent.get('client_secret'), with: sent.get('with') }),
+    })
+    await route.abort('connectionfailed')
+  })
+  await save.click()
+
+  // Billing is read again, the summary names the new method, and the form gives way to that:
+  // the sentence a confirmation that was answered ends in, the focus on the section's place.
+  await expect(method.getByRole('status')).toHaveText('The new payment method is in use.')
+  await expect(method).toContainText(debit)
+  await expect(method).not.toContainText(card)
+  await expect(paymentForm(page)).toHaveCount(0)
+  await expect(method.locator('div[tabindex="-1"]')).toBeFocused()
+  await expect(method.getByRole('button', { name: 'Replace the payment method' })).toBeVisible()
+  await expectAccessible(page)
   // The answer that never came is the fault this test makes on purpose, which the browser logs.
   expect(faults.every((fault) => fault.includes('ERR_CONNECTION_FAILED'))).toBe(true)
   faults.length = 0
@@ -516,6 +561,63 @@ test('the payer changes how often they pay, cancels and takes it back, and repla
   await expect(subscription).toContainText('Cancelled')
   await expect(valueOf(subscription, 'Plan')).toHaveText('No subscription')
   await expectAccessible(page)
+})
+
+// The server took a change of how often the payer pays and the page was answered that the
+// processor could not be asked, which is the answer after a change that could not be read back.
+// The question stays open under what it was refused with, and billing is read again behind it.
+// Drawn from what billing then read, the same open question asked for the opposite change, and
+// the press that tried again changed the plan back and was charged for it.
+test('a change of how often the payer pays that the server took and answered as unavailable is asked again as it was asked', async ({
+  page,
+  faults,
+}) => {
+  const { household } = await owner(page)
+  await subscribeNow(page, household, 'year')
+  const plan = await subscriptionOf(page, household)
+  const monthly = money(priceOf(plan, 'month'))
+  await open(page, inHousehold.billing(household))
+  const subscription = section(page, 'Subscription')
+  await subscription.getByRole('button', { name: 'Pay monthly instead' }).click()
+  const asked = page.getByRole('dialog', { name: 'Pay monthly from now on?' })
+  await expect(asked).toContainText(`You would pay ${monthly} a month.`)
+  const sent: unknown[] = []
+  await page.route(`**/households/${household}/billing/subscription`, async (route) => {
+    if (route.request().method() !== 'PATCH') return route.fallback()
+    sent.push(route.request().postDataJSON())
+    if (sent.length > 1) return route.fallback()
+    // The server takes the change, and the page is told the processor could not be asked.
+    await route.fetch()
+    return route.fulfill({
+      status: 503,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({
+        type: 'about:blank',
+        title: 'Service Unavailable',
+        status: 503,
+        code: 'billing_unavailable',
+      }),
+    })
+  })
+  await asked.getByRole('button', { name: 'Pay monthly instead' }).click()
+  await expect(asked.getByRole('alert')).toContainText(
+    'The payment processor can’t be asked right now.',
+  )
+  // Billing was read again behind the question, and says the plan is monthly already.
+  await expect(valueOf(subscription, 'Plan')).toHaveText(`${monthly} a month`)
+  // The question is the one that was asked, whatever billing reads by now.
+  await expect(asked).toBeVisible()
+  await expect(asked).toContainText(`You would pay ${monthly} a month.`)
+  await expect(page.getByRole('dialog', { name: 'Pay yearly from now on?' })).toHaveCount(0)
+  // Asked again, it is answered as it stands: nothing is changed back, and it is said.
+  await asked.getByRole('button', { name: 'Pay monthly instead' }).click()
+  await expect(asked).toBeHidden()
+  await expectSaid(page, 'You pay monthly now.')
+  expect(sent).toEqual([{ interval: 'month' }, { interval: 'month' }])
+  expect((await subscriptionOf(page, household)).interval).toBe('month')
+  // The refusal this test answers with is its own doing, which the browser logs.
+  expect(faults.every((fault) => fault.includes('503'))).toBe(true)
+  faults.length = 0
 })
 
 test('a payment that failed is tried with a new method as soon as it is confirmed, and the household is active again', async ({

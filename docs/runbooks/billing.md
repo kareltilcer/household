@@ -189,6 +189,12 @@ Stripe.js is no part of it: the payment form's side is the suite's to stand in f
 through the stand-in what the page was handed. A payment in Stripe's test mode itself is still
 staging's ("Before the first deploy", step 7).
 
+One check does fetch Stripe's own script, and is no part of a run: with `HOUSEHOLD_E2E_STRIPE_JS=1`
+set, `pnpm exec playwright test e2e/stripe.spec.ts` from `apps/web` holds the page's policy
+(`build/csp.ts`) against Stripe.js as Stripe serves it, the script fetched, its frame drawn, and
+nothing asked of an origin the policy does not name. Run it where the policy's three directives
+for the processor are changed, and before the first payment on staging.
+
 | | |
 |---|---|
 | Stripe's API | Under `/v1`, the routes stripe-go asks, as the server's tests have them. A request Stripe would not take, a route the stand-in does not answer or another API version, is answered and logged as `the stand-in was asked what Stripe would not have taken`: a test in `server/` fails on the same |

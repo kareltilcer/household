@@ -9,11 +9,13 @@
 // and called the screen an owner's; another member's replica is never answered, and whose
 // client runs which version is the owners' other screen (Clients.tsx). This browser's row is
 // marked, and its figures are the replica's own as they are now: what waits to be sent, what
-// waits for the member with the way to it, and whether changes are arriving. Only the tab that
-// holds the household's replica can say those, or which row is its own; another tab says that.
-// A browser is named for what its header tells and never by the header (account/userAgent.ts),
-// and a device by its label, with its kind from the account's own list where the label does not
-// say.
+// waits for the member with the way to it, and whether changes are arriving. It is said to be
+// in sync once its replica says that they are, and until then, with nothing else to say of it,
+// its row draws no status: as it opens, its copy is as the visit before left it. Only the tab
+// that holds the household's replica can say those, or which row is its own; another tab says
+// that. A browser is named for what its header tells and never by the header
+// (account/userAgent.ts), and a device by its label, with its kind from the account's own list
+// where the label does not say.
 //
 // The words are D-93's: a copy's *last checkpoint*, a number the library gives and the row
 // shows as it is, and *download again*. An entity type has no word, so what disagreed is
@@ -131,17 +133,21 @@ interface Connection {
 }
 
 /**
- * How `row` stands. A copy being downloaded again, or one that does not match, is said before
- * anything it has waiting: it is what the row's one action is about. This browser alone says
- * how its connection is, since only it knows.
+ * How `row` stands, or undefined where nothing can be said yet. A copy being downloaded again,
+ * or one that does not match, is said before anything it has waiting: it is what the row's one
+ * action is about. This browser alone says how its connection is, since only it knows; and
+ * until it knows, with its stream not yet up, it is not said to be in sync: its copy is as the
+ * visit before left it, and nobody has said that it holds what the server does. Every other
+ * standing is so whatever the connection, and another copy's is its last report's.
  */
-function standsOf(row: Listed, connection: Connection): Stands {
+function standsOf(row: Listed, connection: Connection): Stands | undefined {
   if (row.report?.needs_resnapshot === true) return 'downloading'
   if ((row.report?.digest_mismatch_entity_types?.length ?? 0) > 0) return 'mismatch'
   if (row.own && !connection.online) return 'offline'
   if (row.own && connection.receiving === false) return 'not_receiving'
   if (row.attention > 0) return 'attention'
   if (row.waiting > 0) return 'waiting'
+  if (row.own && connection.receiving !== true) return undefined
   return 'synced'
 }
 
@@ -187,8 +193,8 @@ function Row({
   const takesWrites = writes(useHousehold())
 
   // How it stands, in the screen's own words: the contract's name for none of it is drawn.
-  const words = (): string => {
-    switch (stands) {
+  const words = (how: Stands): string => {
+    switch (how) {
       case 'downloading':
         return t('health.sync.status.downloading')
       case 'mismatch':
@@ -226,12 +232,16 @@ function Row({
           ) : null}
         </div>
         {row.kind === undefined ? null : <p className={styles.detail}>{row.kind}</p>}
-        <Standing mark={marks[stands]} words={words()} />
+        {stands === undefined ? null : <Standing mark={marks[stands]} words={words(stands)} />}
         {stands === 'downloading' ? (
           <p className={styles.detail}>{t('health.sync.row.downloading')}</p>
         ) : null}
         {row.own && !connection.online ? (
-          <p className={styles.detail}>{t('health.sync.row.offline')}</p>
+          <p className={styles.detail}>
+            {/* Nothing waits here to be sent from a household that takes no writes: as the bar
+                says, it is read from what this browser kept. */}
+            {takesWrites ? t('health.sync.row.offline') : t('shell.offline.reading')}
+          </p>
         ) : row.own && connection.receiving === false ? (
           <p className={styles.detail}>
             {/* Nothing is saved and sent in a household that takes no writes: as the bar says. */}
@@ -459,7 +469,10 @@ export function SyncHealth() {
               sentence={t('health.sync.empty.sentence')}
               example={t('health.sync.empty.example')}
               action={
+                // Busy while the list is asked for: a press that found nothing new would
+                // otherwise look like a press that did nothing.
                 <Button
+                  loading={read.isFetching}
                   onClick={() => {
                     void read.refetch()
                   }}

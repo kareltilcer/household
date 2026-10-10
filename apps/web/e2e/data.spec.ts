@@ -63,7 +63,7 @@ import {
 const guest = 'Vít Ježek'
 
 /** A third person of the suite's. */
-const other = 'Ema Šťastná'
+const other = 'Ema Váňová'
 
 /** A reason an owner gives for stopping all changes: no word a translator missed (stack.ts). */
 const reason = 'Účty za říjen.'
@@ -339,7 +339,8 @@ test('the privacy centre holds the six rights, a copy of one’s own data, the t
   })
   await page.route(`**${apiPath}/me/exports`, async (route) => {
     if (route.request().method() === 'GET') await held
-    await route.continue()
+    // On to the suite's own route, which names this test's network to the API (fixtures.ts).
+    await route.fallback()
   })
   await copy.getByRole('button', { name: 'Export my data' }).click()
   await expectSaid(page, 'The export was asked for. It is usually ready within a day.')
@@ -664,6 +665,28 @@ test('sync health opened at its address after the household changed elsewhere sa
   }
 })
 
+// A browser that comes back to a household nothing changed in reports as the screen opens too:
+// its stream brings a checkpoint of the visit whether or not anything arrives with it, and that
+// is the one the report waits for. Were the report to wait for a change, a quiet household's
+// browser would never report again, and a download asked of it would never begin.
+test('sync health opened again in a household nothing changed in has this browser report once more', async ({
+  page,
+}) => {
+  const { household } = await owner(page)
+  await open(page, inHousehold.syncHealth(household))
+  const own = page.getByRole('listitem').filter({ hasText: 'This browser' })
+  await expect(own).toContainText(/Last reported .+\./)
+  // The app is left, its replica closed with it, and nothing changes meanwhile.
+  await page.goto(buildFile)
+  const reported = page.waitForRequest(
+    (request) => request.method() === 'POST' && request.url().endsWith('/sync/digest'),
+  )
+  await open(page, inHousehold.syncHealth(household))
+  await reported
+  await expect(own).toContainText('In sync')
+  await expect(own).not.toContainText('Doesn’t match the server')
+})
+
 test('in a read-only household no browser is asked to download again, and the list says why', async ({
   page,
 }) => {
@@ -833,7 +856,7 @@ test('a suspended household opens the lockout with the notice itself and no expo
   await expect(main).toContainText(
     'Nothing in it was deleted. While it is suspended, nobody can open it and nothing can be exported.',
   )
-  await expect(main).toContainText('Each owner was told by email.')
+  await expect(main).toContainText('Each owner with a verified address was told by email.')
   await expect(main.getByRole('link')).toHaveText([`Go to ${flat}`])
   await expect(main.getByRole('button')).toHaveText(['Sign out'])
   await expect(sidebar(page)).toHaveCount(0)
@@ -1150,7 +1173,8 @@ async function openEach(page: Page, household: string, look: () => Promise<void>
   })
   await page.route(`**/households/${household}/exports`, async (route) => {
     if (route.request().method() === 'GET') await held
-    await route.continue()
+    // On to the suite's own route, which names this test's network to the API (fixtures.ts).
+    await route.fallback()
   })
   await main.getByRole('button').click()
   // The one row of the list of exports: the settings' navigation is a list too.

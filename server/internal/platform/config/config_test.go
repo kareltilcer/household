@@ -748,6 +748,10 @@ func TestOnlyDevelopmentSaysWhereStripeIs(t *testing.T) {
 		{"over https", map[string]string{config.StripeAPIURLVar: "https://stripe.household.test"}, "scheme and host"},
 		{"over https to this machine", map[string]string{config.StripeAPIURLVar: "https://127.0.0.1:12112"}, "scheme and host"},
 		{"over http to an address that is not the loopback's", map[string]string{config.StripeAPIURLVar: "http://10.0.0.5:12112"}, "this machine"},
+		// The loopback is matched whole: a name that only begins as it does is another machine's.
+		{"at a name that begins as the loopback's address does", map[string]string{config.StripeAPIURLVar: "http://127.0.0.1.household.test:12112"}, "this machine"},
+		{"at a name that begins as the loopback's name does", map[string]string{config.StripeAPIURLVar: "http://localhost.household.test:12112"}, "this machine"},
+		{"with the loopback as the user of another machine", map[string]string{config.StripeAPIURLVar: "http://127.0.0.1" + "@stripe.household.test"}, "scheme and host"},
 		{"with no scheme", map[string]string{config.StripeAPIURLVar: "127.0.0.1:12112"}, "scheme and host"},
 		{"with a path", map[string]string{config.StripeAPIURLVar: "http://127.0.0.1:12112/v1"}, "scheme and host"},
 		{"with credentials", map[string]string{config.StripeAPIURLVar: "http://stand:" + "in" + "@127.0.0.1:12112"}, "scheme and host"},

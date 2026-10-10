@@ -168,6 +168,37 @@ describe('sync health', () => {
     expect(within(row).getByText('Changes waiting to be sent')).toBeInTheDocument()
   })
 
+  // Not yet known is not in sync: until its stream is up, this browser's copy is as the visit
+  // before left it, and nobody has said that it holds what the server does.
+  it('does not say this browser is in sync before its replica says that changes are arriving', async () => {
+    const stand = standIn()
+    const { sync } = await health(listing([report(), other]), {
+      sync: syncOver(stand, { receiving: null }),
+    })
+    const row = await rowOf('Chrome on Windows')
+    expect(within(row).getByText(/^Last reported /)).toBeInTheDocument()
+    expect(within(row).queryByText('In sync')).not.toBeInTheDocument()
+    // Another copy is as it last reported, whatever this browser's connection is.
+    expect(within(await rowOf('Firefox on Linux')).getByText('In sync')).toBeInTheDocument()
+    // What is so whatever the connection is said all the same.
+    act(() => {
+      stand.become({ queued: 1 })
+    })
+    expect(await within(row).findByText('Changes waiting to be sent')).toBeInTheDocument()
+    act(() => {
+      stand.become({ queued: 0 })
+    })
+    await waitFor(() => {
+      expect(within(row).queryByText('Changes waiting to be sent')).not.toBeInTheDocument()
+    })
+    expect(within(row).queryByText('In sync')).not.toBeInTheDocument()
+    // Its stream is up: it is in sync.
+    act(() => {
+      sync.set({ receiving: true })
+    })
+    expect(await within(row).findByText('In sync')).toBeInTheDocument()
+  })
+
   it('says this browser is not receiving changes, where its replica says so', async () => {
     await health(listing([report()]), { sync: syncOver(standIn(), { receiving: false }) })
     const row = await rowOf('Chrome on Windows')
@@ -313,11 +344,7 @@ describe('the report this browser sends as the screen opens', () => {
     const server = listing([])
     await health(server, { sync: syncOver(stand) })
     const row = await rowOf('Chrome on Windows')
-    expect(
-      within(row).getByText(
-        'It hasn’t reported to the server yet. A browser reports once it has caught up and has nothing waiting to be sent.',
-      ),
-    ).toBeInTheDocument()
+    expect(within(row).getByText('It hasn’t reported to the server yet.')).toBeInTheDocument()
     // Nothing the server lists is there to mark: no download is offered for it.
     expect(within(row).queryByRole('button')).not.toBeInTheDocument()
     expect(server.to(`GET ${routes.state}`)).toHaveLength(1)
@@ -641,6 +668,25 @@ describe('sync health, where something cannot be read or changed', () => {
     ).not.toBeInTheDocument()
   })
 
+  // A household that takes no writes keeps no change of its member's to send: the row says what
+  // the offline bar says over such a household, and promises nothing of a change.
+  it('promises nothing is sent once the connection is back in a household that takes no writes', async () => {
+    const server = listing([report()])
+    server.household = readOnly
+    await health(server)
+    await rowOf('Chrome on Windows')
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false)
+    act(() => {
+      window.dispatchEvent(new Event('offline'))
+    })
+    const row = await rowOf('Chrome on Windows')
+    expect(await within(row).findByText('Offline')).toBeInTheDocument()
+    expect(
+      within(row).getByText('Offline — you are reading what this browser kept.'),
+    ).toBeInTheDocument()
+    expect(within(row).queryByText(/nothing is sent until it is back/)).not.toBeInTheDocument()
+  })
+
   it('says another tab keeps the household’s copy, and marks no row as this browser', async () => {
     await health(listing([report(), other]), { sync: syncWithout('elsewhere') })
     const said = screen.getByText('Another tab keeps this household’s copy')
@@ -693,8 +739,21 @@ describe('sync health, where something cannot be read or changed', () => {
       await screen.findByText('No browser or device of yours has reported on this household yet.'),
     ).toBeInTheDocument()
     expect(screen.getByText('Example')).toBeInTheDocument()
-    server.listed.reports = [other]
-    await user.click(screen.getByRole('button', { name: 'Check again' }))
+    let answer: (response: Response) => void = () => undefined
+    server.on(
+      `GET ${routes.state}`,
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve
+        }),
+    )
+    const again = screen.getByRole('button', { name: 'Check again' })
+    await user.click(again)
+    // Busy while the list is asked for: the press is seen to have been taken.
+    await waitFor(() => {
+      expect(again).toHaveAttribute('aria-busy', 'true')
+    })
+    answer(Response.json({ replicas: [other] }))
     expect(await rowOf('Firefox on Linux')).toBeInTheDocument()
   })
 

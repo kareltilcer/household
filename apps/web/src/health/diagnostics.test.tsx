@@ -417,13 +417,14 @@ describe('a bundle that was not taken', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('says a bundle the server would not take as it is, and that nothing was sent', async () => {
+  // It was sent, and refused: what is so is that the server did not keep it.
+  it('says a bundle the server would not take as it is, and that it was not kept', async () => {
     const server = taking()
     server.on(send, () => invalid('/payload'))
     const { user } = await bundle(server)
     await user.click(await sendButton())
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Household wouldn’t take the bundle as it is, so nothing was sent.',
+      'Household wouldn’t take the bundle as it is, so it was not kept.',
     )
     expect(await sendButton()).toBeInTheDocument()
   })
@@ -462,12 +463,21 @@ describe('a bundle that was not taken', () => {
         }),
     )
     const { user } = await bundle(server)
+    const ids = await screen.findByRole('checkbox', { name: 'Send the ids' })
+    const reference = screen.getByRole('textbox', { name: 'A reference, if you were given one' })
+    expect(ids).not.toHaveAttribute('aria-disabled')
+    expect(reference).not.toHaveAttribute('readonly')
     await user.click(await sendButton())
     await waitFor(async () => {
       expect(await sendButton()).toHaveAttribute('aria-busy', 'true')
     })
     await user.click(await sendButton())
     expect(server.to(send)).toHaveLength(1)
+    // What the bundle holds takes no change while it is on its way, and each control says so.
+    expect(ids).toHaveAttribute('aria-disabled', 'true')
+    expect(reference).toHaveAttribute('readonly')
+    await user.click(ids)
+    expect(ids).toBeChecked()
     answer(Response.json({ id: kept, expires_at: '2026-10-08T17:00:00Z' }, { status: 201 }))
     expect(await screen.findByText('Sent')).toBeInTheDocument()
   })
@@ -523,6 +533,21 @@ describe('what a bundle holds of this browser’s copy', () => {
     await user.click(await sendButton())
     await screen.findByText('Sent')
     expect(((await server.body(send)) as BundleBody).payload).not.toHaveProperty('report')
+  })
+
+  // The list a last report is read from is the one sync health reads: its refusal says its
+  // reader is in the household no longer, and the household alone is read again.
+  it('reads the household again where the list of reports is answered as not its reader’s', async () => {
+    const server = taking()
+    server.on(`GET ${routes.state}`, () => {
+      server.on(`GET /households/${home}`, () => problem(404, 'not_found'))
+      return problem(404, 'not_found')
+    })
+    await bundle(server)
+    await waitFor(() => {
+      expect(server.to(`GET /households/${home}`)).toHaveLength(2)
+    })
+    expect(server.to(`GET ${routes.state}`)).toHaveLength(1)
   })
 
   it('says a browser that has not reported has no last report', async () => {

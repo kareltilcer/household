@@ -48,6 +48,36 @@ function inTrial(me = jana): BillingServer {
   return server
 }
 
+/** The day a lapsed household's data is kept until, as its two answers both give it. */
+const retained = '2027-10-09T10:00:00Z'
+
+/**
+ * A household whose trial ran out and lapsed, as the subscription and the household's own answer
+ * both say it: nothing subscribed, nothing written, and the day its data is kept until, which a
+ * lapse always has; with whatever else its own answer carries.
+ */
+function lapsed(
+  more: Partial<NonNullable<BillingServer['household']['entitlement']>> = {},
+): BillingServer {
+  const server = inTrial()
+  server.subscription = trial({
+    state: 'read_only',
+    trial_ends_at: null,
+    data_retained_until: retained,
+  })
+  server.household = {
+    ...server.household,
+    entitlement: {
+      state: 'read_only',
+      can_write: false,
+      can_upload: false,
+      data_retained_until: retained,
+      ...more,
+    },
+  }
+  return server
+}
+
 async function read(server: BillingServer = inTrial()) {
   const opened = open(address, server)
   await screen.findByRole('heading', { level: 1, name: 'Subscribe' })
@@ -62,8 +92,10 @@ async function toPayment(server: BillingServer, often: RegExp = /a year$/) {
   return opened
 }
 
+/** The form's own place, which takes the focus where the form is begun again. */
+const formPlace = () => screen.getByRole('group', { name: 'Payment details' }).closest('[tabindex]')
 /** The place the form stands in, which takes the focus the press gave up. */
-const place = () => screen.getByRole('group', { name: 'Payment details' }).closest('[tabindex]')
+const place = () => formPlace()?.parentElement?.closest('[tabindex]')
 
 describe('subscribing', () => {
   it('is titled for what it is, and says what storage adds beside the base fee', async () => {
@@ -308,12 +340,7 @@ describe('subscribing', () => {
   })
 
   it('says a household that takes no writes takes them again once it is paid for', async () => {
-    const server = inTrial()
-    server.subscription = trial({
-      state: 'read_only',
-      trial_ends_at: null,
-      data_retained_until: '2027-10-09T10:00:00Z',
-    })
+    const server = lapsed()
     await read(server)
     expect(
       await screen.findByText(
@@ -324,21 +351,13 @@ describe('subscribing', () => {
 
   // A payment lifts no restriction and takes no scheduled deletion back: neither is promised.
   it('does not say a lapsed household takes changes again where an owner restricted it, and says that stays', async () => {
-    const server = inTrial()
-    server.subscription = trial({ state: 'read_only', trial_ends_at: null })
-    server.household = {
-      ...server.household,
-      entitlement: {
-        ...server.household.entitlement,
-        state: 'read_only',
-        can_write: false,
-        restriction: {
-          restricted_by: { user_id: jana.id, label: jana.display_name, is_former_member: false },
-          restricted_at: '2026-09-01T08:00:00Z',
-          reason: null,
-        },
+    const server = lapsed({
+      restriction: {
+        restricted_by: { user_id: jana.id, label: jana.display_name, is_former_member: false },
+        restricted_at: '2026-09-01T08:00:00Z',
+        reason: null,
       },
-    }
+    })
     await read(server)
     expect(
       await screen.findByText('The paid period starts when the payment goes through.'),
@@ -352,12 +371,7 @@ describe('subscribing', () => {
   })
 
   it('does not say the day of deletion is cleared where the household’s own deletion is scheduled', async () => {
-    const server = inTrial()
-    server.subscription = trial({
-      state: 'read_only',
-      trial_ends_at: null,
-      data_retained_until: '2027-10-09T10:00:00Z',
-    })
+    const server = lapsed()
     server.household = { ...server.household, deletion_scheduled_at: '2026-10-09T08:00:00Z' }
     await read(server)
     expect(
@@ -402,13 +416,21 @@ describe('a press that the server refuses', () => {
     })
   })
 
-  it('says the processor cannot be asked, and keeps the press', async () => {
+  // The sentence says the page shows how billing stands, which holds where it was read again:
+  // the server answers so too once the processor has taken what it could not then read back.
+  it('says the processor cannot be asked, reads how billing stands, and keeps the press', async () => {
     const server = inTrial()
     server.on(subscribing, () => problem(503, 'billing_unavailable'))
-    await toPayment(server)
+    const { user } = await read(server)
+    await user.click(await screen.findByRole('radio', { name: money('EUR 59.88 a year') }))
+    const before = server.to(reading).length
+    await user.click(screen.getByRole('button', { name: 'Continue to payment' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'The payment processor can’t be asked right now. The page shows how billing stands. Try again in a little while.',
     )
+    await waitFor(() => {
+      expect(server.to(reading).length).toBeGreaterThan(before)
+    })
     const press = screen.getByRole('button', { name: 'Continue to payment' })
     expect(press).not.toHaveAttribute('aria-busy')
     expect(press).toHaveFocus()
@@ -577,6 +599,10 @@ describe('the payment form', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     // The same secret: the server was not asked for another.
     expect(server.to(subscribing)).toHaveLength(1)
+    // The press left with the drawing it began again: the focus is on the form's own place,
+    // inside the one the form stands in.
+    expect(formPlace()).toHaveFocus()
+    expect(place()).toContainElement(screen.getByRole('group', { name: 'Payment details' }))
   })
 
   it('says the same where the script came and would not make the form', async () => {
@@ -706,15 +732,13 @@ describe('the plan’s read', () => {
     expect(await screen.findByRole('status', { name: 'Loading' })).toBeInTheDocument()
   })
 
-  it('says the plan could not be read and that nothing was charged, and reads it again', async () => {
+  it('says the plan could not be read and that opening it charges nothing, and reads it again', async () => {
     const server = inTrial()
     server.on(reading, () => Promise.reject(new TypeError('offline')))
     const { user } = await read(server)
     expect(await screen.findByText('The plan could not be read')).toBeInTheDocument()
     expect(
-      screen.getByText(
-        'Nothing was charged and nothing has changed. Check your connection and try again.',
-      ),
+      screen.getByText('Opening this page charges nothing. Check your connection and try again.'),
     ).toBeInTheDocument()
     server.on(reading, () => Response.json(server.subscription))
     await user.click(screen.getByRole('button', { name: 'Try again' }))

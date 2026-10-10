@@ -45,6 +45,7 @@ import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { inHousehold, isOwnPath } from '../app/paths.ts'
 import { fieldCodes, useRefusedField } from '../auth/fields.tsx'
+import { notTheirs, useRereadWhereRefused } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { HouseholdSettingsPage, Section } from '../household/settings/Page.tsx'
 import { useTimeZone } from '../household/timezone.ts'
@@ -285,6 +286,9 @@ export function Diagnostics() {
   // answer, or for there to be none, and is then built once.
   const read = useSyncState(household.id)
   const reports = read.data
+  // The list's own refusal says its reader is in the household no longer: it is read again, as
+  // sync health reads it over the same list.
+  useRereadWhereRefused(household.id, notTheirs(read))
   const settled = read.fetchStatus !== 'fetching'
   const screen = cameFrom(location.state) ?? location.pathname
   const [bundle, setBundle] = useState<Bundle | null>(null)
@@ -466,6 +470,8 @@ export function Diagnostics() {
                             <Checkbox
                               label={parts.name(part)}
                               checked={!left}
+                              // Said of the box too, which takes no press while a bundle is sent.
+                              aria-disabled={send.isPending || undefined}
                               onChange={(event) => {
                                 // A bundle on its way is the one that was read: what it holds
                                 // is not changed under its answer.
@@ -511,6 +517,8 @@ export function Diagnostics() {
                         maxLength={referenceLimit}
                         autoComplete="off"
                         value={reference}
+                        // Nor is the reference typed over while its bundle is on its way.
+                        readOnly={send.isPending}
                         error={
                           refusedReference ? t('health.diagnostics.reference.invalid') : undefined
                         }

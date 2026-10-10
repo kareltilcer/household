@@ -142,9 +142,7 @@ describe('a household’s exports', () => {
 
     const failed = await rowOf('Sep 2, 2026, 10:00 AM')
     expect(within(failed).getByText('Failed')).toBeInTheDocument()
-    expect(
-      within(failed).getByText('Nothing partial was kept. Asking again costs only the wait.'),
-    ).toBeInTheDocument()
+    expect(within(failed).getByText('Nothing partial was kept.')).toBeInTheDocument()
 
     const expired = await rowOf('Aug 1, 2026, 10:00 AM')
     expect(within(expired).getByText('Expired')).toBeInTheDocument()
@@ -158,6 +156,33 @@ describe('a household’s exports', () => {
     expect(screen.getAllByRole('button', { name: /^Download/ })).toHaveLength(1)
     // The contract's own words for a state are drawn nowhere.
     expect(document.body).not.toHaveTextContent(/\b(queued|running)\b/)
+  })
+
+  // The server removes a household's archives with the household, whatever last moment each
+  // names for itself, which is seven days from when it was made whatever is scheduled.
+  it('says a ready export downloads until its household goes, where that comes first', async () => {
+    const sooner = serving([ready()])
+    sooner.household = { ...sooner.household, deletion_scheduled_at: '2026-09-12T08:00:00Z' }
+    const first = await screenOf(sooner)
+    expect(
+      within(await rowOf()).getByText(/^Download it until Sep 12, 2026, 10:00\sAM\.$/),
+    ).toBeInTheDocument()
+    first.unmount()
+
+    // A deletion that comes after the archive's own last moment takes nothing from it, and a
+    // household that stays names the archive's own.
+    const later = serving([ready()])
+    later.household = { ...later.household, deletion_scheduled_at: '2026-10-01T08:00:00Z' }
+    const second = await screenOf(later)
+    expect(
+      within(await rowOf()).getByText(/^Download it until Sep 16, 2026, 7:20\sPM\.$/),
+    ).toBeInTheDocument()
+    second.unmount()
+
+    await screenOf(serving([ready()]))
+    expect(
+      within(await rowOf()).getByText(/^Download it until Sep 16, 2026, 7:20\sPM\.$/),
+    ).toBeInTheDocument()
   })
 
   it('lists what is in an archive by its own names, each with what it is where its name says', async () => {
@@ -193,9 +218,26 @@ describe('a household’s exports', () => {
     const { user } = await screenOf(server)
     expect(await screen.findByText('The exports did not load')).toBeInTheDocument()
     expect(screen.getByText('Nothing was asked for, and nothing was lost.')).toBeInTheDocument()
-    server.on(`GET ${exports}`, () => Response.json({ items: [ready()] }))
+    let answer: (response: Response) => void = () => undefined
+    server.on(
+      `GET ${exports}`,
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve
+        }),
+    )
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await rowOf()).toBeInTheDocument()
+    // *Try again* left with the sentence it stood in as the list was asked for again: the focus
+    // it held is on the list's own place from then on, and not dropped to the page.
+    const shape = await screen.findByRole('status', { name: 'Loading' })
+    const place = shape.closest('[tabindex="-1"]')
+    expect(place).not.toBeNull()
+    await waitFor(() => {
+      expect(document.activeElement).toBe(place)
+    })
+    answer(Response.json({ items: [ready()] }))
+    expect(place).toContainElement(await rowOf())
+    expect(document.activeElement).toBe(place)
   })
 
   // A read that waits for a connection is no read under way: nothing is kept, and it is said.
@@ -280,6 +322,29 @@ describe('who a household’s exports are for', () => {
     await user.click(await screen.findByRole('button', { name: 'Make an export' }))
     expect(await screen.findByText('Waiting to be made')).toBeInTheDocument()
     expect(server.to(`POST ${exports}`)).toHaveLength(1)
+  })
+
+  // Taken out of the household since the page read it: the list's own refusal is the first word
+  // of it. The household alone is read again, which is what tells the rest of the app; read
+  // again with it, the list would only be refused again, and that refusal ask for the next.
+  it('reads the household alone again where the list is answered as not its reader’s', async () => {
+    const server = serving()
+    server.on(`GET ${exports}`, () => {
+      server.on(`GET /households/${home}`, () => problem(404, 'not_found'))
+      return problem(404, 'not_found')
+    })
+    await screenOf(server)
+    expect(await screen.findByText('The exports did not load')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(server.to(`GET /households/${home}`)).toHaveLength(2)
+    })
+    for (let turn = 0; turn < 3; turn += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+    }
+    expect(server.to(`GET /households/${home}`)).toHaveLength(2)
+    expect(server.to(`GET ${exports}`)).toHaveLength(1)
   })
 
   it('says nothing of a read-only household to a member, who asks for nothing', async () => {
@@ -477,6 +542,8 @@ describe('an export on its way', () => {
     const server = serving([job({ status: 'running' })])
     await screenOf(server)
     await rowOf()
+    // An owner is handed a link: she is made a member while the export is on its way.
+    server.household = readBy({ ...memberOf(jana.id), role: 'member' })
     server.on(`GET ${exports}`, () => Response.json({ items: [ready({ download_url: null })] }))
     pass(askAgainEvery)
     expect(await within(await rowOf()).findByText('Ready')).toBeInTheDocument()
@@ -539,7 +606,12 @@ describe('downloading an export', () => {
   // Made a member between the list's read and the press: the server hands them no link.
   it('says an export is no longer its requester’s to download where the job carries no link', async () => {
     const server = serving([ready()])
-    server.on(`GET ${one}`, () => Response.json(ready({ download_url: null })))
+    server.on(`GET ${one}`, () => {
+      // As the server then stands: she is a member, and her list hands her no link either.
+      server.household = readBy({ ...memberOf(jana.id), role: 'member' })
+      server.on(`GET ${exports}`, () => Response.json({ items: [ready({ download_url: null })] }))
+      return Response.json(ready({ download_url: null }))
+    })
     const { user } = await screenOf(server)
     await user.click(await screen.findByRole('button', { name: download }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -555,6 +627,13 @@ describe('downloading an export', () => {
       expect(document.activeElement).not.toBe(document.body)
     })
     expect(document.activeElement).toContainElement(await list())
+    // A job that is ready and carries no link is the server's word that she owns the household
+    // no longer: it is read again, and the control that asks leaves for whose it is.
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Make an export' })).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('link', { name: 'Your data' })).toBeInTheDocument()
+    expect(document.activeElement).not.toBe(document.body)
   })
 
   it('says one that has expired since can no longer be downloaded', async () => {

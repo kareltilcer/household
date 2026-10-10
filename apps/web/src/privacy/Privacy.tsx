@@ -30,7 +30,7 @@
 // *withdrawn* has nothing to be, no grant standing over one's own account; nor have *pending*
 // and *conflicted*, nothing here being held to be sent later.
 import { Link } from 'react-router'
-import { readState, useNoWithdrawal, useOwnZone } from '../account/common.ts'
+import { readState, usePartFocusKept, useNoWithdrawal, useOwnZone } from '../account/common.ts'
 import { Section, SettingsPage } from '../account/Page.tsx'
 import account from '../account/Settings.module.css'
 import { inHousehold, paths } from '../app/paths.ts'
@@ -39,6 +39,7 @@ import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
+import { cx } from '../ui/cx.ts'
 import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
@@ -58,47 +59,54 @@ function Owned() {
   // page says once, above, that it is. Its owner is not told that they own none.
   const mine = (households.data ?? []).filter((household) => household.my_role === 'owner')
   const owned = mine.filter((household) => household.entitlement?.state !== 'suspended')
+  const state = readState(households, online)
+  // *Try again* leaves with the sentence it stands in as soon as the households are asked for
+  // again, and the focus it held would drop to the page: it is put on this body's own place,
+  // where the skeleton and then the lines are drawn (account/common.ts).
+  const view = usePartFocusKept()
   return (
-    <StateFrame
-      state={readState(households, online)}
-      skeleton={<Skeleton bars={[[50, 1.25]]} />}
-      // A member who owns none is told whose it is, which is no empty list to teach.
-      empty={null}
-      texts={{
-        error: {
-          title: t('shell.households.error.title'),
-          text: t('shell.households.error.body'),
-          actions: (
-            <Button
-              onClick={() => {
-                void households.refetch()
-              }}
-            >
-              {t('ui.retry')}
-            </Button>
-          ),
-        },
-        withdrawn,
-      }}
-    >
-      {() =>
-        owned.length === 0 ? (
-          mine.length === 0 ? (
-            <p className={account.text}>{t('privacy.restrict.none')}</p>
-          ) : null
-        ) : (
-          <ul className={styles.lines} role="list">
-            {owned.map((household) => (
-              <li key={household.id} className={styles.line}>
-                <Link className={account.link} to={inHousehold.data(household.id)}>
-                  {t('privacy.restrict.open', { household: household.name ?? '' })}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )
-      }
-    </StateFrame>
+    <div ref={view} tabIndex={-1} className={cx(account.view, styles.stack)}>
+      <StateFrame
+        state={state}
+        skeleton={<Skeleton bars={[[50, 1.25]]} />}
+        // A member who owns none is told whose it is, which is no empty list to teach.
+        empty={null}
+        texts={{
+          error: {
+            title: t('shell.households.error.title'),
+            text: t('shell.households.error.body'),
+            actions: (
+              <Button
+                onClick={() => {
+                  void households.refetch()
+                }}
+              >
+                {t('ui.retry')}
+              </Button>
+            ),
+          },
+          withdrawn,
+        }}
+      >
+        {() =>
+          owned.length === 0 ? (
+            mine.length === 0 ? (
+              <p className={account.text}>{t('privacy.restrict.none')}</p>
+            ) : null
+          ) : (
+            <ul className={styles.lines} role="list">
+              {owned.map((household) => (
+                <li key={household.id} className={styles.line}>
+                  <Link className={account.link} to={inHousehold.data(household.id)}>
+                    {t('privacy.restrict.open', { household: household.name ?? '' })}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+      </StateFrame>
+    </div>
   )
 }
 

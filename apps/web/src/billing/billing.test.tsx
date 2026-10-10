@@ -76,13 +76,51 @@ function withAnotherOwner(): BillingServer {
   return server
 }
 
-/** The household in a state that takes no writes, as every screen of it reads it. */
-function takingNoWrites(server: BillingServer, state: Subscription['state']): BillingServer {
+/** An owner's restriction, as the household's answer carries one whenever it is restricted. */
+const restriction = {
+  restricted_by: janaPays,
+  restricted_at: '2026-09-01T08:00:00Z',
+  reason: null,
+}
+
+type Entitlement = NonNullable<BillingServer['household']['entitlement']>
+
+/**
+ * The household in a state that takes no writes, as every screen of it reads it, with what its
+ * own answer carries in that state: the day a lapse keeps its data until, a restriction.
+ */
+function takingNoWrites(
+  server: BillingServer,
+  state: Subscription['state'],
+  more: Partial<Entitlement> = {},
+): BillingServer {
   server.household = {
     ...server.household,
-    entitlement: { state, can_write: false, can_upload: false },
+    entitlement: { state, can_write: false, can_upload: false, ...more },
   }
   return server
+}
+
+/** The day a lapsed household's data is kept until, as its two answers both give it. */
+const retained = '2027-11-13T10:00:00Z'
+
+/**
+ * A lapse, as the subscription and the household's own answer both say it: nothing subscribed,
+ * nothing written, and the day the data is kept until, which a lapse always has.
+ */
+function lapsed(
+  server: BillingServer,
+  state: 'read_only' | 'canceled' = 'read_only',
+  more: Partial<Entitlement> = {},
+): BillingServer {
+  server.subscription = trial({ state, trial_ends_at: null, data_retained_until: retained })
+  return takingNoWrites(server, state, { data_retained_until: retained, ...more })
+}
+
+/** A subscribed household an owner restricted, as both answers say it. */
+function restricted(server: BillingServer): BillingServer {
+  server.subscription = subscription({ state: 'restricted' })
+  return takingNoWrites(server, 'restricted', { restriction })
 }
 
 const section = (name: string) => screen.findByRole('region', { name })
@@ -167,20 +205,37 @@ describe('billing, as its payer reads it', () => {
     expect(valueOf(month, 'Extra storage')).toHaveTextContent('None')
   })
 
+  // A household with no subscription is billed no storage, whatever its blocks would come to:
+  // no charge is projected for it, and nothing says when storage is billed.
+  it('projects no charge for storage where the household has no subscription', async () => {
+    const server = createServer()
+    server.subscription = trial()
+    await read(server)
+    const month = await section('This month’s storage')
+    await within(month).findByText('Month')
+    expect(valueOf(month, 'Extra storage')).toHaveTextContent('2 blocks of 10 GB')
+    expect(within(month).queryByText('Projected charge for storage')).not.toBeInTheDocument()
+    expect(month).not.toHaveTextContent('EUR')
+    expect(month).not.toHaveTextContent(/billed after the month ends/)
+    expect(within(month).getByRole('link', { name: 'Storage' })).toBeInTheDocument()
+  })
+
   it('says this month’s storage could not be read, beside everything else, and reads it again', async () => {
     const server = createServer()
     server.on(`GET ${at}/usage`, () => Promise.reject(new TypeError('offline')))
     const { user } = await read(server)
     const month = await section('This month’s storage')
     expect(
-      await within(month).findByText(
-        'This month’s storage could not be read. Nothing about the subscription has changed. Try again.',
-      ),
+      await within(month).findByText('This month’s storage could not be read. Try again.'),
     ).toBeInTheDocument()
     expect(await section('Subscription')).toBeInTheDocument()
     server.on(`GET ${at}/usage`, () => Response.json(server.usage))
     await user.click(within(month).getByRole('button', { name: 'Try again' }))
     expect(await within(month).findByText('Stored now')).toBeInTheDocument()
+    // The press left with the sentence it stood in: the focus is on the section's own place.
+    await waitFor(() => {
+      expect(placeOf(month)).toHaveFocus()
+    })
   })
 })
 
@@ -206,46 +261,63 @@ describe('how the household stands', () => {
     expect(screen.queryByRole('region', { name: 'Payment method' })).not.toBeInTheDocument()
   })
 
-  it.each<[Partial<Subscription>, string, string]>([
+  // Each state as the server answers it, in the subscription and in the household's own answer:
+  // a payment that failed has its subscription, uploads are what a grace pauses, and nothing is
+  // written under a lapse or a restriction, which is always carried with its state.
+  it.each<[Subscription['state'], (server: BillingServer) => void, string, string]>([
     [
-      { state: 'past_due' },
+      'past_due',
+      (server) => {
+        server.subscription = subscription({ state: 'past_due' })
+        server.household = {
+          ...server.household,
+          entitlement: { state: 'past_due', can_write: true, can_upload: true },
+        }
+      },
       'Payment failed',
       'The last payment did not go through. The payment processor tries it again, and nothing is restricted meanwhile. A new payment method is tried as soon as it is confirmed.',
     ],
     [
-      { state: 'grace', grace_ends_at: '2026-10-14T10:00:00Z' },
+      'grace',
+      (server) => {
+        const until = '2026-10-14T10:00:00Z'
+        server.subscription = trial({ state: 'grace', trial_ends_at: null, grace_ends_at: until })
+        server.household = {
+          ...server.household,
+          entitlement: { state: 'grace', can_write: true, can_upload: false, grace_ends_at: until },
+        }
+      },
       'Uploads paused',
       // Of a trial that ran out as of a subscription that ended: the answer does not tell them apart.
       'The trial or the subscription has ended. Uploading files is paused, and everything else works until Oct 14, 2026, when the household becomes read-only. Subscribing brings everything back.',
     ],
     [
-      { state: 'read_only', data_retained_until: '2027-11-13T10:00:00Z' },
+      'read_only',
+      (server) => lapsed(server, 'read_only'),
       'Read-only',
       'Nothing can be added or changed. Everything can still be read and exported, and is kept until Nov 13, 2027. Subscribing brings writing back and clears that date.',
     ],
     [
-      { state: 'canceled', data_retained_until: '2027-11-13T10:00:00Z' },
+      'canceled',
+      (server) => lapsed(server, 'canceled'),
       'Cancelled',
       'The subscription was cancelled and the period paid for has ended. Nothing can be added or changed; everything can still be read and exported, and is kept until Nov 13, 2027. Subscribing again brings writing back and clears that date.',
     ],
     [
-      { state: 'restricted' },
+      'restricted',
+      (server) => restricted(server),
       'Restricted',
       'An owner has restricted the household, so nothing can be changed until an owner lifts it. The subscription is not affected. Lifting it is under Data.',
     ],
-  ])('says what %o means, in a word and a sentence', async (more, word, sentence) => {
+  ])('says what %s means, in a word and a sentence', async (state, stands, word, sentence) => {
     const server = createServer()
-    server.subscription = trial({ trial_ends_at: null, ...more })
-    server.household = {
-      ...server.household,
-      entitlement: { state: more.state ?? 'active', can_write: true, can_upload: true },
-    }
+    stands(server)
     await read(server)
     const standing = await section('Subscription')
     expect(within(standing).getByText(word)).toBeInTheDocument()
     expect(within(standing).getByText(sentence)).toBeInTheDocument()
     // No date the server did not give: a failed payment has none.
-    if (more.state === 'past_due') expect(standing).not.toHaveTextContent(/\d{4}/)
+    if (state === 'past_due') expect(standing).not.toHaveTextContent(/\d{4}/)
   })
 
   // The next charge of a subscription whose payment failed is the processor's retry, which no
@@ -263,20 +335,7 @@ describe('how the household stands', () => {
   // A lapse outranks a restriction, which stands under it all the same (D-114): subscribing
   // again does not lift it, and that is said beside what subscribing brings back.
   it('says under a lapse that a restriction stays until an owner lifts it, with the way there', async () => {
-    const server = createServer()
-    server.subscription = trial({ state: 'read_only', trial_ends_at: null })
-    takingNoWrites(server, 'read_only')
-    server.household = {
-      ...server.household,
-      entitlement: {
-        ...server.household.entitlement,
-        restriction: {
-          restricted_by: janaPays,
-          restricted_at: '2026-09-01T08:00:00Z',
-          reason: null,
-        },
-      },
-    }
+    const server = lapsed(createServer(), 'read_only', { restriction })
     await read(server)
     const standing = await section('Subscription')
     expect(
@@ -292,14 +351,8 @@ describe('how the household stands', () => {
 
   // The household's own deletion comes before the day a lapse keeps its data until, and a
   // payment does not take it back: that day is not said, nor that subscribing clears it.
-  it('names no day its data is kept until where the household’s deletion is scheduled', async () => {
-    const server = createServer()
-    server.subscription = trial({
-      state: 'read_only',
-      trial_ends_at: null,
-      data_retained_until: '2027-11-13T10:00:00Z',
-    })
-    takingNoWrites(server, 'read_only')
+  it('names no day its data is kept until where the household’s deletion is scheduled for sooner', async () => {
+    const server = lapsed(createServer())
     server.household = { ...server.household, deletion_scheduled_at: '2026-10-09T08:00:00Z' }
     await read(server)
     const standing = await section('Subscription')
@@ -311,10 +364,23 @@ describe('how the household stands', () => {
     expect(standing).not.toHaveTextContent('Nov 13, 2027')
   })
 
+  // The data goes on whichever day is due first. A deletion is always thirty days on, so one
+  // scheduled in the last thirty days of a lapse comes after the day the lapse keeps the data
+  // until: that day is the one the household does not outlast, and it is still said.
+  it('still names the day its data is kept until where the household’s deletion is scheduled for later', async () => {
+    const server = lapsed(createServer())
+    server.household = { ...server.household, deletion_scheduled_at: '2027-11-20T08:00:00Z' }
+    await read(server)
+    const standing = await section('Subscription')
+    expect(
+      within(standing).getByText(
+        'Nothing can be added or changed. Everything can still be read and exported, and is kept until Nov 13, 2027. Subscribing brings writing back and clears that date.',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('leads from a restriction to where it is lifted', async () => {
-    const server = createServer()
-    server.subscription = subscription({ state: 'restricted' })
-    takingNoWrites(server, 'restricted')
+    const server = restricted(createServer())
     await read(server)
     expect(
       within(await section('Subscription')).getByRole('link', { name: 'Data' }),
@@ -336,13 +402,7 @@ describe('how the household stands', () => {
 
   // Everything under billing is outside the gate (FR-BI1): the strip says so, and the controls stay.
   it('still works in a household that takes no writes, and says that it does', async () => {
-    const server = createServer()
-    server.subscription = trial({
-      state: 'read_only',
-      trial_ends_at: null,
-      data_retained_until: '2027-11-13T10:00:00Z',
-    })
-    takingNoWrites(server, 'read_only')
+    const server = lapsed(createServer())
     await read(server)
     expect(
       await screen.findByText(
@@ -458,6 +518,49 @@ describe('changing how often the payer pays', () => {
       expect(server.to(reading).length).toBeGreaterThan(before)
     })
   })
+
+  // The server took the change and could not then read the processor. What is read again under
+  // the open question says the new way of paying, and the question stays the one that was asked:
+  // drawn from what is read, it would ask for the opposite change under *try again*.
+  it('keeps asking for the change it was opened for once the subscription read says it was made', async () => {
+    const server = createServer()
+    let asked = 0
+    server.on(changing, () => {
+      asked += 1
+      server.subscription = subscription({ interval: 'month', base_price: eur(599) })
+      return asked === 1 ? problem(503, 'billing_unavailable') : Response.json(server.subscription)
+    })
+    const { user } = await read(server)
+    await user.click(await screen.findByRole('button', { name: 'Pay monthly instead' }))
+    const dialog = screen.getByRole('dialog', { name: 'Pay monthly from now on?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Pay monthly instead' }))
+    await within(dialog).findByRole('alert')
+    // Read again: the page behind the question says the household pays by the month.
+    const standing = await section('Subscription')
+    await waitFor(() => {
+      expect(valueOf(standing, 'Plan')).toHaveTextContent('EUR 5.99 a month')
+    })
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Pay monthly from now on?')
+    expect(dialog).toHaveAccessibleDescription(
+      money(
+        'You would pay EUR 5.99 a month. The change takes effect now: the payment processor sets what you have already paid against the new price, and charges or credits the difference.',
+      ),
+    )
+    expect(
+      within(dialog)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Keep paying yearly', 'Pay monthly instead'])
+
+    // Pressed again, it asks for the same change, which the server answers as it stands.
+    await user.click(within(dialog).getByRole('button', { name: 'Pay monthly instead' }))
+    expect(await screen.findByText('You pay monthly now.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    const sent = await Promise.all(
+      server.to(changing).map((request) => request.clone().json() as Promise<unknown>),
+    )
+    expect(sent).toEqual([{ interval: 'month' }, { interval: 'month' }])
+  })
 })
 
 describe('cancelling, and taking a cancellation back', () => {
@@ -515,6 +618,72 @@ describe('cancelling, and taking a cancellation back', () => {
     })
   })
 
+  // The period's end is a day the household stays as it is until only where the period is paid
+  // for: with the last payment owed it may lapse before then, so the question, the toast and the
+  // section name no day, and say what is owed.
+  it('promises no day where the last payment is still owed, and says that it is', async () => {
+    const server = createServer()
+    server.subscription = subscription({ state: 'past_due' })
+    server.household = {
+      ...server.household,
+      entitlement: { state: 'past_due', can_write: true, can_upload: true },
+    }
+    server.on(cancelling, () => {
+      server.subscription = subscription({ state: 'past_due', cancel_at_period_end: true })
+      return Response.json(server.subscription)
+    })
+    const { user } = await read(server)
+    await user.click(await screen.findByRole('button', { name: 'Cancel the subscription' }))
+    const dialog = screen.getByRole('dialog', { name: 'Cancel the subscription for Tilcerovi?' })
+    expect(dialog).toHaveAccessibleDescription(
+      'The subscription for Tilcerovi will not renew, and until it ends you can take the cancellation back. The last payment is still owed: if the payment processor cannot collect it, the household loses uploads and then becomes read-only before the period ends, and this page says so.',
+    )
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Cancel the subscription for Tilcerovi' }),
+    )
+    const said =
+      'The subscription is cancelled and will not renew. The last payment is still owed, so how long the household stays as it is depends on whether it goes through. The cancellation can still be taken back.'
+    // The toast, and the section's own sentence once the question has closed.
+    const toasts = await screen.findByRole('region', { name: /^Notifications/ })
+    expect(await within(toasts).findByText(said)).toBeInTheDocument()
+    const standing = await section('Subscription')
+    expect(await within(standing).findByText(said)).toBeInTheDocument()
+    expect(within(standing).queryByText('Ends on')).not.toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent('Mar 2, 2027')
+  })
+
+  // A restriction's state does not say whether the period under it is paid for: no day is
+  // promised there either, in the words that name none.
+  it('names no day the subscription ends on in a household that is restricted', async () => {
+    const server = restricted(createServer())
+    server.on(cancelling, () => {
+      server.subscription = subscription({ state: 'restricted', cancel_at_period_end: true })
+      return Response.json(server.subscription)
+    })
+    const { user } = await read(server)
+    await user.click(await screen.findByRole('button', { name: 'Cancel the subscription' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveAccessibleDescription(
+      /^Tilcerovi stays exactly as it is until the period paid for ends,/,
+    )
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Cancel the subscription for Tilcerovi' }),
+    )
+    expect(
+      await screen.findByText(
+        'The subscription for Tilcerovi is cancelled. Nothing changes until the period paid for ends.',
+      ),
+    ).toBeInTheDocument()
+    const standing = await section('Subscription')
+    expect(
+      await within(standing).findByText(
+        'The subscription is cancelled and ends when the period paid for does. Nothing changes until then, and until then the cancellation can be taken back.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(standing).queryByText('Ends on')).not.toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent('Mar 2, 2027')
+  })
+
   it('takes a cancellation back while the period runs', async () => {
     const server = createServer()
     server.subscription = subscription({ cancel_at_period_end: true })
@@ -553,6 +722,29 @@ describe('cancelling, and taking a cancellation back', () => {
     await waitFor(() => {
       expect(server.to(reading).length).toBeGreaterThan(before)
     })
+  })
+
+  // A `503` is also what the server answers once the processor has taken the change and could
+  // not then be read: billing is read again, by whichever says the refusal, and once.
+  it('says the processor cannot be asked where a cancellation is taken back, and reads billing once', async () => {
+    const server = createServer()
+    server.subscription = subscription({ cancel_at_period_end: true })
+    server.on(resuming, () => problem(503, 'billing_unavailable'))
+    const { user } = await read(server)
+    const press = await screen.findByRole('button', { name: 'Resume the subscription' })
+    const before = server.to(reading).length
+    await user.click(press)
+    const standing = await section('Subscription')
+    expect(await within(standing).findByRole('alert')).toHaveTextContent(
+      /^The payment processor can’t be asked right now\. The page shows how billing stands\./,
+    )
+    await waitFor(() => {
+      expect(server.to(reading).length).toBeGreaterThan(before)
+    })
+    // A second read asked beside the first would have been sent by now.
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(server.to(reading)).toHaveLength(before + 1)
+    expect(press).toHaveFocus()
   })
 
   it('says who pays now where the payer pays no longer, and closes the question', async () => {
@@ -620,10 +812,12 @@ describe('replacing the payment method', () => {
     expect(
       within(method).queryByRole('button', { name: 'Replace the payment method' }),
     ).not.toBeInTheDocument()
-    // The control gave its place to the form: the focus is where the form stands.
-    expect(
-      within(method).getByRole('group', { name: 'Payment details' }).closest('[tabindex]'),
-    ).toHaveFocus()
+    // The control gave its place to the form: the focus is where the form stands, on the
+    // section's own place.
+    expect(placeOf(method)).toHaveFocus()
+    expect(placeOf(method)).toContainElement(
+      within(method).getByRole('group', { name: 'Payment details' }),
+    )
     // No payment is being retried: nothing says one is.
     expect(within(method).queryByText(/tried with the new method/)).not.toBeInTheDocument()
   })
@@ -694,6 +888,136 @@ describe('replacing the payment method', () => {
       expect(within(method).getByRole('status')).toHaveTextContent(
         'The new payment method is in use.',
       )
+    })
+  })
+
+  // Once said, it stays said: what is read after it takes nothing back of it.
+  it('goes on saying the new method is in use whatever is read after it', async () => {
+    const server = createServer()
+    server.subscription = subscription({ state: 'past_due' })
+    const { user, method, save } = await replacing(server)
+    await user.click(save)
+    server.subscription = subscription()
+    const status = within(method).getByRole('status')
+    await waitFor(() => {
+      expect(status).toHaveTextContent('The new payment method is in use.')
+    })
+    // A later payment fails, and the page is looked at again.
+    server.subscription = subscription({ state: 'past_due' })
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    expect(
+      await within(await section('Subscription')).findByText('Payment failed'),
+    ).toBeInTheDocument()
+    expect(status).toHaveTextContent('The new payment method is in use.')
+  })
+
+  // A renewal that fails while the processor's word is waited for moves the state and not the
+  // method: it is no word on the new one.
+  it('does not take a payment that fails meanwhile for the new method being in use', async () => {
+    const server = createServer()
+    const { user, method, save } = await replacing(server)
+    await user.click(save)
+    const status = within(method).getByRole('status')
+    await waitFor(() => {
+      expect(status).toHaveTextContent(
+        'The payment processor is confirming the new payment method.',
+      )
+    })
+    server.subscription = subscription({ state: 'past_due' })
+    expect(
+      await within(await section('Subscription')).findByText('Payment failed'),
+    ).toBeInTheDocument()
+    expect(status).not.toHaveTextContent('The new payment method is in use.')
+    await waitFor(() => {
+      expect(status).toHaveTextContent(/^The payment processor has not said yet/)
+    })
+  })
+
+  // Neither the form's fault nor the method's: the processor may have taken it all the same.
+  const lost = () => Promise.resolve({ error: { type: 'api_connection_error' } })
+
+  // The processor took the new method and its answer never came: pressed again it refuses what
+  // it has taken, at every press. Once the summary read says another method the form is put
+  // away, the sentence says the method is in use, and the focus is on the section's own place.
+  it.each([
+    ['whose answer was lost', lost],
+    ['that the script threw on', () => Promise.reject(new Error('the script threw'))],
+  ])(
+    'puts the form away once a confirmation %s is read as a method in use',
+    async (_how, answer) => {
+      const server = createServer()
+      const { user, method, save } = await replacing(server)
+      standIn.answer = answer
+      server.subscription = subscription({
+        payment_method: { brand: 'mastercard', last4: '0005', exp_month: 1, exp_year: 2030 },
+      })
+      await user.click(save)
+      const status = within(method).getByRole('status')
+      await waitFor(() => {
+        expect(status).toHaveTextContent('The new payment method is in use.')
+      })
+      expect(
+        within(method).getByText('Mastercard ending in 0005, expires 01/2030'),
+      ).toBeInTheDocument()
+      expect(
+        within(method).queryByRole('group', { name: 'Payment details' }),
+      ).not.toBeInTheDocument()
+      expect(within(method).queryByRole('alert')).not.toBeInTheDocument()
+      expect(standIn.frames[0]?.destroyed).toBe(true)
+      await waitFor(() => {
+        expect(status.closest('[tabindex]')).toHaveFocus()
+      })
+      expect(
+        within(method).getByRole('button', { name: 'Replace the payment method' }),
+      ).toBeVisible()
+    },
+  )
+
+  // Where what is read after it names the method there was, nothing says the processor took it:
+  // the form stays under its own sentence, whatever else of the subscription moved.
+  it('keeps the form, and says nothing of the method, where the read after a lost answer names the same one', async () => {
+    const server = createServer()
+    const { user, method, save } = await replacing(server)
+    standIn.answer = lost
+    // Something else of the subscription moved meanwhile, which is how the read is seen here.
+    server.subscription = subscription({ cancel_at_period_end: true })
+    await user.click(save)
+    expect(await within(method).findByRole('alert')).toHaveTextContent(
+      /^That could not be confirmed with the payment processor, and this page cannot tell yet whether it went through\./,
+    )
+    expect(await screen.findByRole('button', { name: 'Resume the subscription' })).toBeVisible()
+    expect(within(method).getByRole('group', { name: 'Payment details' })).toBeInTheDocument()
+    expect(within(method).getByRole('alert')).toBeInTheDocument()
+    expect(within(method).getByRole('status')).toBeEmptyDOMElement()
+    expect(save).toHaveFocus()
+  })
+
+  // A form somebody is typing into is not taken away because the summary moved: only an outcome
+  // nobody gave makes what is read after it this form's own doing.
+  it('keeps a form nothing was confirmed with where the summary read names another method', async () => {
+    const server = createServer()
+    const { user, method, save } = await replacing(server)
+    // Replaced in another tab meanwhile, and the page is looked at again.
+    server.subscription = subscription({
+      payment_method: { brand: 'mastercard', last4: '0005', exp_month: 1, exp_year: 2030 },
+    })
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    expect(
+      await within(method).findByText('Mastercard ending in 0005, expires 01/2030'),
+    ).toBeInTheDocument()
+    expect(within(method).getByRole('group', { name: 'Payment details' })).toBeInTheDocument()
+    const status = within(method).getByRole('status')
+    expect(status).toBeEmptyDOMElement()
+
+    // Confirmed after that, a method is read against the summary as it stood when the
+    // processor took it: the method the other tab set says nothing of this one.
+    await user.click(save)
+    await waitFor(() => {
+      expect(status).toHaveTextContent(/^The payment processor has not said yet/)
     })
   })
 
@@ -904,6 +1228,53 @@ describe('the invoices', () => {
     expect(await rowOf('Invoice HH-0042')).toBeInTheDocument()
     expect(asked).toEqual([null, 'c2'])
     expect(screen.queryByRole('button', { name: 'Show earlier invoices' })).not.toBeInTheDocument()
+    // The control left with the last of them: the focus is on the section's own place.
+    await waitFor(() => {
+      expect(placeOf(screen.getByRole('region', { name: 'Invoices' }))).toHaveFocus()
+    })
+  })
+
+  // No frame draws the read of the earlier ones, the invoices already read being drawn all the
+  // same: it is said above the control that asks, as it arrives and again for each that fails.
+  it('says the earlier ones could not be read, above the control that asks again for them', async () => {
+    const server = createServer()
+    let fails = true
+    server.on(`GET ${at}/invoices`, (request) => {
+      if (new URL(request.url).searchParams.get('cursor') === null) {
+        return Response.json({ items: [storage], meta: { has_more: true, next_cursor: 'c2' } })
+      }
+      return fails
+        ? Promise.reject(new TypeError('offline'))
+        : Response.json({ items: [invoice()], meta: { has_more: false, next_cursor: null } })
+    })
+    const { user } = await read(server)
+    await rowOf('Invoice of Oct 1, 2026')
+    const invoices = screen.getByRole('region', { name: 'Invoices' })
+    const more = within(invoices).getByRole('button', { name: 'Show earlier invoices' })
+    await user.click(more)
+    const said = await within(invoices).findByRole('alert')
+    expect(said).toHaveTextContent(
+      'The invoices could not be read. Nothing about them has changed. Try again.',
+    )
+    // The ones already read stay, and so does the control, under the sentence.
+    expect(within(invoices).getByText('Invoice of Oct 1, 2026')).toBeInTheDocument()
+    expect(said.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(more).not.toHaveAttribute('aria-busy')
+    expect(more).toHaveFocus()
+
+    // A second failure is a sentence of its own, said again.
+    await user.click(more)
+    await waitFor(() => {
+      expect(within(invoices).getByRole('alert')).not.toBe(said)
+    })
+    expect(within(invoices).getByRole('alert')).toHaveTextContent(
+      /^The invoices could not be read\./,
+    )
+
+    fails = false
+    await user.click(more)
+    expect(await rowOf('Invoice HH-0042')).toBeInTheDocument()
+    expect(within(invoices).queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('says its payer’s invoices could not be read, and reads them again', async () => {
@@ -922,6 +1293,10 @@ describe('the invoices', () => {
     )
     await user.click(within(invoices).getByRole('button', { name: 'Try again' }))
     expect(await rowOf('Invoice HH-0042')).toBeInTheDocument()
+    // The press left with the sentence it stood in: the focus is on the section's own place.
+    await waitFor(() => {
+      expect(placeOf(invoices)).toHaveFocus()
+    })
   })
 })
 
@@ -946,8 +1321,7 @@ describe('handing billing over', () => {
 
   // Making an owner is a write the gate refuses (FR-BI1): no way that could only be refused.
   it('says making an owner waits for a household that takes writes, and leads nowhere', async () => {
-    const server = takingNoWrites(createServer(), 'read_only')
-    server.subscription = trial({ state: 'read_only', trial_ends_at: null })
+    const server = lapsed(createServer())
     await read(server)
     const handover = await section('Hand billing over')
     expect(
@@ -1132,6 +1506,33 @@ describe('handing billing over', () => {
     expect(await screen.findByText(/^Miloš Tilcer pays for the household\./)).toBeInTheDocument()
   })
 
+  // The answer itself says that no offer is open, whatever becomes of reading who pays after
+  // it: the offer is not left drawn, with its control, under the sentence that none is open.
+  it('draws no offer to take back once the server has answered, where who pays could not be read after', async () => {
+    const server = withAnotherOwner()
+    server.subscription = subscription({ transfer: offer })
+    server.on(withdrawing, () => {
+      server.on(reading, () => Promise.reject(new TypeError('offline')))
+      return noContent()
+    })
+    const { user } = await read(server)
+    const handover = await section('Hand billing over')
+    await user.click(within(handover).getByRole('button', { name: 'Take the offer back' }))
+    expect(
+      await screen.findByText('No offer of billing is open now. The page shows who pays.'),
+    ).toBeInTheDocument()
+    expect(
+      within(handover).queryByRole('button', { name: 'Take the offer back' }),
+    ).not.toBeInTheDocument()
+    expect(within(handover).queryByText(/^You offered billing to another owner/)).toBeNull()
+    expect(
+      within(handover).getByRole('button', { name: 'Hand billing to another owner' }),
+    ).toBeVisible()
+    await waitFor(() => {
+      expect(placeOf(handover)).toHaveFocus()
+    })
+  })
+
   // No frame draws this part's read: it is said as it arrives, to whoever cannot see it.
   it('says, as it arrives, that who else owns the household could not be read', async () => {
     const server = createServer()
@@ -1269,6 +1670,23 @@ describe('billing, for everybody else', () => {
     expect(server.to(`GET ${at}/usage`)).toHaveLength(0)
   })
 
+  // The processor's secret is left in nobody's address: somebody who owns the household no
+  // longer when their bank sends them back is drawn nothing of billing, and what the address
+  // carried is taken out of it all the same.
+  it('takes what a bank’s page sent back out of the address of somebody who is no owner', async () => {
+    const server = createServer(accountOf(petr))
+    const { router } = open(
+      `${address}?payment_intent=pi_1&payment_intent_client_secret=pi_1_secret_2&redirect_status=succeeded`,
+      server,
+    )
+    expect(await screen.findByText('This link doesn’t open anything here.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(router.state.location.search).toBe('')
+    })
+    expect(router.state.location.pathname).toBe(address)
+    expect(server.to(reading)).toHaveLength(0)
+  })
+
   it('reads the household again where billing answers that its reader owns it no longer', async () => {
     const server = createServer()
     server.on(reading, () => problem(404, 'not_found'))
@@ -1288,19 +1706,24 @@ describe('billing’s read', () => {
     expect(screen.queryByRole('region', { name: 'Subscription' })).not.toBeInTheDocument()
   })
 
-  it('says billing could not be read and that nothing was charged, and reads it again', async () => {
+  it('says billing could not be read and that opening it charges nothing, and reads it again', async () => {
     const server = createServer()
     server.on(reading, () => Promise.reject(new TypeError('offline')))
     const { user } = await read(server)
     expect(await screen.findByText('Billing could not be read')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'The subscription is as it was: opening this page charges nothing. Check your connection and try again.',
+        'Opening this page charges nothing and changes nothing. Check your connection and try again.',
       ),
     ).toBeInTheDocument()
     server.on(reading, () => Response.json(server.subscription))
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await section('Subscription')).toBeInTheDocument()
+    const standing = await section('Subscription')
+    // The press left with the sentence it stood in: the focus is on the screen's own place.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(standing.closest('[tabindex="-1"]'))
+    })
+    expect(document.body).not.toHaveFocus()
   })
 
   // A read that waits for a connection is no read under way: nothing is kept, and it is said.

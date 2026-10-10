@@ -82,6 +82,25 @@ async function centre(server: HouseholdServer = serving()) {
 /** A right's section, by the plain words it is named in. */
 const right = (name: string) => screen.getByRole('region', { name })
 
+/**
+ * The place of its own that the body of `section` gives the focus a control left behind: what
+ * stands around `drawn`, something the body draws, inside the section.
+ */
+function placeIn(section: HTMLElement, drawn: HTMLElement): HTMLElement {
+  const place = drawn.closest<HTMLElement>('[tabindex="-1"]')
+  if (place === null || !section.contains(place)) {
+    throw new Error('the body has no place of its own')
+  }
+  return place
+}
+
+/** The focus is on `place`, and not dropped to the page. */
+async function focusIsOn(place: HTMLElement) {
+  await waitFor(() => {
+    expect(document.activeElement).toBe(place)
+  })
+}
+
 const copy = 'Get a copy of everything'
 const stopping = 'Stop all changes for now'
 const consenting = 'Choose what you agree to'
@@ -315,9 +334,10 @@ describe('stopping all changes, from an account', () => {
       Response.json({ items: [{ id: home, name: 'Tilcerovi', my_role: 'owner' }] }),
     )
     await user.click(within(section).getByRole('button', { name: 'Try again' }))
-    expect(
-      await within(section).findByRole('link', { name: 'Open the data of Tilcerovi' }),
-    ).toBeInTheDocument()
+    const way = await within(section).findByRole('link', { name: 'Open the data of Tilcerovi' })
+    // *Try again* left with the sentence it stood in: the focus it held is on this body's own
+    // place, and not dropped to the page.
+    await focusIsOn(placeIn(section, way))
   })
 })
 
@@ -491,6 +511,49 @@ describe('the two consents', () => {
     expect(screen.getByRole('switch', { name: statistics })).toBeChecked()
   })
 
+  // Each change sends both, so a later one carries the earlier one's choice: where the server
+  // took the later one, both switches are as chosen and as it holds them, whatever the earlier
+  // one was answered.
+  it('say nothing of an earlier change that was refused where the one made after it was taken', async () => {
+    const server = serving()
+    let kept = { analytics: false, marketing_email: false }
+    server.on('GET /me/consents', () => Response.json(kept))
+    const answers: ((response: Response) => void)[] = []
+    server.on(
+      'PUT /me/consents',
+      () =>
+        new Promise<Response>((resolve) => {
+          answers.push(resolve)
+        }),
+    )
+    const { user } = await centre(server)
+    await user.click(await screen.findByRole('switch', { name: statistics }))
+    await user.click(screen.getByRole('switch', { name: news }))
+    await waitFor(() => {
+      expect(answers).toHaveLength(2)
+    })
+    const reads = server.to('GET /me/consents').length
+    // The first is refused, and the second, which carried the first's choice, is taken.
+    kept = { analytics: true, marketing_email: true }
+    act(() => {
+      answers[0]?.(problem(429, 'rate_limited'))
+    })
+    act(() => {
+      answers[1]?.(Response.json(kept))
+    })
+    // What the server holds is read once both are answered, and is what was chosen.
+    await waitFor(() => {
+      expect(server.to('GET /me/consents').length).toBeGreaterThan(reads)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(screen.getByRole('switch', { name: statistics })).toBeChecked()
+    expect(screen.getByRole('switch', { name: news })).toBeChecked()
+    expect(screen.queryByText('Not saved')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('put a refused change back, say why, and let it be put away', async () => {
     const server = serving()
     server.on('PUT /me/consents', () => problem(429, 'rate_limited'))
@@ -504,6 +567,9 @@ describe('the two consents', () => {
     })
     await user.click(within(strip).getByRole('button', { name: 'Dismiss' }))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // *Dismiss* left with the strip it stood in: the focus it held is on the consents' own
+    // place, and not dropped to the page.
+    await focusIsOn(placeIn(right(consenting), screen.getByRole('switch', { name: statistics })))
   })
 
   it('are asked at once with no connection, say the server was not reached, and are sent by nothing later', async () => {
@@ -547,7 +613,11 @@ describe('the two consents', () => {
     expect(within(right(copy)).getByRole('button', { name: 'Export my data' })).toBeInTheDocument()
     failing.on('GET /me/consents', () => Response.json({ analytics: true, marketing_email: false }))
     await user.click(within(section).getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByRole('switch', { name: statistics })).toBeChecked()
+    const control = await screen.findByRole('switch', { name: statistics })
+    expect(control).toBeChecked()
+    // *Try again* left with the sentence it stood in: the focus it held is on the consents' own
+    // place, and not dropped to the page.
+    await focusIsOn(placeIn(section, control))
   })
 
   // A read that waits for a connection is no read under way: nothing is kept, and it is said.
@@ -654,9 +724,37 @@ describe('whom to complain to', () => {
     ).toBeInTheDocument()
     server.on(`GET /households/${home}`, () => Response.json(tilcerovi))
     await user.click(within(section).getByRole('button', { name: 'Try again' }))
+    const authority = await within(section).findByRole('link', {
+      name: 'Office for Personal Data Protection',
+    })
+    // *Try again* left with the sentence it stood in: the focus it held is on the authorities'
+    // own place, and not dropped to the page.
+    await focusIsOn(placeIn(section, authority))
+  })
+
+  // The households unread, two bodies of the page say so, each with its own *Try again*, and
+  // one read answers both. The focus goes to the place of the body whose control was pressed:
+  // a page watched whole would hand it to whichever body looked first.
+  it('keeps the focus in its own body where the households’ read is another body’s too', async () => {
+    const server = serving()
+    server.on('GET /households', () => Promise.reject(new TypeError('offline')))
+    const { user } = await centre(server)
+    const section = right(complaining)
+    const other = right(stopping)
     expect(
-      await within(section).findByRole('link', { name: 'Office for Personal Data Protection' }),
+      await within(section).findByText('The authorities could not be read. Nothing was changed.'),
     ).toBeInTheDocument()
+    expect(await within(other).findByText('Your households could not be read')).toBeInTheDocument()
+    server.on('GET /households', () =>
+      Response.json({ items: [{ id: home, name: 'Tilcerovi', my_role: 'owner' }] }),
+    )
+    await user.click(within(section).getByRole('button', { name: 'Try again' }))
+    const authority = await within(section).findByRole('link', {
+      name: 'Office for Personal Data Protection',
+    })
+    const way = await within(other).findByRole('link', { name: 'Open the data of Tilcerovi' })
+    await focusIsOn(placeIn(section, authority))
+    expect(placeIn(other, way)).not.toHaveFocus()
   })
 
   // An account has no country, and a member in no household has none to read: the device's

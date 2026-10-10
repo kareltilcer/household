@@ -49,6 +49,12 @@ export function underWay(job: Pick<ExportJob, 'status'>): boolean {
 export interface ExportSource {
   /** What its list is filed under: the household's own key, or the account's. */
   readonly key: QueryKey
+  /**
+   * The household whose exports these are, where they are a household's: what is read again,
+   * alone, where the list itself is answered as not its reader's (`useRereadWhereRefused`). Not
+   * `reread`, which reads the list with it: the refused list would only be refused again.
+   */
+  readonly household?: string
   /** Its reader's own exports, newest first, fifty at most. */
   readonly list: (signal: AbortSignal) => Promise<ExportJob[]>
   /** Asks for one. While one waits or is being made, the server answers that one. */
@@ -77,6 +83,7 @@ export function useHouseholdExports(household: string): ExportSource {
     const path = { household_id: household }
     return {
       key: householdExportsKey(household),
+      household,
       reread,
       list: async (signal) =>
         unwrap(await api.GET('/households/{household_id}/exports', { params: { path }, signal }))

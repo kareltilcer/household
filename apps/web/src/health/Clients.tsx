@@ -16,8 +16,8 @@
 // this page or another build: nothing knows which version is the newest, so the prototype's
 // *two versions behind* has no source and no client is ever behind. And a client under the
 // oldest version the deployment serves must update before it syncs again, which is the one
-// status of this screen. A client that reported before versions were recorded has none, and
-// its row says so.
+// status of this screen. A client whose last report named no version has none, and its row
+// says so; this browser's own row names the page's, which is the one it syncs as.
 //
 // This browser's row is marked, by the id its replica reports under, which only the tab that
 // holds the replica can say; another tab says that it cannot.
@@ -28,7 +28,8 @@
 // the ledger did not expect: a browser reports a quarter of an hour after it connects, so an
 // owner who opens this first reads one sentence. *Absent* is everybody but an owner. *Read-only*
 // is the list under a notice: nothing here writes, and in a household that takes no writes
-// no client reports either, so each row is as it last did. Nothing is *pending*, *syncing*,
+// no client reports either, so each row is as it last did, and a list of none stays one: it is
+// drawn under the same notice, and not as *empty*. Nothing is *pending*, *syncing*,
 // *conflicted* or *rejected*, a version being reported and never edited; and what would be
 // *withdrawn*, an owner made a member while the screen is open, is the absent state too, as the
 // list's own refusal says once it is read again.
@@ -107,7 +108,9 @@ function Row({
   // The oldest version of its type the deployment serves, where it is under it. This browser's
   // own row is held to the version of the page that draws it, which is what it syncs as from now
   // on, and not to the one its replica last reported under: a page served since the minimum
-  // was raised would be told that it must update, by a report from before it was loaded.
+  // was raised would be told that it must update, by a report from before it was loaded. It is
+  // the version its row names too, which is the one every other row's *the same build as this
+  // browser* is said of.
   const held = own ? ownVersion(clientName()) : version
   const under = held !== null && minimum !== null && isUnder(held, minimum) ? minimum : undefined
 
@@ -127,9 +130,9 @@ function Row({
           </>
         )}
         <p className={styles.detail}>
-          {version === null
+          {held === null
             ? t('clients.row.no_version')
-            : t('clients.row.version', { version: data(version) })}
+            : t('clients.row.version', { version: data(held) })}
         </p>
         {/* A build is a browser's: the app on a phone is another app, and is compared with nothing. */}
         {own || kind !== 'browser' || client.type !== 'web' || version === null ? null : (
@@ -164,8 +167,13 @@ function Listed() {
 
   const items = read.data?.items ?? []
   const base = readState(read, online, items.length === 0)
+  // In a household that takes no writes no client reports, so the list is as it last was, and
+  // one that lists nothing among them: the sentence that teaches says that a client is listed
+  // once it has reported, which nothing there makes true.
   const state: DataState =
-    !writes(household) && (base === 'populated' || base === 'offline') ? 'readonly' : base
+    !writes(household) && (base === 'populated' || base === 'offline' || base === 'empty')
+      ? 'readonly'
+      : base
   // The screen's one control, *Try again*, leaves with the sentence it stands in once the list
   // is read, and the focus it held would drop to the page: it is put on the list's own place.
   const view = useFocusKept(state === 'error', state)

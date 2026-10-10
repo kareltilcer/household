@@ -9,9 +9,10 @@
 // in one place, on the server (D-132).
 import type { BaseId } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
-import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import { refocus, useSaid, type Said } from '../account/common.ts'
+import { useCallback } from 'react'
+import { useSaid, type Said } from '../account/common.ts'
 import account from '../account/Settings.module.css'
+import { problemIn } from '../api/problem.ts'
 import { useReread, type Subscription } from '../household/data.ts'
 import type { EntitlementState } from '../household/households.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
@@ -191,57 +192,25 @@ export function useMethodWords(): (method: Method) => string {
   }
 }
 
-/**
- * Where the focus goes when a control of one part of a screen has left the page with the focus
- * on it: to the part's own place, which takes the ref this answers and a `tabIndex` of -1. A
- * button gives its place to the payment form, the form to a sentence, *Cancel* to *Resume*, a
- * question closes over a control that is gone: each took the focus with it, and nothing else
- * says where its member is (D-166).
- *
- * It is moved only where it was last on something inside the part that is on the page no
- * longer. A focus that went anywhere else meanwhile is its member's and is left alone, and so
- * is one that was never here: what changes under a member who is reading moves nothing. The
- * look is taken after every drawing of the part, since a control may leave under a question
- * that is still open and be missed only when the question closes.
- *
- * It is one part that is watched, of a screen that has several, each with a place of its own. A
- * screen with one place for its whole page, whose controls leave together, keeps the focus by
- * whether they are drawn (account/common.ts, `useFocusKept`): the two are not one hook, since
- * that one watches the whole page and would move the focus to the wrong part here.
- */
-export function useFocusKept(): RefObject<HTMLDivElement | null> {
-  const place = useRef<HTMLDivElement>(null)
-  /** The control inside the part that took the focus last, until the focus goes elsewhere. */
-  const held = useRef<Element | null>(null)
-  useEffect(() => {
-    const note = (event: FocusEvent) => {
-      const part = place.current
-      const target = event.target instanceof Element ? event.target : null
-      held.current = target !== null && target !== part && part?.contains(target) ? target : null
-    }
-    document.addEventListener('focusin', note)
-    return () => {
-      document.removeEventListener('focusin', note)
-    }
-  }, [])
-  useEffect(() => {
-    if (held.current?.isConnected !== false) return
-    held.current = null
-    refocus(place.current)
-  })
-  return place
-}
+// Where the focus goes when a control of one part of a screen has left with the focus on it:
+// each part's own place. Billing's screens are of several parts, and name the hook as they
+// always have; it is the account's to hold, where a page of another directory that has several
+// parts, the privacy centre, may take it too (account/common.ts).
+export { usePartFocusKept as useFocusKept } from '../account/common.ts'
 
 export interface Refusals {
   /** What the last write was refused with, until the next is asked. */
   readonly refused: Said | null
   /**
-   * Says what `error` refused a write with, and reads the household again where the refusal says
-   * the page is no longer how billing stands. It answers whether it is: its caller then closes
-   * what the write was asked from. Such a refusal is said in a toast: what is read again takes
-   * away the part it was pressed in, the payer's own controls from somebody who pays no longer,
-   * or the whole screen from somebody who owns no longer, and a banner there would go with it
-   * before it was read.
+   * Says what `error` refused a write with, and reads the household again where its sentence
+   * says that the page shows how billing stands: a refusal that says the page is no longer how
+   * it stands (`isMoved`), and the processor that cannot be asked, which the server answers too
+   * once the processor has taken a change it could not then read back. It answers whether it
+   * read again: a caller whose write may have landed whatever it was refused with reads again
+   * where this did not, and nothing is read twice. A refusal of the first kind is said in a
+   * toast: what is read again takes away the part it was pressed in, the payer's own controls
+   * from somebody who pays no longer, or the whole screen from somebody who owns no longer, and
+   * a banner there would go with it before it was read.
    */
   readonly refuse: (error: unknown) => boolean
   /** Says `text` as a refusal: what a write came to that no problem of the server's says. */
@@ -261,9 +230,10 @@ export function useRefusals(household: string): Refusals {
       if (moved) {
         say(null)
         toast({ message: refusal(error) })
-        void reread()
       } else say(refusal(error))
-      return moved
+      const read = moved || problemIn(error)?.code === 'billing_unavailable'
+      if (read) void reread()
+      return read
     },
     [say, refusal, reread, toast],
   )

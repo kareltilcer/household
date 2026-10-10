@@ -31,6 +31,17 @@ const needed = new Set<Part>([first])
 /** The languages being fetched, each with the fetch that is on its way. */
 const fetching = new Map<Locale, Promise<void>>()
 
+/**
+ * The languages this page has held whole, which are the ones it may be shown in: one it was
+ * handed, and one a fetch of it brought every needed part of. A language that is held and is
+ * none of these is what a fetch that failed part-way left behind: the parts that arrived before
+ * the one that did not. It is shown to nobody until `fetchCatalog` has fetched it whole, and
+ * nothing else is asked for in it meanwhile: a browser may answer a file asked for again with
+ * the failure it kept, and the screen that asked would then fail to open in the language that
+ * is shown, and whole.
+ */
+const showable = new Set<Locale>()
+
 const listeners = new Set<() => void>()
 
 /** Tells `listener` whenever what this page holds changes, until the answer is called. */
@@ -57,7 +68,10 @@ export function holdCatalog(
   messages: CatalogPart,
   parts: readonly Part[],
 ): void {
-  keep(catalogLocale(locale), messages, parts)
+  const language = catalogLocale(locale)
+  keep(language, messages, parts)
+  // Whoever hands a catalog over draws in it.
+  showable.add(language)
 }
 
 /**
@@ -107,22 +121,28 @@ export function fetchCatalog(locale: DisplayLocale): Promise<void> {
   const language = catalogLocale(locale)
   const before = fetching.get(language)
   if (before !== undefined) return before
-  const fetched = fetchNeeded(language).finally(() => {
-    if (fetching.get(language) === fetched) fetching.delete(language)
-  })
+  const fetched = fetchNeeded(language)
+    .then(() => {
+      showable.add(language)
+    })
+    .finally(() => {
+      if (fetching.get(language) === fetched) fetching.delete(language)
+    })
   fetching.set(language, fetched)
   return fetched
 }
 
 /**
  * Says that this page needs `parts` from now on, a screen that reads them being on its way, and
- * fetches them in every language it holds or is fetching, so that the screen has its words in
- * whichever of them is shown when it is drawn: a language may be switched to while a screen
- * loads, and a screen opened while a language does. It rejects where a file cannot be fetched.
+ * fetches them in every language it may be shown in or is fetching, so that the screen has its
+ * words in whichever of them is shown when it is drawn: a language may be switched to while a
+ * screen loads, and a screen opened while a language does. What a fetch that failed part-way
+ * left of a language is none of them: `fetchCatalog` fetches every part needed by then, should
+ * the language be asked for again. It rejects where a file cannot be fetched.
  */
 export async function needWords(parts: readonly Part[]): Promise<void> {
   for (const part of parts) needed.add(part)
-  const languages = new Set([...held.keys(), ...fetching.keys()])
+  const languages = new Set([...showable, ...fetching.keys()])
   await Promise.all(
     [...languages].flatMap((language) => parts.map((part) => fetchPart(language, part))),
   )
@@ -135,6 +155,7 @@ export async function needWords(parts: readonly Part[]): Promise<void> {
 export function dropCatalogs(): void {
   held.clear()
   fetching.clear()
+  showable.clear()
   needed.clear()
   needed.add(first)
 }

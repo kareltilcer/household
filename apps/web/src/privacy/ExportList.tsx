@@ -10,12 +10,15 @@
 // since the server would answer the same job, and the list is asked for again every few
 // seconds, which the browser holds back while the page is hidden; what the job then came to is
 // said in a toast. The email that says an export is ready goes to a verified address alone, so
-// an account without one is told to look here instead.
+// an account without one is told to look here instead. One thing a ready job says is not the
+// job's alone: until when it downloads is the earlier of its own last moment and the moment its
+// household goes, a household's archives being removed with it.
 //
 // *Download* is no link kept on the page. An archive's link is good for minutes and each read of
 // its job renews it, so the press reads the job again and hands the browser the link it then
 // carries (leave.ts). One that is ready and carries none is a household's whose requester has
-// been made a member since: only an owner downloads a household's export, which the row says.
+// been made a member since: only an owner downloads a household's export, which the row says,
+// and the household is read again, by which the control that asks leaves too.
 //
 // Its states, for a list that is read and a request asked at once: *loading*, *populated* and
 // *error* are the read's; *empty* teaches what an export is, with the control that asks for one
@@ -31,11 +34,17 @@ import type { BaseId } from '@household/icons'
 import { BaseIcon } from '@household/icons/web'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, type ReactNode } from 'react'
-import { readState, refocus, useData, useNoWithdrawal, useSaid } from '../account/common.ts'
+import {
+  readState,
+  useData,
+  usePartFocusKept,
+  useNoWithdrawal,
+  useSaid,
+} from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
-import { notTheirs } from '../household/data.ts'
+import { notTheirs, useRereadWhereRefused } from '../household/data.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import a11y from '../ui/a11y.module.css'
@@ -111,6 +120,7 @@ function useEntryLine(): (name: string) => string | undefined {
 function Row({
   job,
   zone,
+  goes,
   unlinked,
   downloading,
   held,
@@ -118,6 +128,8 @@ function Row({
 }: {
   readonly job: Listed
   readonly zone: string
+  /** The moment its household goes, or null: for a job of no household's, or of one that stays. */
+  readonly goes: string | null
   readonly unlinked: string | undefined
   /** Whether its own download is being asked for. */
   readonly downloading: boolean
@@ -131,12 +143,16 @@ function Row({
   const line = useEntryLine()
   const status = statusOf(job)
   const when = job.requested_at === undefined ? '' : format.instant(job.requested_at, zone)
+  const ends = job.expires_at ?? null
+  // A household's archives are removed with the household, whatever last moment a job names for
+  // itself: one that is ready can be downloaded until whichever of the two comes first.
+  const last =
+    status === 'ready' && goes !== null && (ends === null || Date.parse(goes) < Date.parse(ends))
+      ? goes
+      : ends
   // The moment, and not its day alone: an archive is gone at that time of the day, and on the
   // day itself *until* would be read as the whole of it.
-  const until =
-    job.expires_at === undefined || job.expires_at === null
-      ? undefined
-      : format.instant(job.expires_at, zone)
+  const until = last === null ? undefined : format.instant(last, zone)
   const contents = job.contents ?? []
 
   // How it stands, in words: the contract's own names for it are drawn nowhere.
@@ -228,6 +244,12 @@ export interface ExportListProps {
   readonly source: ExportSource
   /** The zone its instants are said in: the household's as its member reads it, or their own. */
   readonly zone: string
+  /**
+   * The moment the household whose exports these are goes, where they are a household's and it
+   * has one: its archives go with it, so one that is ready names the earlier of this and its own
+   * last moment. The account's own exports are no household's, and are given none.
+   */
+  readonly goes?: string | null
   /** Whether its reader may ask for an export. */
   readonly asks: boolean
   /** What the control that asks reads. */
@@ -251,6 +273,7 @@ export interface ExportListProps {
 export function ExportList({
   source,
   zone,
+  goes = null,
   asks,
   ask,
   teaches,
@@ -278,6 +301,10 @@ export function ExportList({
   })
   const list = read.data
   const making = list?.some(underWay) === true
+  // A household's list answered as not its reader's says they are in the household no longer.
+  // The household alone is read again, which is what tells the rest of the app and takes this
+  // screen away: read again with it (`source.reread`), the list would only be refused again.
+  useRereadWhereRefused(source.household ?? '', source.household !== undefined && notTheirs(read))
 
   // What the last press was refused with: a banner of its own for each, so that a second
   // refusal is said as the first was.
@@ -299,29 +326,20 @@ export function ExportList({
     }
   }, [list, toast, t])
 
-  // The control that asks leaves once an export is on its way, and the focus it held with it:
-  // it is put on the list's own place, where the row that says so is.
-  const view = useRef<HTMLDivElement>(null)
-  const pressed = useRef(false)
-  useEffect(() => {
-    if (!pressed.current || !making) return
-    pressed.current = false
-    refocus(view.current)
-  }, [making])
-  // So does a row's own control, where the job read at its press carries no link or is gone:
-  // the row is drawn again without it, or leaves the list, and the focus goes the same way.
-  const unlinking = useRef(false)
-  useEffect(() => {
-    if (!unlinking.current) return
-    unlinking.current = false
-    refocus(view.current)
-  }, [list])
+  const base = readState(read, online, list?.length === 0)
+  // A control of the list's leaves with what it stood in, and the focus it held would drop to
+  // the page: the control that asks once an export is on its way, a row's own where the job read
+  // at its press carries no link or is gone, and *Try again* as soon as the list is asked for
+  // again. Each is looked for after every drawing of the list, and the focus is put on the
+  // list's own place only where what held it was a control of the list's that is on the page no
+  // longer (account/common.ts): a download that went through leaves its control, and the focus
+  // on it, and a focus that fell to the page from another part of it is that part's to keep.
+  const view = usePartFocusKept()
 
   const asking = useMutation({
     ...askedNow,
     mutationFn: () => source.ask(),
     onSuccess: (job) => {
-      pressed.current = true
       // Listed at once, first, as the server lists it: the answer may be one already listed.
       queries.setQueryData<Listed[]>(source.key, (was) => [
         listed(job),
@@ -341,7 +359,6 @@ export function ExportList({
     onSuccess: (job) => {
       const link = job.download_url
       const linked = typeof link === 'string' && link !== ''
-      unlinking.current = !linked
       queries.setQueryData<Listed[]>(source.key, (was) =>
         was?.map((each) => (each.id === job.id ? listed(job) : each)),
       )
@@ -351,11 +368,11 @@ export function ExportList({
         return
       }
       // Read again, it carries no link: its row says how it stands now, and so is it said.
-      refuse(
-        statusOf(job) === 'ready' && unlinked !== undefined
-          ? unlinked
-          : t('data.exports.download.gone'),
-      )
+      const made = statusOf(job) === 'ready'
+      refuse(made && unlinked !== undefined ? unlinked : t('data.exports.download.gone'))
+      // Ready and handed no link is the server's word that its requester owns the household no
+      // longer: where they stand there is read again, and the control that asks leaves with it.
+      if (made) void source.reread()
     },
     onError: (error) => {
       if (!notTheirs({ error })) {
@@ -363,7 +380,6 @@ export function ExportList({
         return
       }
       // Its row was kept thirty days and is gone: the list is read again without it.
-      unlinking.current = true
       refuse(t('data.exports.download.gone'))
       void source.reread()
     },
@@ -397,7 +413,6 @@ export function ExportList({
     (instead ?? null)
   )
 
-  const base = readState(read, online, list?.length === 0)
   const state: DataState = making && base === 'populated' ? 'syncing' : base
 
   return (
@@ -451,6 +466,7 @@ export function ExportList({
                   key={job.id}
                   job={job}
                   zone={zone}
+                  goes={goes}
                   unlinked={unlinked}
                   downloading={download.isPending && download.variables === job.id}
                   held={download.isPending && download.variables !== job.id}

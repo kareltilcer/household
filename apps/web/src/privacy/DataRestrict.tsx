@@ -27,7 +27,7 @@ import { askedNow } from '../api/query.ts'
 import { fieldCodes, useRefusedField } from '../auth/fields.tsx'
 import { useReread } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
-import { householdKey, type Household } from '../household/households.ts'
+import { householdKey, keptUntil, type Household } from '../household/households.ts'
 import { useStandingRefusal, type AskedProps } from '../household/settings/profile.ts'
 import { useTimeZone } from '../household/timezone.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
@@ -216,19 +216,19 @@ export function Lift({ onBegin, onDone, onEnded }: LiftProps) {
     if (typeof entitlement?.grace_ends_at === 'string') return t('data.lift.after.grace')
     return t('data.lift.after.writes')
   }
-  // The day a lapse keeps the household's data until is not said where its own deletion is
-  // scheduled: that day comes first.
-  const deleting = (household.deletion_scheduled_at ?? null) !== null
-  const until = lapsed && !deleting ? entitlement.data_retained_until : undefined
+  // The day a lapse keeps the household's data until is said where it is the day the household
+  // goes: not where its own deletion comes no later, whose notice says that day, and still where
+  // the deletion is scheduled for later, the erasure taking whichever is due first.
+  const until = lapsed ? keptUntil(household) : null
 
   return (
     <>
       {/* Said before the control is used, and tied to it. */}
       <div id={after} className={account.group}>
         <p className={account.text}>{comes()}</p>
-        {typeof until === 'string' ? (
+        {until === null ? null : (
           <p className={account.text}>{t('data.lift.after.kept_until', { day: day(until) })}</p>
-        ) : null}
+        )}
       </div>
       <div className={account.actions}>
         <Button

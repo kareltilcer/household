@@ -111,18 +111,52 @@ describe('which banner a household’s entitlement asks for', () => {
     expect(bannerOf(states.restricted, false)).toEqual({ kind: 'restricted', restriction })
   })
 
-  // The household's own deletion comes first, and the erasure takes whichever does: the day a
-  // lapse would keep its data until is a day it does not reach, and is not said.
-  it('carries no day its data is kept until where the household’s deletion is scheduled', () => {
-    expect(bannerOf(states.readOnly, true, true)).toEqual({
+  // The erasure takes whichever is due first of the household's own deletion and the day a lapse
+  // keeps its data until. A deletion that comes no later makes that day one the household does
+  // not reach, and it is not said.
+  it('carries no day its data is kept until where the household’s deletion comes no later', () => {
+    expect(bannerOf(states.readOnly, true, '2026-10-09T08:00:00Z')).toEqual({
       kind: 'read_only',
       retainedUntil: null,
       restriction: null,
     })
-    expect(bannerOf(states.canceled, false, true)).toMatchObject({ retainedUntil: null })
-    expect(bannerOf(states.readOnly, true, false)).toMatchObject({
+    expect(bannerOf(states.canceled, false, '2026-10-09T08:00:00Z')).toMatchObject({
+      retainedUntil: null,
+    })
+    // The same instant, however it is written: the deletion's notice says it.
+    expect(bannerOf(states.readOnly, true, '2027-10-09T08:00:00Z')).toMatchObject({
+      retainedUntil: null,
+    })
+    expect(bannerOf(states.readOnly, true, '2027-10-09T10:00:00+02:00')).toMatchObject({
+      retainedUntil: null,
+    })
+  })
+
+  // A deletion is thirty days on from the day it is scheduled: one scheduled in the last thirty
+  // days of a lapse comes after the lapse's own day, which is then the day the household goes.
+  it('carries the day its data is kept until where the household’s deletion comes later, or is none', () => {
+    expect(bannerOf(states.readOnly, true, '2027-10-20T08:00:00Z')).toMatchObject({
       retainedUntil: '2027-10-09T08:00:00Z',
     })
+    expect(bannerOf(states.canceled, false, '2027-10-09T08:00:01Z')).toMatchObject({
+      retainedUntil: '2027-10-09T08:00:00Z',
+    })
+    expect(bannerOf(states.readOnly, true, null)).toMatchObject({
+      retainedUntil: '2027-10-09T08:00:00Z',
+    })
+  })
+
+  // Nor is a household told the day it becomes read-only where it is deleted by then.
+  it('carries the day a household in grace becomes read-only only where it reaches that day', () => {
+    expect(bannerOf(states.grace, false, '2026-10-01T08:00:00Z')).toEqual({
+      kind: 'grace',
+      endsAt: null,
+    })
+    expect(bannerOf(states.grace, true, '2026-10-05T08:00:00Z')).toMatchObject({ endsAt: null })
+    expect(bannerOf(states.grace, true, '2026-10-20T08:00:00Z')).toMatchObject({
+      endsAt: '2026-10-05T08:00:00Z',
+    })
+    expect(bannerOf(states.grace, true, null)).toMatchObject({ endsAt: '2026-10-05T08:00:00Z' })
   })
 
   // D-114: the lapse outranks the restriction, which is carried beside it.
@@ -602,6 +636,38 @@ describe('the banner above a household’s screens', () => {
     expect(await screen.findByText('Tilcerovi is read-only')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  // The household's own deletion is read beside its state: a day the household does not reach is
+  // not said, and a day that comes before the deletion's is.
+  it('says the day a lapse keeps its data until unless the household’s deletion comes no later', async () => {
+    const later = serving(states.readOnly)
+    later.household = { ...later.household, deletion_scheduled_at: '2027-10-20T08:00:00Z' }
+    await above(later)
+    expect(await screen.findByText(keptUntil)).toBeInTheDocument()
+    cleanup()
+
+    const sooner = serving(states.readOnly)
+    sooner.household = { ...sooner.household, deletion_scheduled_at: '2026-10-09T08:00:00Z' }
+    await above(sooner)
+    expect(await screen.findByText('Tilcerovi is read-only')).toBeInTheDocument()
+    expect(screen.queryByText(/kept until/)).not.toBeInTheDocument()
+  })
+
+  it('says the day a household in grace becomes read-only unless it is deleted by then', async () => {
+    const server = serving(states.grace)
+    server.household = { ...server.household, deletion_scheduled_at: '2026-10-01T08:00:00Z' }
+    await above(server)
+    expect(await screen.findByText('New files can’t be added for now')).toBeInTheDocument()
+    expect(screen.queryByText(/becomes read-only on/)).not.toBeInTheDocument()
+  })
+
+  // A server newer than this page may name a state the page has no banner for: it draws none,
+  // and what stands above every screen does not fail.
+  it('is nothing for a state this build does not know', async () => {
+    const { container } = await above(serving({ state: 'frozen' } as unknown as Entitlement))
+    expect(screen.getByRole('main')).toBeInTheDocument()
+    expect(container.querySelector('p')).toBeNull()
   })
 
   // Who pays is the member's own row among the household's members.

@@ -357,6 +357,22 @@ describe('stopping all changes', () => {
     expect(server.to(`POST ${restriction}`)).toHaveLength(0)
   })
 
+  // Another owner stopped them while the question stood open: the household is read again under
+  // it, the control that opened it leaves for the one that lifts, and the platform has nothing
+  // to give the focus back to when the question is closed.
+  it('puts the focus on the screen’s own place where the control that asked left under the open question', async () => {
+    const { user, server, dialog } = await asked()
+    server.household = standing(stopped)
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    expect(await screen.findByRole('button', { name: 'Lift the restriction' })).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(server.to(`POST ${restriction}`)).toHaveLength(0)
+    await focusIsKept()
+  })
+
   // The typed client lists no `422` for this operation, and the server answers one all the same.
   it('says beside the reason that it cannot be kept, and puts the focus on it', async () => {
     const server = createServer()
@@ -471,7 +487,8 @@ describe('lifting a restriction', () => {
     const control = screen.getByRole('button', { name: lift })
     expect(control).toHaveAccessibleDescription(
       expect.stringContaining(
-        'Lifting it leaves Tilcerovi read-only: its subscription has lapsed.',
+        // A trial that ran out lapses with no subscription at all.
+        'Lifting it leaves Tilcerovi read-only: its trial or its subscription has ended.',
       ),
     )
     expect(control).toHaveAccessibleDescription(
@@ -484,19 +501,6 @@ describe('lifting a restriction', () => {
     expect(screen.queryByText(/until an owner lifts it/)).not.toBeInTheDocument()
     lapsed.unmount()
 
-    // Nor the day a lapse keeps its data until, where the household's own deletion comes first.
-    const server = lifting({
-      ...stopped,
-      state: 'read_only',
-      data_retained_until: '2027-10-09T00:00:00Z',
-    })
-    server.household = { ...server.household, deletion_scheduled_at: '2026-10-09T08:00:00Z' }
-    const deleting = await data(server)
-    expect(screen.getByRole('button', { name: lift })).not.toHaveAccessibleDescription(
-      expect.stringContaining('Its data is kept until'),
-    )
-    deleting.unmount()
-
     await data(
       lifting({ ...stopped, state: 'canceled', data_retained_until: '2027-10-09T00:00:00Z' }),
     )
@@ -504,6 +508,33 @@ describe('lifting a restriction', () => {
       expect.stringContaining(
         'Lifting it leaves Tilcerovi read-only: its subscription was cancelled.',
       ),
+    )
+  })
+
+  // The erasure takes whichever is due first of the household's own deletion and the day a
+  // lapse keeps its data until, and neither holds the other back.
+  it('says the day a lapse keeps its data until unless the household’s deletion comes no later', async () => {
+    const lapsing = (deletion: string) => {
+      const server = lifting({
+        ...stopped,
+        state: 'read_only',
+        data_retained_until: '2027-10-09T00:00:00Z',
+      })
+      server.household = { ...server.household, deletion_scheduled_at: deletion }
+      return server
+    }
+    // The deletion comes first: its own notice says its day, and the lapse's is never reached.
+    const sooner = await data(lapsing('2026-10-09T08:00:00Z'))
+    expect(screen.getByRole('button', { name: lift })).not.toHaveAccessibleDescription(
+      expect.stringContaining('Its data is kept until'),
+    )
+    sooner.unmount()
+
+    // One scheduled in the last thirty days of the lapse comes after it: the lapse's day is the
+    // day the household goes, and is said.
+    await data(lapsing('2027-10-20T08:00:00Z'))
+    expect(screen.getByRole('button', { name: lift })).toHaveAccessibleDescription(
+      expect.stringContaining('Its data is kept until October 9, 2027.'),
     )
   })
 

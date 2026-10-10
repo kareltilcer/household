@@ -12,6 +12,10 @@
 // in nothing this browser keeps. While the processor cannot be asked the invoice has no link,
 // and the row says so.
 //
+// The list is read a page at a time, the earlier ones when the control under it asks for them.
+// A read of those that fails is said above that control, which asks again: no frame draws it,
+// the invoices already read being drawn all the same.
+//
 // What the prototype said and this does not: that the first invoice arrives the day after the
 // household subscribes, which is charged at once (D-131). The empty state says what an invoice
 // will hold, and offers nothing: there is nothing to do about having none.
@@ -27,6 +31,7 @@ import { askedNow } from '../api/query.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { Section } from '../household/settings/Page.tsx'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
+import { Banner } from '../ui/Banner.tsx'
 import { Button, RowAction } from '../ui/Button.tsx'
 import { EmptyState } from '../ui/EmptyState.tsx'
 import { List } from '../ui/ListRow.tsx'
@@ -37,7 +42,7 @@ import { StateFrame } from '../ui/StateFrame.tsx'
 import { useToast } from '../ui/Toast.tsx'
 import styles from './Billing.module.css'
 import { useInvoices, type Invoice } from './data.ts'
-import { Refused, useRefusals } from './parts.tsx'
+import { Refused, useFocusKept, useRefusals } from './parts.tsx'
 import { leaveFor } from './stripe.ts'
 
 type Status = Invoice['status']
@@ -172,6 +177,10 @@ export function Invoices({ payer }: InvoicesProps) {
   const invoices = read.data?.pages.flatMap((page) => page.items)
   // The invoices being asked for, each row busy for as long as its own is on its way.
   const [asked, setAsked] = useState<readonly string[]>([])
+  // *Try again* gives its place to the skeleton as it is pressed, and *Show earlier invoices*
+  // leaves with the last of them, each with the focus on it: it goes to the section's own
+  // place. The screen's does not see it, not being drawn again for this read.
+  const place = useFocusKept()
 
   const download = useMutation({
     ...askedNow,
@@ -207,68 +216,77 @@ export function Invoices({ payer }: InvoicesProps) {
 
   return (
     <Section title={t('billing.invoices.title')}>
-      <StateFrame
-        state={readState(read, online, invoices?.length === 0)}
-        skeleton={
-          <Skeleton
-            bars={[
-              [40, 1.25],
-              [70, 1],
-              [90, 1],
-              [40, 1.25],
-              [70, 1],
-            ]}
-          />
-        }
-        empty={<EmptyState sentence={t('billing.invoices.empty')} />}
-        texts={{
-          error: {
-            text: t('billing.invoices.error'),
-            actions: (
-              <Button
-                onClick={() => {
-                  void read.refetch()
-                }}
-              >
-                {t('ui.retry')}
-              </Button>
-            ),
-          },
-          withdrawn: { text: t('household.settings.withdrawn') },
-        }}
-      >
-        {() => (
-          <>
-            <Refused said={refusals.refused} />
-            <List label={t('billing.invoices.title')}>
-              {(invoices ?? []).map((invoice) => (
-                <Row
-                  key={invoice.id}
-                  invoice={invoice}
-                  downloading={asked.includes(invoice.id)}
-                  onDownload={() => {
-                    refusals.clear()
-                    setAsked((ids) => [...ids, invoice.id])
-                    download.mutate(invoice.id)
-                  }}
-                />
-              ))}
-            </List>
-            {read.hasNextPage ? (
-              <div className={account.actions}>
+      <div ref={place} tabIndex={-1} className={styles.place}>
+        <StateFrame
+          state={readState(read, online, invoices?.length === 0)}
+          skeleton={
+            <Skeleton
+              bars={[
+                [40, 1.25],
+                [70, 1],
+                [90, 1],
+                [40, 1.25],
+                [70, 1],
+              ]}
+            />
+          }
+          empty={<EmptyState sentence={t('billing.invoices.empty')} />}
+          texts={{
+            error: {
+              text: t('billing.invoices.error'),
+              actions: (
                 <Button
-                  loading={read.isFetchingNextPage}
                   onClick={() => {
-                    void read.fetchNextPage()
+                    void read.refetch()
                   }}
                 >
-                  {t('billing.invoices.more')}
+                  {t('ui.retry')}
                 </Button>
-              </div>
-            ) : null}
-          </>
-        )}
-      </StateFrame>
+              ),
+            },
+            withdrawn: { text: t('household.settings.withdrawn') },
+          }}
+        >
+          {() => (
+            <>
+              <Refused said={refusals.refused} />
+              <List label={t('billing.invoices.title')}>
+                {(invoices ?? []).map((invoice) => (
+                  <Row
+                    key={invoice.id}
+                    invoice={invoice}
+                    downloading={asked.includes(invoice.id)}
+                    onDownload={() => {
+                      refusals.clear()
+                      setAsked((ids) => [...ids, invoice.id])
+                      download.mutate(invoice.id)
+                    }}
+                  />
+                ))}
+              </List>
+              {read.isFetchNextPageError ? (
+                // No frame draws the earlier ones' read: said as it arrives, and again for each
+                // read of them that fails.
+                <Banner key={read.errorUpdateCount} tone="danger" announce>
+                  {t('billing.invoices.error')}
+                </Banner>
+              ) : null}
+              {read.hasNextPage ? (
+                <div className={account.actions}>
+                  <Button
+                    loading={read.isFetchingNextPage}
+                    onClick={() => {
+                      void read.fetchNextPage()
+                    }}
+                  >
+                    {t('billing.invoices.more')}
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
+        </StateFrame>
+      </div>
     </Section>
   )
 }

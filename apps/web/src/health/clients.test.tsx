@@ -206,6 +206,13 @@ describe('clients and versions', () => {
     expect(
       within(await rowOf('Petr Tilcer')).getByText('Must update before it syncs again'),
     ).toBeInTheDocument()
+    // And it names that version: the one the other rows' *the same build as this browser* is
+    // said of, and not one the row is no longer held to.
+    expect(within(mine).getByText(`Version ${own}`)).toBeInTheDocument()
+    expect(within(mine).queryByText(`Version ${before}+aaaa`)).not.toBeInTheDocument()
+    expect(
+      within(await rowOf('Petr Tilcer')).getByText(`Version ${before}+bbbb`),
+    ).toBeInTheDocument()
   })
 
   it('says nothing of a minimum where the deployment sets none', async () => {
@@ -214,7 +221,7 @@ describe('clients and versions', () => {
     expect(screen.queryByText('Must update before it syncs again')).not.toBeInTheDocument()
   })
 
-  it('says a client that reported before versions were recorded has none', async () => {
+  it('says a client whose last report named no version has none', async () => {
     await clients(
       listing([
         client({ type: null, version: null }),
@@ -222,16 +229,19 @@ describe('clients and versions', () => {
         { ...phones, type: null, version: null, label: '' },
       ]),
     )
+    const noVersion = 'Its last report named no version, so its version isn’t known.'
+    const petrsRow = await rowOf('Petr Tilcer')
+    expect(within(petrsRow).getByText(noVersion)).toBeInTheDocument()
+    expect(within(await rowOf('Klára Nováková')).getByText(noVersion)).toBeInTheDocument()
+    // This browser's own version is known whatever its last report named: it is the page's.
     const mine = await rowOf('Jana Tilcerová')
-    expect(
-      within(mine).getByText(
-        'It last reported before versions were recorded, so its version isn’t known.',
-      ),
-    ).toBeInTheDocument()
+    await within(mine).findByText('This browser')
+    expect(within(mine).getByText(`Version ${own}`)).toBeInTheDocument()
+    expect(within(mine).queryByText(noVersion)).not.toBeInTheDocument()
     // What it is is told by what is left: a header that tells a browser, a device's platform,
     // or neither, which is said as that and never by the label.
     expect(within(mine).getByText('Chrome on Windows')).toBeInTheDocument()
-    expect(within(await rowOf('Petr Tilcer')).getByText('A browser or device')).toBeInTheDocument()
+    expect(within(petrsRow).getByText('A browser or device')).toBeInTheDocument()
     expect(within(await rowOf('Klára Nováková')).getByText('iPhone or iPad')).toBeInTheDocument()
     expect(document.body).not.toHaveTextContent('curl')
     expect(within(await list()).queryByText(/build/)).not.toBeInTheDocument()
@@ -255,7 +265,7 @@ describe('clients and versions', () => {
     await clients()
     expect(
       screen.getByText(
-        'How one of your own browsers or devices stands, and the way to download it again, is under Sync health.',
+        'How one of your own browsers or devices stands, and the way to have it download the household again, is under Sync health.',
       ),
     ).toBeInTheDocument()
     // Named apart from the settings' own way there, which stands above every screen of them.
@@ -377,6 +387,24 @@ describe('clients and versions, where the list cannot be read or nothing reports
       ),
     ).toBeInTheDocument()
     expect(screen.queryByRole('list', { name: 'Apps and versions' })).not.toBeInTheDocument()
+  })
+
+  // No client reports on a household that takes no writes: nothing there makes true that one
+  // is listed once it has reported, and the list of none is as it last was, like any other.
+  it('promises no report where nothing has reported on a household that takes no writes', async () => {
+    const server = listing([])
+    server.household = readOnly
+    await clients(server)
+    expect(await screen.findByText('Read-only')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Nothing on this page changes anything. While the household can’t be changed, no browser or device reports on it, so each row is as it last reported.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/^No browser or device has reported on this household yet\./),
+    ).not.toBeInTheDocument()
+    expect((await list()).children).toHaveLength(0)
   })
 
   it('says in a household that takes no writes that each row is as it last reported', async () => {

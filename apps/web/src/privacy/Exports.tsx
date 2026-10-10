@@ -23,6 +23,7 @@ import { useFocusKept } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { paths } from '../app/paths.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
+import { goesAt } from '../household/households.ts'
 import { HouseholdSettingsPage, useStanding } from '../household/settings/Page.tsx'
 import { useStandingRefusal } from '../household/settings/profile.ts'
 import { useTimeZone } from '../household/timezone.ts'
@@ -59,6 +60,8 @@ export function Exports() {
         <ExportList
           source={source}
           zone={zone}
+          // An archive is removed with its household: none is said to be there after it has gone.
+          goes={goesAt(household)}
           asks={standing.owner}
           ask={t('data.exports.ask')}
           teaches={{

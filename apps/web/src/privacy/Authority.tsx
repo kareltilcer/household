@@ -14,7 +14,7 @@
 // The link opens that page in a new tab and says that it leaves Household.
 import { useQueries } from '@tanstack/react-query'
 import { useId, useState } from 'react'
-import { useNoWithdrawal } from '../account/common.ts'
+import { usePartFocusKept, useNoWithdrawal } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
 import { useCountries, useCountryChoices, useLocalized, type Country } from '../household/data.ts'
@@ -22,6 +22,7 @@ import { deviceCountry } from '../household/device.ts'
 import { householdQuery, useHouseholds } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Button } from '../ui/Button.tsx'
+import { cx } from '../ui/cx.ts'
 import { Select } from '../ui/Field.tsx'
 import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
@@ -130,54 +131,60 @@ export function Authority() {
       : online
         ? 'populated'
         : 'offline'
+  // *Try again* leaves with the sentence it stands in as soon as what could not be read is asked
+  // for again, and the focus it held would drop to the page: it is put on this body's own place,
+  // where the skeleton and then the authorities are drawn (account/common.ts).
+  const view = usePartFocusKept()
 
   return (
-    <StateFrame
-      state={state}
-      skeleton={
-        <Skeleton
-          bars={[
-            [35, 1.25],
-            [70, 1.25],
-          ]}
-        />
-      }
-      // An authority for every country Household has a profile of: nothing to teach.
-      empty={null}
-      texts={{
-        error: {
-          text: t('privacy.complain.error'),
-          actions: (
-            <Button
-              onClick={() => {
-                for (const each of [households, profiles, ...read]) {
-                  if (each.data === undefined) void each.refetch()
-                }
-              }}
-            >
-              {t('ui.retry')}
-            </Button>
-          ),
-        },
-        withdrawn,
-      }}
-    >
-      {() => (
-        <>
-          {open.length === 0 ? (
-            <Chosen countries={countries} leaves={leaves} />
-          ) : (
-            <ul className={styles.lines} role="list">
-              {named.map((country) => (
-                <Named key={country.code} country={country} leaves={leaves} />
-              ))}
-            </ul>
-          )}
-          <p id={leaves} className={account.note}>
-            {t('privacy.complain.leaves')}
-          </p>
-        </>
-      )}
-    </StateFrame>
+    <div ref={view} tabIndex={-1} className={cx(account.view, styles.stack)}>
+      <StateFrame
+        state={state}
+        skeleton={
+          <Skeleton
+            bars={[
+              [35, 1.25],
+              [70, 1.25],
+            ]}
+          />
+        }
+        // An authority for every country Household has a profile of: nothing to teach.
+        empty={null}
+        texts={{
+          error: {
+            text: t('privacy.complain.error'),
+            actions: (
+              <Button
+                onClick={() => {
+                  for (const each of [households, profiles, ...read]) {
+                    if (each.data === undefined) void each.refetch()
+                  }
+                }}
+              >
+                {t('ui.retry')}
+              </Button>
+            ),
+          },
+          withdrawn,
+        }}
+      >
+        {() => (
+          <>
+            {open.length === 0 ? (
+              <Chosen countries={countries} leaves={leaves} />
+            ) : (
+              <ul className={styles.lines} role="list">
+                {named.map((country) => (
+                  <Named key={country.code} country={country} leaves={leaves} />
+                ))}
+              </ul>
+            )}
+            <p id={leaves} className={account.note}>
+              {t('privacy.complain.leaves')}
+            </p>
+          </>
+        )}
+      </StateFrame>
+    </div>
   )
 }

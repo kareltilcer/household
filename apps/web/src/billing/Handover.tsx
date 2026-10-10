@@ -35,6 +35,7 @@ import {
   type Subscription,
 } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
+import { subscriptionKey } from '../household/households.ts'
 import { Section } from '../household/settings/Page.tsx'
 import { useTimeZone } from '../household/timezone.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
@@ -217,6 +218,12 @@ export function Handover({ subscription }: HandoverProps) {
         await api.DELETE('/households/{household_id}/billing/transfer', {
           params: { path: { household_id: household.id } },
         }),
+      )
+      // The answer itself says that no offer is open now, whichever way it went: kept so before
+      // who pays is read, or a read that failed would leave the offer drawn, and the control
+      // that takes it back, under the sentence that none is open.
+      queries.setQueryData<Subscription>(subscriptionKey(household.id), (kept) =>
+        kept === undefined ? kept : { ...kept, transfer: null },
       )
       try {
         const stands = await queries.query({

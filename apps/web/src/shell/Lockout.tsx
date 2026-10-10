@@ -6,10 +6,10 @@
 // went with it. The notice is the platform's own words to the household, shown as written.
 //
 // It says that the suspension is the platform's, since when, what the owners were told and that
-// each of them was emailed it, that nothing was deleted, and that nothing can be exported while
-// it lasts: said, and no button that could only fail (DD-15). From here a member goes to another
-// household of theirs, where they have one that opens, or signs out. Every member reads the
-// same, whatever they were in the household.
+// each of them with a verified address was emailed it, an email reaching no other, that nothing
+// was deleted, and that nothing can be exported while it lasts: said, and no button that could
+// only fail (DD-15). From here a member goes to another household of theirs, where they have one
+// that opens, or signs out. Every member reads the same, whatever they were in the household.
 //
 // What the prototype drew and this does not: a cause it guessed at (*while a report is looked
 // into*), where the notice itself is shown; *everybody was emailed*, where it is the owners

@@ -153,7 +153,7 @@ export class Replica {
   private refilling = false
   /**
    * PowerSync's last checkpoint as it stood when its stream was last down, in milliseconds: one
-   * applied since the stream came up is later than it (caughtUp).
+   * applied since the stream came up is stamped otherwise (caughtUp).
    */
   private syncedBefore = 0
   /**
@@ -254,7 +254,10 @@ export class Replica {
       status.connected &&
       !status.downloading &&
       status.hasSynced === true &&
-      this.syncedAt(status) > this.syncedBefore
+      // Another stamp than the one the stream came up over, and not a later one: the stamps are
+      // the device's clock, and a clock set back between two streams would hold every report
+      // until it had passed the old one again.
+      this.syncedAt(status) !== this.syncedBefore
     )
   }
 

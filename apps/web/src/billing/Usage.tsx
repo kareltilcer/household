@@ -8,6 +8,10 @@
 // What the prototype added up and this does not is the month's total: storage is billed after
 // its month, apart from a plan paid by the year, so no one sum is charged. The picture of what
 // takes the room is Storage's (C-54), which this leads to.
+//
+// A household with no subscription is billed no storage, a month on trial or after a lapse
+// among them: the charge its blocks would come to is nobody's to pay, so neither it nor when
+// storage is billed is said there.
 import { Link } from 'react-router'
 import { readState } from '../account/common.ts'
 import account from '../account/Settings.module.css'
@@ -22,6 +26,8 @@ import { MoneyValue } from '../ui/MoneyValue.tsx'
 import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
+import styles from './Billing.module.css'
+import { useFocusKept } from './parts.tsx'
 
 export function Usage({ subscription }: { readonly subscription: Subscription }) {
   const t = useTranslate()
@@ -30,94 +36,105 @@ export function Usage({ subscription }: { readonly subscription: Subscription })
   const household = useHousehold()
   const read = useUsage(household.id)
   const usage = read.data
+  // Whether storage is billed at all: only a household with a subscription is charged for it.
+  const billed = subscription.interval !== null
+  // *Try again* gives its place to the skeleton as it is pressed, with the focus on it: it goes
+  // to the section's own place. The screen's does not see it, not being drawn again for this read.
+  const place = useFocusKept()
   return (
     <Section title={t('billing.usage.title')}>
-      <StateFrame
-        state={readState(read, online)}
-        skeleton={
-          <Skeleton
-            bars={[
-              [70, 1],
-              [55, 1],
-              [60, 1],
-              [45, 1],
-            ]}
-          />
-        }
-        // A month always has its figures: nothing is listed that could be none.
-        empty={null}
-        texts={{
-          error: {
-            text: t('billing.usage.error'),
-            actions: (
-              <Button
-                onClick={() => {
-                  void read.refetch()
-                }}
-              >
-                {t('ui.retry')}
-              </Button>
-            ),
-          },
-          withdrawn: { text: t('household.settings.withdrawn') },
-        }}
-      >
-        {() =>
-          usage === undefined ? null : (
-            <>
-              <KeyValue
-                pairs={[
-                  {
-                    key: t('billing.usage.month'),
-                    value: t('billing.usage.period', {
-                      from: format.day(usage.period_from),
-                      to: format.day(usage.period_to),
-                    }),
-                  },
-                  {
-                    key: t('billing.usage.now'),
-                    value: format.bytes(usage.current_bytes),
-                    numeric: true,
-                  },
-                  {
-                    key: t('billing.usage.average'),
-                    value: format.bytes(usage.mtd_average_bytes),
-                    numeric: true,
-                  },
-                  {
-                    key: t('billing.usage.projected'),
-                    value: format.bytes(usage.projected_average_bytes),
-                    numeric: true,
-                  },
-                  {
-                    key: t('billing.usage.included'),
-                    value: format.bytes(usage.included_bytes_base),
-                    numeric: true,
-                  },
-                  {
-                    key: t('billing.usage.blocks'),
-                    value:
-                      usage.blocks_projected === 0
-                        ? t('billing.usage.blocks_none')
-                        : t('billing.usage.blocks_count', {
-                            count: usage.blocks_projected,
-                            size: format.bytes(subscription.storage_block_bytes),
-                          }),
-                  },
-                  {
-                    key: t('billing.usage.charge'),
-                    value: <MoneyValue amount={usage.projected_charge} />,
-                  },
-                ]}
-              />
-              <p className={account.note}>{t('billing.usage.note')}</p>
-              <Link className={account.link} to={inHousehold.storage(household.id)}>
-                {t('household.settings.storage.title')}
-              </Link>
-            </>
-          )
-        }
-      </StateFrame>
+      <div ref={place} tabIndex={-1} className={styles.place}>
+        <StateFrame
+          state={readState(read, online)}
+          skeleton={
+            <Skeleton
+              bars={[
+                [70, 1],
+                [55, 1],
+                [60, 1],
+                [45, 1],
+              ]}
+            />
+          }
+          // A month always has its figures: nothing is listed that could be none.
+          empty={null}
+          texts={{
+            error: {
+              text: t('billing.usage.error'),
+              actions: (
+                <Button
+                  onClick={() => {
+                    void read.refetch()
+                  }}
+                >
+                  {t('ui.retry')}
+                </Button>
+              ),
+            },
+            withdrawn: { text: t('household.settings.withdrawn') },
+          }}
+        >
+          {() =>
+            usage === undefined ? null : (
+              <>
+                <KeyValue
+                  pairs={[
+                    {
+                      key: t('billing.usage.month'),
+                      value: t('billing.usage.period', {
+                        from: format.day(usage.period_from),
+                        to: format.day(usage.period_to),
+                      }),
+                    },
+                    {
+                      key: t('billing.usage.now'),
+                      value: format.bytes(usage.current_bytes),
+                      numeric: true,
+                    },
+                    {
+                      key: t('billing.usage.average'),
+                      value: format.bytes(usage.mtd_average_bytes),
+                      numeric: true,
+                    },
+                    {
+                      key: t('billing.usage.projected'),
+                      value: format.bytes(usage.projected_average_bytes),
+                      numeric: true,
+                    },
+                    {
+                      key: t('billing.usage.included'),
+                      value: format.bytes(usage.included_bytes_base),
+                      numeric: true,
+                    },
+                    {
+                      key: t('billing.usage.blocks'),
+                      value:
+                        usage.blocks_projected === 0
+                          ? t('billing.usage.blocks_none')
+                          : t('billing.usage.blocks_count', {
+                              count: usage.blocks_projected,
+                              size: format.bytes(subscription.storage_block_bytes),
+                            }),
+                    },
+                    ...(billed
+                      ? [
+                          {
+                            key: t('billing.usage.charge'),
+                            value: <MoneyValue amount={usage.projected_charge} />,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+                {billed ? <p className={account.note}>{t('billing.usage.note')}</p> : null}
+                <Link className={account.link} to={inHousehold.storage(household.id)}>
+                  {t('household.settings.storage.title')}
+                </Link>
+              </>
+            )
+          }
+        </StateFrame>
+      </div>
     </Section>
   )
 }

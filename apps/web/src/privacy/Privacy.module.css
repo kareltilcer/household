@@ -60,14 +60,16 @@
   min-width: 0;
 }
 
-/* What is in an archive: closed until it is asked for, behind a line of a row's height. */
+/* What is in an archive: closed until it is asked for, behind a line of a row's height. The line
+   keeps the platform's own display, a list item's, whose marker is what says that it opens: its
+   words are centred in the row's height as a block centres what it holds, and stand at its top
+   in a browser that centres none. */
 .contents {
   min-width: 0;
 }
 
 .contents > summary {
-  display: flex;
-  align-items: center;
+  align-content: center;
   min-height: var(--dens-row-min);
   cursor: pointer;
   overflow-wrap: anywhere;
@@ -93,7 +95,8 @@
 }
 
 /* What stands above a list and the list itself, one under another: a refusal, what a household
-   is told of itself, and the body. */
+   is told of itself, and the body. And a body of the privacy centre in the place of its own that
+   takes the focus a control of it left behind. */
 .stack {
   display: flex;
   flex-direction: column;

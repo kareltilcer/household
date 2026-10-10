@@ -17,7 +17,8 @@
 // ends and is taken back until then; a change of interval is prorated by the processor, now; a
 // method is in use once the processor has confirmed it, which this page reads and does not
 // assume. What a bank's own page carried back in the address is taken out of it before anything
-// else is done, and is believed for nothing: the subscription is read again.
+// else is done, whoever came back with it, and is believed for nothing: the subscription is
+// read again.
 //
 // What the prototype drew and this does not, each because the PRD says otherwise: a cancellation
 // that takes effect at once, an interval that changes at the next renewal, *resume* for a
@@ -54,7 +55,7 @@ import {
   type Subscription,
 } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
-import { subscriptionKey } from '../household/households.ts'
+import { keptUntil, subscriptionKey } from '../household/households.ts'
 import { HouseholdSettingsPage, Section } from '../household/settings/Page.tsx'
 import { useTimeZone } from '../household/timezone.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
@@ -106,17 +107,17 @@ const returned = [
 
 /**
  * What the state the household is in means, in a sentence, with the day it carries where it has
- * one. The day a lapse keeps its data until is not said of a household whose own deletion is
- * scheduled: that comes first, and subscribing does not take it back.
+ * one. The day a lapse keeps its data until is said where it is the day the data goes
+ * (`keptUntil`, households.ts): a deletion the owners scheduled for no later takes the household
+ * first, and subscribing does not take that back; one scheduled for later leaves the lapse's
+ * day the earlier, and it is said.
  */
 function useStateSentence(): (subscription: Subscription) => string | undefined {
   const t = useTranslate()
   const format = useFormat()
   const zone = useTimeZone()
-  const deleting = (useHousehold().deletion_scheduled_at ?? null) !== null
+  const household = useHousehold()
   return (subscription) => {
-    const kept = (at: string | null) =>
-      at === null || deleting ? undefined : format.dayOf(at, zone)
     switch (subscription.state) {
       case 'trialing':
       case 'active':
@@ -134,7 +135,8 @@ function useStateSentence(): (subscription: Subscription) => string | undefined 
       }
       case 'read_only':
       case 'canceled': {
-        const until = kept(subscription.data_retained_until)
+        const kept = keptUntil(household)
+        const until = kept === null ? undefined : format.dayOf(kept, zone)
         if (subscription.state === 'canceled') {
           return until === undefined
             ? t('billing.means.canceled')
@@ -159,8 +161,8 @@ function otherThan(interval: Interval): Interval {
 
 /**
  * How the household stands and what its subscription is: the state, the plan, the day it is
- * charged next or ends on, and who pays; and for the payer the three things that change it: how
- * often they pay, cancelling, and taking a cancellation back.
+ * charged next or ends on, where the period is paid for, and who pays; and for the payer the
+ * three things that change it: how often they pay, cancelling, and taking a cancellation back.
  */
 function Standing({ subscription }: { readonly subscription: Subscription }) {
   const t = useTranslate()
@@ -183,7 +185,11 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
   const restricted =
     subscription.state === 'restricted' || (household.entitlement?.restriction ?? null) !== null
   const path = { household_id: id }
-  const [asking, setAsking] = useState<'interval' | 'cancel' | null>(null)
+  // The question that is open: cancelling, or the way of paying a change was asked for. That one
+  // is kept as it was pressed for: the subscription may be read again under the open question,
+  // and after a change the server took and could not answer for, the other way than it then pays
+  // is the opposite of what was asked.
+  const [asking, setAsking] = useState<Interval | 'cancel' | null>(null)
   // *Cancel* gives its place to *Resume*, and *Resume* to *Cancel*, each with the focus a press
   // or a question left on it: it goes to the section's own place.
   const place = useFocusKept()
@@ -231,14 +237,18 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
       unwrap(await api.POST('/households/{household_id}/billing/cancel', { params: { path } })),
     onSuccess: (answer) => {
       kept(answer)
+      // By the answer's own state, as the section then says it: a day only where the period is
+      // paid for.
       toast({
         message:
-          answer.current_period_end === null
-            ? t('billing.cancel.done', { household: name })
-            : t('billing.cancel.done_on', {
-                household: name,
-                day: format.dayOf(answer.current_period_end, zone),
-              }),
+          answer.state === 'past_due'
+            ? t('billing.cancel.pending_owed')
+            : answer.state === 'active' && answer.current_period_end !== null
+              ? t('billing.cancel.done_on', {
+                  household: name,
+                  day: format.dayOf(answer.current_period_end, zone),
+                })
+              : t('billing.cancel.done', { household: name }),
       })
     },
     onError: refused,
@@ -252,33 +262,42 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
       toast({ message: t('billing.resume.done', { household: name }) })
     },
     onError: (error) => {
-      // As above: a refusal that is not about where its member stands is read again too.
+      // As above: whatever it was refused with, how billing stands is read again, once: here
+      // where saying the refusal did not read it already.
       if (!refusals.refuse(error)) void reread()
     },
   })
-  const asked = asking === 'interval' ? change : cancel
+  const asked = asking === 'cancel' || asking === null ? cancel : change
   const close = () => {
     if (!asked.isPending) setAsking(null)
   }
 
   const day = (at: string | null) => (at === null ? undefined : format.dayOf(at, zone))
   const price = interval === null ? undefined : (subscription.base_price ?? undefined)
-  const ends = day(subscription.current_period_end)
+  // The period's end is a day the household stays as it is until, and is charged on, only where
+  // the period is known to be paid for. With a payment owed the next charge is the processor's
+  // retry, which no answer dates, and the household may lapse before the period ends; and a
+  // restriction's state does not say which of the two is under it. So the day is named in a
+  // household that is active, and nowhere else.
+  const paidUp = subscription.state === 'active'
+  const owed = subscription.state === 'past_due'
+  const ends = paidUp ? day(subscription.current_period_end) : undefined
   const pairs: Pair[] = [
     {
       key: t('billing.plan.label'),
       value:
         interval === null || price === undefined ? t('billing.plan.none') : prices(interval, price),
     },
-    // No *next charge* while a payment is being retried: the next charge is the processor's
-    // retry, which no answer dates, and the period's end is no day it is charged on.
-    ...(interval === null
+    ...(interval === null || ends === undefined
       ? []
-      : subscription.cancel_at_period_end
-        ? [{ key: t('billing.period.ends'), value: ends }]
-        : subscription.state === 'past_due'
-          ? []
-          : [{ key: t('billing.period.next'), value: ends }]),
+      : [
+          {
+            key: subscription.cancel_at_period_end
+              ? t('billing.period.ends')
+              : t('billing.period.next'),
+            value: ends,
+          },
+        ]),
     { key: t('billing.payer.label'), value: payerName },
     ...(subscription.trial_ends_at === null
       ? []
@@ -287,6 +306,9 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
   const means = sentence(subscription)
   const other = interval === null ? undefined : otherThan(interval)
   const otherPrice = other === undefined ? undefined : priceOf(subscription, other)
+  // The way of paying the open question asks for, and what it costs.
+  const to = asking === 'cancel' ? null : asking
+  const toPrice = to === null ? undefined : priceOf(subscription, to)
   const failure = asked.isError ? refusal(asked.error) : undefined
 
   return (
@@ -320,9 +342,11 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
         ) : null}
         {interval !== null && subscription.cancel_at_period_end ? (
           <p className={account.text}>
-            {ends === undefined
-              ? t('billing.cancel.pending')
-              : t('billing.cancel.pending_on', { day: ends })}
+            {owed
+              ? t('billing.cancel.pending_owed')
+              : ends === undefined
+                ? t('billing.cancel.pending')
+                : t('billing.cancel.pending_on', { day: ends })}
           </p>
         ) : null}
         {payer && interval !== null ? (
@@ -346,7 +370,7 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
                 onClick={() => {
                   refusals.clear()
                   change.reset()
-                  setAsking('interval')
+                  setAsking(other)
                 }}
               >
                 {other === 'year' ? t('billing.interval.to_year') : t('billing.interval.to_month')}
@@ -368,24 +392,22 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
         ) : null}
         {asking === null ? <Refused said={refusals.refused} /> : null}
 
-        {asking === 'interval' && other !== undefined && otherPrice !== undefined ? (
+        {to !== null && toPrice !== undefined ? (
           <Dialog
             open
             onClose={close}
             title={
-              other === 'year'
-                ? t('billing.interval.title.year')
-                : t('billing.interval.title.month')
+              to === 'year' ? t('billing.interval.title.year') : t('billing.interval.title.month')
             }
             description={
-              other === 'year'
-                ? t('billing.interval.body.year', { price: format.money(otherPrice) })
-                : t('billing.interval.body.month', { price: format.money(otherPrice) })
+              to === 'year'
+                ? t('billing.interval.body.year', { price: format.money(toPrice) })
+                : t('billing.interval.body.month', { price: format.money(toPrice) })
             }
             actions={
               <>
                 <Button onClick={close}>
-                  {other === 'year'
+                  {to === 'year'
                     ? t('billing.interval.keep.month')
                     : t('billing.interval.keep.year')}
                 </Button>
@@ -393,12 +415,10 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
                   variant="primary"
                   loading={change.isPending}
                   onClick={() => {
-                    change.mutate(other)
+                    change.mutate(to)
                   }}
                 >
-                  {other === 'year'
-                    ? t('billing.interval.to_year')
-                    : t('billing.interval.to_month')}
+                  {to === 'year' ? t('billing.interval.to_year') : t('billing.interval.to_month')}
                 </Button>
               </>
             }
@@ -416,9 +436,11 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
             onClose={close}
             title={t('billing.cancel.title', { household: name })}
             description={
-              ends === undefined
-                ? t('billing.cancel.body', { household: name })
-                : t('billing.cancel.body_on', { household: name, day: ends })
+              owed
+                ? t('billing.cancel.body_owed', { household: name })
+                : ends === undefined
+                  ? t('billing.cancel.body', { household: name })
+                  : t('billing.cancel.body_on', { household: name, day: ends })
             }
             actions={
               <>
@@ -483,78 +505,82 @@ function Read({ cameBack }: { readonly cameBack: boolean }) {
   const state: DataState =
     !writes(household) && (base === 'populated' || base === 'offline') ? 'readonly' : base
 
+  // *Try again* gives its place to the skeleton as it is pressed, with the focus on it: it goes
+  // to the screen's own place. A section whose own control leaves has a place of its own.
+  const view = useFocusKept()
+
   return (
     <HouseholdSettingsPage
       title={t('household.settings.billing.title')}
       lead={t('billing.lead')}
       note={false}
     >
-      <StateFrame
-        state={state}
-        skeleton={
-          <Skeleton
-            bars={[
-              [35, 2],
-              [80, 1],
-              [60, 1],
-              [60, 1],
-              [45, 2.75],
-            ]}
-          />
-        }
-        // Nothing is listed here that could be none: the invoices say so themselves.
-        empty={null}
-        texts={{
-          error: {
-            title: t('billing.error.title'),
-            text: t('billing.error.body'),
-            actions: (
-              <Button
-                onClick={() => {
-                  void read.refetch()
-                }}
-              >
-                {t('ui.retry')}
-              </Button>
-            ),
-          },
-          withdrawn: { text: t('household.settings.withdrawn') },
-          readonly: {
-            title: word(household.entitlement?.state ?? 'read_only'),
-            text: t('billing.exempt'),
-          },
-        }}
-      >
-        {() =>
-          subscription === undefined ? null : (
-            <div className={styles.stack}>
-              {cameBack ? <Banner tone="info">{t('billing.returned')}</Banner> : null}
-              <Standing subscription={subscription} />
-              {isPayer(subscription, me.id) && subscription.interval !== null ? (
-                <Method subscription={subscription} />
-              ) : null}
-              <Usage subscription={subscription} />
-              <Invoices payer={isPayer(subscription, me.id)} />
-              <Handover subscription={subscription} />
-            </div>
-          )
-        }
-      </StateFrame>
+      <div ref={view} tabIndex={-1} className={account.view}>
+        <StateFrame
+          state={state}
+          skeleton={
+            <Skeleton
+              bars={[
+                [35, 2],
+                [80, 1],
+                [60, 1],
+                [60, 1],
+                [45, 2.75],
+              ]}
+            />
+          }
+          // Nothing is listed here that could be none: the invoices say so themselves.
+          empty={null}
+          texts={{
+            error: {
+              title: t('billing.error.title'),
+              text: t('billing.error.body'),
+              actions: (
+                <Button
+                  onClick={() => {
+                    void read.refetch()
+                  }}
+                >
+                  {t('ui.retry')}
+                </Button>
+              ),
+            },
+            withdrawn: { text: t('household.settings.withdrawn') },
+            readonly: {
+              title: word(household.entitlement?.state ?? 'read_only'),
+              text: t('billing.exempt'),
+            },
+          }}
+        >
+          {() =>
+            subscription === undefined ? null : (
+              <div className={styles.stack}>
+                {cameBack ? <Banner tone="info">{t('billing.returned')}</Banner> : null}
+                <Standing subscription={subscription} />
+                {isPayer(subscription, me.id) && subscription.interval !== null ? (
+                  <Method subscription={subscription} />
+                ) : null}
+                <Usage subscription={subscription} />
+                <Invoices payer={isPayer(subscription, me.id)} />
+                <Handover subscription={subscription} />
+              </div>
+            )
+          }
+        </StateFrame>
+      </div>
     </HouseholdSettingsPage>
   )
 }
 
-function Arrived() {
-  // What a bank's own page sent back with is taken out of the address before anything else is
-  // done, as a link's token is (auth/fragment.ts), and each arrival is a screen of its own.
-  const carried = useFragmentAndQuery()
-  const cameBack = returned.some((name) => carried.query.has(name))
-  return <Read key={carried.arrival} cameBack={cameBack} />
-}
-
 export function Billing() {
   const household = useHousehold()
+  // What a bank's own page sent back with is taken out of the address before anything else is
+  // done, as a link's token is (auth/fragment.ts), whoever it is that came back: the
+  // processor's secret is left in the address of nobody, one who owns the household no longer
+  // and is drawn nothing of billing among them. Each arrival is a screen of its own.
+  const carried = useFragmentAndQuery()
   // Absent: no screen, no reason, and nothing asked of the server (FR-BI5).
   if (household.my_role !== 'owner') return <NotAvailable home={inHousehold.home(household.id)} />
-  return <Arrived />
+  const cameBack = returned.some((name) => carried.query.has(name))
+  return <Read key={carried.arrival} cameBack={cameBack} />
 }

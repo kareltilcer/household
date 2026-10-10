@@ -164,4 +164,42 @@ describe('@household/sync against the engine', () => {
       }
     })
   })
+
+  it('has caught up once a checkpoint of this connection has landed, and not on the one the visit before left (D-125)', async () => {
+    await run('library-caught-up', 20_004, async (w) => {
+      const f = await family(w)
+      const petr = w.client({ name: 'petr', member: f.petr, household: f.home })
+      await online(w, petr)
+      const caughtUp = (): Promise<number | null> =>
+        until(() => Promise.resolve(petr.replica.caughtUp), 20_000)
+      expect(await caughtUp(), 'caught up on its first visit').not.toBeNull()
+      // The app is closed and started again, in a household nothing changed in meanwhile: what
+      // PowerSync last applied is the visit before's, and says nothing of this connection.
+      await petr.restart()
+      const before = petr.db.currentStatus.lastSyncedAt?.getTime()
+      expect(before, 'a checkpoint the visit before left').toBeDefined()
+      expect(petr.replica.caughtUp).toBe(false)
+      // Each status of the new connection at which the stream is up and what PowerSync has
+      // applied is still the visit before's: the replica says it has not caught up at any of them.
+      const early: boolean[] = []
+      const stop = petr.db.registerListener({
+        statusChanged: (status) => {
+          if (status.connected && status.lastSyncedAt?.getTime() === before) {
+            early.push(petr.replica.caughtUp)
+          }
+        },
+      })
+      try {
+        await petr.online()
+        // An idle household too gets a checkpoint of this connection, and with it the replica has
+        // caught up: one that never did would never report itself again.
+        expect(await caughtUp(), 'caught up on its second visit').not.toBeNull()
+      } finally {
+        stop()
+      }
+      expect(petr.db.currentStatus.lastSyncedAt?.getTime()).not.toBe(before)
+      expect(early).not.toContain(true)
+      expect(await w.settle()).toBe(true)
+    })
+  })
 })

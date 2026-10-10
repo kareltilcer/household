@@ -16,10 +16,13 @@
 // nor its opposite, since nobody has said: an answer that was lost on its way back, or the
 // script's own failure, leaves a confirmation the processor may have taken all the same, and a
 // second press of one it took is refused in the same kind. The page then says that it cannot
-// tell yet, and reads how the household stands again, by which its screen draws: once the
-// processor has told the server, the form gives way to what is so. What the processor took is
-// its screen's to follow: nothing here says a payment went through, which only the server's
-// reading of the processor does (D-134).
+// tell yet, tells its screen (`onUnknown`), and reads how the household stands again. The form
+// itself stays: whether it gives way once the processor has told the server is its screen's to
+// say. Subscribing and taking billing over draw by what is read, and the form goes with what
+// stood around it; the method's own section stays whatever is read, and puts the form away
+// itself where the summary then says the new method is in use (Method.tsx). What the processor
+// took is its screen's to follow too: nothing here says a payment went through, which only the
+// server's reading of the processor does (D-134).
 //
 // The form is drawn in the page and never in a modal: where a bank asks its customer to confirm
 // a payment (3-D Secure), the processor's script draws that over the page, and a modal would hold
@@ -29,6 +32,7 @@
 import { catalogLocale } from '@household/i18n/lazy'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
+import { refocus } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { askedNow } from '../api/query.ts'
 import { useReread } from '../household/data.ts'
@@ -78,6 +82,11 @@ export interface PaymentFormProps {
    * put something else in the form's place.
    */
   readonly onConfirming?: (confirming: boolean) => void
+  /**
+   * Told that a confirmation came to an end nobody gave: the processor may have taken it all the
+   * same. Its screen then knows that what it reads next may be of this form's own doing.
+   */
+  readonly onUnknown?: () => void
 }
 
 function Mounted({
@@ -88,6 +97,7 @@ function Mounted({
   putAway,
   onPutAway,
   onConfirming,
+  onUnknown,
   language,
   onRetry,
 }: PaymentFormProps & { readonly language: FormLocale; readonly onRetry: () => void }) {
@@ -166,11 +176,16 @@ function Mounted({
         return
       }
       onConfirming?.(false)
-      // Whether the processor took it is not known: what the server knows of it is read.
-      if (fault === 'failed') void reread()
+      // Whether the processor took it is not known: its screen is told, and what the server
+      // knows of it is read.
+      if (fault === 'failed') {
+        onUnknown?.()
+        void reread()
+      }
     },
     onError: () => {
       onConfirming?.(false)
+      onUnknown?.()
       void reread()
     },
   })
@@ -258,14 +273,22 @@ export function PaymentForm(props: PaymentFormProps) {
   // How many times the form was begun again after it could not be loaded: each is a drawing of
   // its own, as each secret and each language is.
   const [begun, setBegun] = useState(0)
+  // *Try again* leaves with the drawing it began again, the focus on it: it goes to the form's
+  // own place. Its screen's does not see it, not being drawn again for a form begun again.
+  const place = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (begun > 0) refocus(place.current)
+  }, [begun])
   return (
-    <Mounted
-      key={`${String(begun)} ${language} ${props.intent.client_secret}`}
-      {...props}
-      language={language}
-      onRetry={() => {
-        setBegun((times) => times + 1)
-      }}
-    />
+    <div ref={place} tabIndex={-1} className={account.view}>
+      <Mounted
+        key={`${String(begun)} ${language} ${props.intent.client_secret}`}
+        {...props}
+        language={language}
+        onRetry={() => {
+          setBegun((times) => times + 1)
+        }}
+      />
+    </div>
   )
 }
