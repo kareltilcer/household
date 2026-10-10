@@ -539,7 +539,9 @@ jobs:
       # written ahead of their screens, those that sign in, and the one that sends the app a
       # link, which iOS asks about first in a dialog of its own that no flow answers.
       - name: Run the flows on the simulator
-        timeout-minutes: 30
+        # Each flow starts the app as an installation that kept nothing, which on a simulator
+        # is installing it again, and two of them scroll a long page a screen at a time.
+        timeout-minutes: 45
         run: |
           xcrun simctl bootstatus "$SIMULATOR" -b
           xcrun simctl install "$SIMULATOR" "$APP"
