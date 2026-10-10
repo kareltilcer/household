@@ -9,10 +9,16 @@
 // come in, so only the answer to the change made last is drawn, and once every one of them is
 // answered, and not before, what the server holds is read: read after the last one made but
 // before an earlier one landed, it would be drawn over by nothing when that one did. A change
-// that was refused is put back and said where it was the last one made, and only there. An
-// earlier one's refusal leaves what the later one chose and says nothing: the later one sent
-// its value too, so whether it is saved is that one's answer to give, and what the server came
-// to hold is what the read then settles.
+// that was refused is said where it was the last one made, and only there, and the switches are
+// put back to what the server last said it holds: what stood before the changes now on their
+// way, or the answer to the latest of them it took, and never to what an earlier one of them
+// had only chosen, which two refused one after the other would leave drawn as saved. An earlier
+// one's refusal leaves what the later one chose and says nothing: the later one sent its value
+// too, so whether it is saved is that one's answer to give, and what the server came to hold is
+// what the read then settles. *Not saved* is said of a change the server refused, and of one
+// asked while the browser said it had no connection, which sends nothing. Of any other that got
+// no answer, or the server's own failure for one, nobody has said: the sentence says that the
+// server was not reached, and the read that follows says what it holds.
 //
 // The switch for statistics says what they would hold and what they never would, and claims no
 // more than is so: the web app collects none yet, and the switch records the choice. A child
@@ -24,7 +30,7 @@ import { useId, useRef, useState } from 'react'
 import { readState, usePartFocusKept, useNoWithdrawal, useOwnZone } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
-import { unwrap } from '../api/problem.ts'
+import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
@@ -62,12 +68,24 @@ function Choices() {
     queryKey: consentsKey,
     queryFn: async ({ signal }) => unwrap(await api.GET('/me/consents', { signal })),
   })
-  // Why the last change was not saved, until the next one or until it is put away.
-  const [refusal, setRefusal] = useState<string | null>(null)
+  // What the last change failed with, until the next one or until it is put away, and whether
+  // the server refused it or it was never sent: only then is it known not to be saved.
+  const [refusal, setRefusal] = useState<{
+    readonly text: string
+    readonly refused: boolean
+  } | null>(null)
   // How many changes this screen has sent: the one made last is the one whose answer is drawn.
   const sent = useRef(0)
   // How many of them are still on their way: what the server holds is read once none is.
   const flying = useRef(0)
+  // What the server last said it holds: what was read before the changes now on their way, and
+  // then the answer to the latest-made of them it took.
+  const served = useRef<{ readonly turn: number; readonly kept: Kept | undefined }>({
+    turn: 0,
+    kept: undefined,
+  })
+  // Whether the change made last was refused: an earlier one answered after it is then drawn.
+  const lastRefused = useRef(false)
   const save = useMutation({
     ...askedNow,
     mutationFn: async (next: Both) => unwrap(await api.PUT('/me/consents', { body: next })),
@@ -76,26 +94,41 @@ function Choices() {
       sent.current += 1
       flying.current += 1
       const turn = sent.current
+      // The first of the changes on their way: what is kept is what the server holds.
+      const first = flying.current === 1
+      lastRefused.current = false
       // A read on its way was asked before this change: its answer would be drawn over it.
       await queries.cancelQueries({ queryKey: consentsKey, exact: true })
-      const before = queries.getQueryData<Kept>(consentsKey)
+      if (first) served.current = { turn: 0, kept: queries.getQueryData<Kept>(consentsKey) }
       // Shown as chosen while it is asked: a switch that waited for the answer would feel stuck.
       queries.setQueryData<Kept>(consentsKey, (was) =>
         was === undefined ? was : { ...was, ...next },
       )
-      return { before, turn }
+      // Asked with no connection, by the browser's own word, it is sent nowhere.
+      return { turn, unsent: !online }
     },
     onSuccess: (saved, _next, context) => {
-      if (context.turn === sent.current) queries.setQueryData(consentsKey, saved)
+      if (context.turn > served.current.turn) served.current = { turn: context.turn, kept: saved }
+      if (context.turn === sent.current || lastRefused.current) {
+        queries.setQueryData(consentsKey, served.current.kept)
+      }
     },
     onError: (error, _next, context) => {
       // Put back and said, where no change was made after it: what the screen shows is what the
-      // server holds. Under a later change it is that one's choice that stands until the read,
-      // and nothing is said of this one: the later one carried its value, and where the server
-      // took that, *not saved* would be said over two switches that are both as it holds them.
+      // server last said it holds. Under a later change it is that one's choice that stands
+      // until the read, and nothing is said of this one: the later one carried its value, and
+      // where the server took that, *not saved* would be said over two switches that are both
+      // as it holds them.
       if (context?.turn !== sent.current) return
-      if (context.before !== undefined) queries.setQueryData(consentsKey, context.before)
-      setRefusal(say(error))
+      lastRefused.current = true
+      if (served.current.kept !== undefined) {
+        queries.setQueryData(consentsKey, served.current.kept)
+      }
+      const status = problemIn(error)?.status
+      setRefusal({
+        text: say(error),
+        refused: context.unsent || (status !== undefined && status < 500),
+      })
     },
     onSettled: () => {
       // Every one of them is answered: what the server holds now is read, whichever of two
@@ -149,8 +182,8 @@ function Choices() {
           },
           withdrawn,
           rejected: {
-            title: t('privacy.consent.not_saved'),
-            text: refusal ?? '',
+            ...(refusal?.refused === true ? { title: t('privacy.consent.not_saved') } : {}),
+            text: refusal?.text ?? '',
             actions: (
               <Button
                 onClick={() => {

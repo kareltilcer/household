@@ -554,6 +554,73 @@ describe('the two consents', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  // Two changes refused one after the other: the later one was made over the earlier one's
+  // choice, which nobody saved. Put back to that, the page would draw a consent as withdrawn
+  // that the server still holds, and the read that settles it fails where the writes did.
+  it('put both switches back to what the server holds where two changes are refused and the read after them fails', async () => {
+    const server = serving()
+    server.on('GET /me/consents', () => Response.json({ analytics: true, marketing_email: true }))
+    const answers: ((response: Response) => void)[] = []
+    server.on(
+      'PUT /me/consents',
+      () =>
+        new Promise<Response>((resolve) => {
+          answers.push(resolve)
+        }),
+    )
+    const { user } = await centre(server)
+    await user.click(await screen.findByRole('switch', { name: statistics }))
+    await user.click(screen.getByRole('switch', { name: news }))
+    await waitFor(() => {
+      expect(answers).toHaveLength(2)
+    })
+    server.on('GET /me/consents', () => Promise.reject(new TypeError('offline')))
+    act(() => {
+      answers[0]?.(problem(429, 'rate_limited'))
+    })
+    act(() => {
+      answers[1]?.(problem(429, 'rate_limited'))
+    })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not saved')
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: news })).toBeChecked()
+    })
+    expect(screen.getByRole('switch', { name: statistics })).toBeChecked()
+  })
+
+  // The change made last is refused first, and the one before it is then taken: what the server
+  // said it holds is drawn, the earlier choice saved and the later one put back.
+  it('draw the earlier change the server took where the one made after it was refused first', async () => {
+    const server = serving()
+    server.on('GET /me/consents', () => Response.json({ analytics: true, marketing_email: true }))
+    const answers: ((response: Response) => void)[] = []
+    server.on(
+      'PUT /me/consents',
+      () =>
+        new Promise<Response>((resolve) => {
+          answers.push(resolve)
+        }),
+    )
+    const { user } = await centre(server)
+    await user.click(await screen.findByRole('switch', { name: statistics }))
+    await user.click(screen.getByRole('switch', { name: news }))
+    await waitFor(() => {
+      expect(answers).toHaveLength(2)
+    })
+    server.on('GET /me/consents', () => Promise.reject(new TypeError('offline')))
+    act(() => {
+      answers[1]?.(problem(429, 'rate_limited'))
+    })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not saved')
+    act(() => {
+      answers[0]?.(Response.json({ analytics: false, marketing_email: true }))
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: statistics })).not.toBeChecked()
+    })
+    expect(screen.getByRole('switch', { name: news })).toBeChecked()
+  })
+
   it('put a refused change back, say why, and let it be put away', async () => {
     const server = serving()
     server.on('PUT /me/consents', () => problem(429, 'rate_limited'))
@@ -590,6 +657,30 @@ describe('the two consents', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(server.to('PUT /me/consents')).toHaveLength(1)
+  })
+
+  // *Not saved* is said where that is known: the server refused the change, or the browser had
+  // no connection to send it over. A request that got no answer with a connection there is one
+  // the server may have taken, its answer lost on the way back: of that nobody has said.
+  it.each([
+    ['say that a change asked with the browser offline was not saved', false, true],
+    ['say nothing of whether a change that got no answer was saved', true, false],
+  ])('%s', async (_name, connected, denied) => {
+    const server = serving()
+    server.on('PUT /me/consents', () => Promise.reject(new TypeError('no answer')))
+    const { user } = await centre(server)
+    const control = await screen.findByRole('switch', { name: statistics })
+    if (!connected) {
+      vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false)
+      window.dispatchEvent(new Event('offline'))
+    }
+    await user.click(control)
+    const strip = await screen.findByRole('alert')
+    expect(strip).toHaveTextContent(/We couldn’t reach Household\./)
+    expect(within(strip).queryByText('Not saved') !== null).toBe(denied)
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: statistics })).not.toBeChecked()
+    })
   })
 
   it('draw their shape while they are read, and say so where they could not be', async () => {

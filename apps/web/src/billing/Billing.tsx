@@ -55,7 +55,7 @@ import {
   type Subscription,
 } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
-import { keptUntil, subscriptionKey } from '../household/households.ts'
+import { deletedBy, keptUntil, subscriptionKey } from '../household/households.ts'
 import { HouseholdSettingsPage, Section } from '../household/settings/Page.tsx'
 import { useTimeZone } from '../household/timezone.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
@@ -110,7 +110,9 @@ const returned = [
  * one. The day a lapse keeps its data until is said where it is the day the data goes
  * (`keptUntil`, households.ts): a deletion the owners scheduled for no later takes the household
  * first, and subscribing does not take that back; one scheduled for later leaves the lapse's
- * day the earlier, and it is said.
+ * day the earlier, and it is said. The day a household in grace becomes read-only is held to the
+ * same, as the banner above the screen holds it (`deletedBy`): it is no day of a household that
+ * is gone by then.
  */
 function useStateSentence(): (subscription: Subscription) => string | undefined {
   const t = useTranslate()
@@ -125,10 +127,9 @@ function useStateSentence(): (subscription: Subscription) => string | undefined 
       case 'past_due':
         return t('billing.means.past_due')
       case 'grace': {
+        const ends = subscription.grace_ends_at
         const until =
-          subscription.grace_ends_at === null
-            ? undefined
-            : format.dayOf(subscription.grace_ends_at, zone)
+          ends === null || deletedBy(household, ends) ? undefined : format.dayOf(ends, zone)
         return until === undefined
           ? t('billing.means.grace')
           : t('billing.means.grace_until', { day: until })

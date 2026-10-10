@@ -470,11 +470,16 @@ export function SyncHealth() {
               example={t('health.sync.empty.example')}
               action={
                 // Busy while the list is asked for: a press that found nothing new would
-                // otherwise look like a press that did nothing.
+                // otherwise look like a press that did nothing. So would one whose read failed,
+                // the empty list being kept and drawn all the same: it is said, as a press's
+                // refusal is.
                 <Button
                   loading={read.isFetching}
                   onClick={() => {
-                    void read.refetch()
+                    refuse(null)
+                    void read.refetch().then((answer) => {
+                      if (answer.isError) refuse(say(answer.error))
+                    })
                   }}
                 >
                   {t('health.sync.empty.again')}

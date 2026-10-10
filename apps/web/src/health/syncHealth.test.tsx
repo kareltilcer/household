@@ -757,6 +757,25 @@ describe('sync health, where something cannot be read or changed', () => {
     expect(await rowOf('Firefox on Linux')).toBeInTheDocument()
   })
 
+  // The empty list is kept and drawn whatever became of asking again: a read that failed there
+  // would be a press that came to nothing, and is said instead, each time.
+  it('says that checking again could not reach the server, where the empty list stays', async () => {
+    const server = listing([])
+    const { user } = await health(server, { sync: syncWithout('elsewhere') })
+    const again = await screen.findByRole('button', { name: 'Check again' })
+    server.on(`GET ${routes.state}`, () => Promise.reject(new TypeError('offline')))
+    await user.click(again)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/We couldn’t reach Household\./)
+    expect(
+      screen.getByText('No browser or device of yours has reported on this household yet.'),
+    ).toBeInTheDocument()
+    // Answered the next time, the refusal is said no longer.
+    server.on(`GET ${routes.state}`, () => Response.json({ replicas: [other] }))
+    await user.click(screen.getByRole('button', { name: 'Check again' }))
+    expect(await rowOf('Firefox on Linux')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('draws no control in a household that takes no writes, and says each row is as it last reported', async () => {
     const server = listing([report(), { ...other, digest_mismatch_entity_types: ['notes.note'] }])
     server.household = readOnly

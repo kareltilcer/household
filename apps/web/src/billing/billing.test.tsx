@@ -379,6 +379,35 @@ describe('how the household stands', () => {
     ).toBeInTheDocument()
   })
 
+  // The day a household in grace becomes read-only is held to the same rule, as the banner above
+  // the screen holds it: a trial that ran out in a household whose deletion was scheduled in the
+  // trial's first fortnight is gone before its grace ends.
+  it.each([
+    [
+      'names no day a household in grace becomes read-only on where its deletion comes no later',
+      '2026-10-12T08:00:00Z',
+      'The trial or the subscription has ended. Uploading files is paused; everything else works for now, and then the household becomes read-only. Subscribing brings everything back.',
+    ],
+    [
+      'still names the day a household in grace becomes read-only on where its deletion comes later',
+      '2026-10-20T08:00:00Z',
+      'The trial or the subscription has ended. Uploading files is paused, and everything else works until Oct 14, 2026, when the household becomes read-only. Subscribing brings everything back.',
+    ],
+  ])('%s', async (_name, deletion, sentence) => {
+    const server = createServer()
+    const until = '2026-10-14T10:00:00Z'
+    server.subscription = trial({ state: 'grace', trial_ends_at: null, grace_ends_at: until })
+    server.household = {
+      ...server.household,
+      deletion_scheduled_at: deletion,
+      entitlement: { state: 'grace', can_write: true, can_upload: false, grace_ends_at: until },
+    }
+    await read(server)
+    const standing = await section('Subscription')
+    expect(within(standing).getByText(sentence)).toBeInTheDocument()
+    if (deletion < until) expect(standing).not.toHaveTextContent('Oct 14, 2026')
+  })
+
   it('leads from a restriction to where it is lifted', async () => {
     const server = restricted(createServer())
     await read(server)

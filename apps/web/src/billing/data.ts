@@ -177,7 +177,13 @@ export function useProcessorsWord(household: string, begun = false): Wait {
   useEffect(() => {
     if (!reading) return undefined
     const timer = setInterval(() => {
-      void queries.invalidateQueries({ queryKey: subscriptionKey(household), exact: true })
+      // A read still on its way is left to land, and not given up for this one: on a connection
+      // slower than the reads come, each would otherwise be abandoned for the next, and nothing
+      // read until the last.
+      void queries.invalidateQueries(
+        { queryKey: subscriptionKey(household), exact: true },
+        { cancelRefetch: false },
+      )
       setLeft((reads) => (reads === null ? null : reads - 1))
     }, confirmationReads.every)
     return () => {
