@@ -293,7 +293,7 @@ describe('a household’s replica', () => {
   it('is not left open by an opening that ended after its household had left the screen', async () => {
     let arrive: () => void = () => undefined
     const stand = standIn({ registry })
-    const { view } = await drawn({
+    const { view, opener } = await drawn({
       open: () =>
         new Promise((resolve) => {
           arrive = () => {
@@ -301,13 +301,12 @@ describe('a household’s replica', () => {
           }
         }),
     })
+    // Asked for, and not yet there: the household leaves while its replica is on its way.
     await waitFor(() => {
-      expect(arrive).not.toBe(undefined)
+      expect(opener).toHaveBeenCalledTimes(1)
     })
-    await comesTo('phase', 'opening')
-    await waitFor(() => {
-      expect(stand.asked).toEqual([])
-    })
+    expect(says('phase')).toHaveTextContent('opening', { exact: true })
+    expect(stand.asked).toEqual([])
     await view.unmount()
     await act(async () => {
       arrive()
