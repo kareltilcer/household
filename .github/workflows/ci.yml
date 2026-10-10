@@ -308,14 +308,18 @@ jobs:
       - name: Java 17
         run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
       # What Gradle downloads, itself and every dependency of the build, which the lockfile
-      # decides the versions of. Nothing a build made is kept from one run to the next.
+      # decides the versions of, and no more: all of Gradle's own folder was 1.6 GB of the
+      # repository's ten, most of it what a build made of the downloads. Nothing a build made
+      # is kept from one run to the next.
       - name: Gradle's downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: mobile-gradle-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+            ~/.gradle/caches/modules-2
+            !~/.gradle/caches/modules-2/modules-2.lock
+            !~/.gradle/caches/modules-2/gc.properties
+            ~/.gradle/wrapper/dists
+          key: mobile-gradle-downloads-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Generate
         run: pnpm exec turbo run gen
       # The native project is no file of the repository: Expo writes it from app.config.ts
@@ -438,9 +442,9 @@ jobs:
         run: |
           docker compose logs --tail 200
           cat "$RUNNER_TEMP/api.log" || true
-      # Maestro's report, its own log and a screenshot of each failure, what the flows kept,
-      # and what the device logged meanwhile. Kept of a run that passed too: a screenshot is
-      # the one place the app's faces and its two themes are seen.
+      # Maestro's report and, flow by flow, the screenshots it took, what the device logged
+      # and of a failure the screen and the hierarchy Maestro saw. Kept of a run that passed
+      # too: a screenshot is the one place the app's faces and its two themes are seen.
       - name: Keep what the flows left
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -555,16 +559,15 @@ jobs:
               exit 1
             fi
           done
-      # Maestro's report, its own log and a screenshot of each failure, what the flows kept,
-      # and what the simulator logged meanwhile; beside them Xcode's output and the log of
-      # Maestro's driver, which Xcode runs. Kept of a run that passed too: a screenshot is the
-      # one place the app's faces and its two themes are seen.
-      - name: Gather Xcode's output and the driver's log
-        if: ${{ !cancelled() }}
+      # Maestro's report and, flow by flow, the screenshots it took and of a failure the screen,
+      # the hierarchy Maestro saw and the simulator's log; beside them Xcode's whole output
+      # where the build is what failed. Kept of a run that passed too: a screenshot is the one
+      # place the app's faces and its two themes are seen.
+      - name: Gather Xcode's output of a build that failed
+        if: ${{ !cancelled() && steps.build.outcome == 'failure' }}
         run: |
           mkdir -p apps/mobile/dist/e2e
-          cp "$RUNNER_TEMP/xcodebuild.log" apps/mobile/dist/e2e/ || true
-          cp -R "$HOME/Library/Logs/maestro" apps/mobile/dist/e2e/maestro-driver || true
+          cp "$RUNNER_TEMP/xcodebuild.log" apps/mobile/dist/e2e/
       - name: Keep what the flows left
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
