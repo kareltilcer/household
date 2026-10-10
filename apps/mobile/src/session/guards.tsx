@@ -81,13 +81,23 @@ export function Unreachable({ retry }: { readonly retry: () => void }) {
 /** What is under it is drawn for a member, and for nobody else. */
 export function Signed({ children }: { readonly children: ReactNode }) {
   const { state, signedOut, retry } = useSession()
+  // Where the app is, which the router says for every screen alike: this screen's own address
+  // while it is the one in front.
   const address = usePathname()
   const member = state.status === 'member'
+  const visitor = state.status === 'visitor'
   // The address held while a visitor signed in has been reached, or another has: it is held no
   // longer, so that it is opened once.
   useEffect(() => {
     if (member) takeDestination()
   }, [member, address])
+  // The address is held for whoever was on their way to it: someone who opened it signed out,
+  // or whose sign-in ended under them. A member who signed out themselves was on their way out,
+  // and the next person to sign in here is not sent to where they were. The sign-in's own
+  // address is never held: the router names it already as this screen gives way to it.
+  useEffect(() => {
+    if (visitor && !signedOut && address !== paths.signIn.path) holdDestination(address)
+  }, [visitor, signedOut, address])
   switch (state.status) {
     case 'member':
       return children
@@ -96,10 +106,6 @@ export function Signed({ children }: { readonly children: ReactNode }) {
     case 'unreachable':
       return <Unreachable retry={retry} />
     case 'visitor':
-      // The address is held for whoever was on their way to it: someone who opened it signed
-      // out, or whose sign-in ended under them. A member who signed out themselves was on their
-      // way out, and the next person to sign in here is not sent to where they were.
-      if (!signedOut) holdDestination(address)
       return <Redirect href={paths.signIn.path} />
   }
 }

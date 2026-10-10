@@ -101,6 +101,29 @@ describe('a household’s screen', () => {
     expect(heldDestination()).toBe(today)
   })
 
+  // The router says where the app is for every screen alike: as this one gives way to the
+  // sign-in, the address it reads is the sign-in's own.
+  it('does not take the sign-in’s own address for where somebody was going', async () => {
+    const view = await render(
+      <SessionFixture state={{ status: 'visitor' }}>
+        <Signed>
+          <Inside />
+        </Signed>
+      </SessionFixture>,
+    )
+    mockAt.path = paths.signIn.path
+    await view.rerender(
+      <TestProviders>
+        <SessionFixture state={{ status: 'visitor' }}>
+          <Signed>
+            <Inside />
+          </Signed>
+        </SessionFixture>
+      </TestProviders>,
+    )
+    expect(heldDestination()).toBe(today)
+  })
+
   it('holds the address for a member whose sign-in ended under them', async () => {
     await render(
       <SessionFixture state={{ status: 'visitor' }} ended>
