@@ -47,7 +47,7 @@ pnpm --filter @household/web check      # that build held to its bundle budget, 
 pnpm --filter @household/web e2e        # builds it again with the dev-only routes (build:e2e), then Playwright against an API and a stand-in for Stripe it starts itself: axe, the pseudo-locale pass, the policy, the critical paths (needs up, db:setup and up:sync; stop dev:api first)
 pnpm --filter @household/mobile test    # Jest and React Native Testing Library over the mobile app: no device, no service and no native build
 pnpm --filter @household/mobile export  # the production bundles of both platforms, as Metro and Hermes make them on any machine (dist), with Metro's cache cleared (run `pnpm exec turbo run gen` first)
-pnpm --filter @household/mobile check   # that export held to each platform's bytecode budget and to holding no dev screen
+pnpm --filter @household/mobile check   # that export held to each platform's bytecode budget, and to holding no dev screen and no stand-in
 pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-to-end build installed on an emulator that is up (or `ios`, on a simulator; `--stack` with the API up and a member made): it builds nothing and starts no device
 ```
 
@@ -110,9 +110,11 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   `mobile` makes the export and runs `check`. `mobile-android` builds the development variant
   as a release build with the dev screens in it (`EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS=1`), starts
   the development services and the API, makes a member (`e2e:stack member`), runs the flows on
-  an emulator at API 29 (`e2e android --stack`), and holds the built APK's permissions to their
-  reasons (`build/apk.ts`). `mobile-ios` builds the same for a simulator and runs the flows that
-  ask nothing of a server (`e2e ios`), a macOS runner having no Docker. The app's Jest tests
+  an emulator at API 29 (`e2e android --stack`), asks the server for the device that signed in
+  and the client that reported (`e2e:stack devices`, `e2e:stack clients`), and holds the built
+  APK's permissions to their reasons (`build/apk.ts`). `mobile-ios` builds the same for a
+  simulator and runs the flows that ask nothing of a server (`e2e ios`), a macOS runner having
+  no Docker. The app's Jest tests
   run in the job that runs every package's
   ([ADR 0029](docs/adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md),
   [runbook](docs/runbooks/mobile-builds.md)).
@@ -424,8 +426,13 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   out, `__DEV__ || process.env.EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS === '1'`, and imports the
   screen behind it by `lazy(() => import(…))`, Metro folding a condition away only where it is
   written. Nothing else outside `src/dev` imports from it (`build/check.test.ts`), and
-  `build/check.ts` fails an export that holds a dev screen, or whose bytecode is over a
-  platform's budget (`build/budget.ts`, [D-189](docs/prd/09-decisions.md)). A device's sign-in is a token pair
+  `build/check.ts` fails an export that holds a dev screen, one that holds a stand-in, and one
+  whose bytecode is over a platform's budget (`build/budget.ts`,
+  [D-189](docs/prd/09-decisions.md)). A stand-in is what a test or a dev screen draws over in
+  the server's place, the replica's or a member's, written outside `src/dev`: each is a line
+  of `standIns` (`build/bundles.ts`) with words it alone holds, and `build/check.test.ts` fails
+  a file under `src` and outside `src/dev` named `*.fixtures.ts`, `standIn.ts` or `testing.ts`
+  that is not listed there. A device's sign-in is a token pair
   kept in SecureStore under its member (`src/session/tokens.ts`, over `src/session/vault.ts`,
   the one file that imports expo-secure-store). From elsewhere, only a renewal the server
   answers `401 refresh_token_invalid` ends it (`src/session/renewal.ts`); a request refused
@@ -441,16 +448,30 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   (`src/sync/files.ts`). A write through the query client spreads `askedNow`
   (`src/api/query.ts`): `src/api/askedNow.test.ts` reads the sources of the session, push, a
   household's own answer, the links, *please update* and the dev sign-in, and fails a
-  `useMutation` there that does not begin with it. `src/sync/open.ts` is the one source file
+  `useMutation` there that does not begin with it. `src/api/query.ts` is also the one source
+  file that imports NetInfo, which a test of the sources holds (`src/api/api.test.tsx`): it believes the
+  device only where it says it has no connection (`watchConnection`) and tells the query
+  client, and a screen reads the query client's word (`useOnline`), so the offline bar and a
+  read that waits for a connection never disagree. `src/sync/open.ts` is the one source file
   that imports `@household/sync`'s values, which `src/sync/open.test.ts` holds, and the one
   that opens a replica: once on the device however many hold it, in a file named for its member
   and its household (`src/sync/databases.ts`), whose removal is noted step by step and taken up
   again at the next start. `ReplicaProvider` (`src/sync/ReplicaProvider.tsx`) asks it for one
-  only for a member, of a household read as theirs. A household's screens stand in a tab navigator with the guard, the replica's provider
-  and the frame inside its `layout` (`src/shell/HouseholdLayout.tsx`), and a household is a
-  route of a stack of its own (`app/households/_layout.tsx`): a guard around a navigator loses
-  the rest of the address, and an address that names another household opens it on top of the
-  one that was open. The tab bar is derived by `tabsOf` (`src/shell/tabs.ts`) from the
+  only for a member, of a household read as theirs. A household's screens stand in a tab
+  navigator with the guard, the replica's provider and the frame inside its `layout`
+  (`src/shell/HouseholdLayout.tsx`), and a household is a route of a stack of its own
+  (`app/households/_layout.tsx`): a guard around a navigator loses the rest of the address, and
+  an address that names another household opens it on top of the one that was open. The screen
+  of a route under a household draws in `HouseholdScreen` (`src/shell/HouseholdScreen.tsx`),
+  whose title is the screen's one header ([D-188](docs/prd/09-decisions.md)), and never in
+  `Screen` alone, which `src/app/routes.test.ts` holds by reading the sources; what the frame
+  draws in a screen's place, a wait, *could not be read* and *not available*, is a plain
+  `Screen`. A household's own answer is read by `useHousehold` (`src/household/data.ts`), only
+  for a member and of an id that can be one, by the frame and the replica's provider in one
+  commit, and by the sync dev screen beside the provider it draws: whatever else needs it is
+  handed it, as the bar above the screens is, a reader that mounts after the answer asking the
+  server again (`src/sync/bars.test.tsx` holds the household to being asked for once). The tab
+  bar is derived by `tabsOf` (`src/shell/tabs.ts`) from the
   household's own answer and `src/modules/registry.ts`, and never authored
   ([D-183](docs/prd/09-decisions.md), [D-184](docs/prd/09-decisions.md)): a module's mobile item
   adds its line to the registry, its routes to `paths.ts`, and the place they stand under to
@@ -464,8 +485,11 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   removes a line of `unusedPermissions` in `app.config.ts`: CI's Android job holds the APK it
   built to the first (`build/apk.ts`), and `build/permissions.test.ts` each variant's
   configuration to both (FR-PR1). A Maestro flow (`e2e/flows`) selects by `testID` and never by
-  a word, which `e2e/flows.test.ts` holds, with each name held to the sources but for a flow
-  tagged `awaiting`, written ahead of its screens.
+  a word, which `e2e/flows.test.ts` holds, with each name held to the sources: the test
+  excuses a flow tagged `awaiting`, one written ahead of its screens, and no flow is tagged so
+  now. A flow finds a thing by its own `testID` and never as inside another, React Native
+  mounting the children of a view that is there only to be named beside it, and on a long dev
+  screen narrowed to one part first (`src/dev/Only.tsx`).
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).
