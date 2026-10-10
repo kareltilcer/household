@@ -34,6 +34,7 @@ import { Today } from './Today.tsx'
 jest.mock('expo-router', () => ({
   router: {
     navigate: jest.fn(),
+    push: jest.fn(),
     replace: jest.fn(),
     back: jest.fn(),
     canGoBack: jest.fn(() => false),
@@ -266,6 +267,24 @@ describe('More', () => {
     await waitFor(() => {
       expect(links()).toEqual([])
     })
+  })
+
+  // A visitor has a way to the dev screens on the sign-in screen; a member's is here.
+  it('leads to the dev screens in a build that holds them, and holds no trace of them in one that does not', async () => {
+    const view = await render(inside(<More />))
+    await userEvent.press(screen.getByTestId('more:dev'))
+    expect(jest.mocked(router.push).mock.calls).toEqual([[paths.dev.path]])
+    await view.unmount()
+    // D-154: a dev-only screen is in no build a store serves, and neither is a way to one.
+    Object.assign(globalThis, { __DEV__: false })
+    try {
+      await render(inside(<More />))
+      expect(screen.getByTestId('route:more')).toBeOnTheScreen()
+      expect(screen.queryByTestId('more:dev')).toBeNull()
+      expect(screen.queryByText(paths.dev.path)).toBeNull()
+    } finally {
+      Object.assign(globalThis, { __DEV__: true })
+    }
   })
 
   it('lists the modules the member holds that the build can open, and no other', async () => {
