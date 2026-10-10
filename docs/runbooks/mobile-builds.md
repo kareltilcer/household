@@ -105,18 +105,20 @@ Expo's template and of every library are merged as the build is made. Two files 
 holds a build to them.
 
 - **`apps/mobile/build/asked.ts`** is what a build asks for, by name, each with what it is for:
-  `INTERNET`, `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS`, `VIBRATE`, `RECEIVE_BOOT_COMPLETED`,
-  `WAKE_LOCK` and Google's messaging `RECEIVE`, and in a development build `SYSTEM_ALERT_WINDOW`,
-  by which React Native draws its errors over the app. It is the source of the table in the
-  release notes. Beside them every build holds one permission of its own making,
+  `INTERNET`, `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS`, `VIBRATE`, `WAKE_LOCK` and Google's
+  messaging `RECEIVE`, and in a development build `SYSTEM_ALERT_WINDOW`, by which React Native
+  draws its errors over the app. It is the source of the table in the release notes. Beside them
+  every build holds one permission of its own making,
   `<identifier>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, which asks its member nothing.
 - **`apps/mobile/app.config.ts`** (`unusedPermissions`) is what every build removes, whichever
   library asks for it, each with why nothing needs it: shared storage (the template's and
   expo-file-system's), a fingerprint or a face (androidx.biometric's, under expo-secure-store), the
-  Wi-Fi network's state (NetInfo's), the install referrer (under expo-application), and sixteen
-  that draw a count on the icon of one launcher or another (the badge library's, under
+  Wi-Fi network's state (NetInfo's), the install referrer (under expo-application), being started
+  with the device (`RECEIVE_BOOT_COMPLETED`, by which expo-notifications schedules again what an
+  app had it hold to show later: the app has it hold nothing, a notification being a push), and
+  sixteen that draw a count on the icon of one launcher or another (the badge library's, under
   expo-notifications). The first build on a runner asked for thirty-one; a development build is
-  to ask for nine, and one a member installs for eight.
+  to ask for eight, and one a member installs for seven.
 - **CI's `mobile-android` job** reads the list off the build it makes and fails on a permission that
   has no reason, and on a reason for a permission the build does not ask for. So **a new library
   that brings a permission fails that job** until somebody decides: its reason in `asked.ts`, or
@@ -129,8 +131,11 @@ holds a build to them.
   node apps/mobile/build/apk.ts asked.txt production
   ```
 
-- **A count on the app's icon** is the one thing here a later item may want back: it is taking the
-  sixteen launchers' names out of `unusedPermissions`, and giving each its reason.
+- **A count on the app's icon** is one thing here a later item may want back: it is taking the
+  sixteen launchers' names out of `unusedPermissions`, and giving each its reason. **A
+  notification the device itself shows at a time**, a reminder scheduled on it and not pushed, is
+  the other: it is `RECEIVE_BOOT_COMPLETED`'s reason, without which what was scheduled is lost
+  when the device restarts.
 
 **iOS** asks through a sentence in `Info.plist`, and the configuration writes none of its own: no
 Face ID (`expo-secure-store` is told so), no camera, no photographs, no location, no contacts. The
@@ -155,7 +160,7 @@ the `typescript` job, whatever changed.
 | Job | Runner | What it does | The first run took |
 |---|---|---|---|
 | `mobile` | Linux | `export` and `check`: the production bundles of both platforms, under their budget and with no dev screen | 1 min |
-| `mobile-android` | Linux, KVM | writes the Android project, builds a release APK for `x86_64`, starts the development services and the API, makes a member, boots an emulator at API 29, runs the flows, asks the server for the member's devices, and holds the build's permissions to their reasons | 13 min: the build 9, with nothing cached; the services and the API under one; the emulator's boot and three flows two |
+| `mobile-android` | Linux, KVM | writes the Android project, builds a release APK for `x86_64`, starts the development services and the API, makes a member, boots an emulator at API 29, runs the flows, asks the server for the member's devices and for the household's clients, and holds the build's permissions to their reasons | 13 min: the build 9, with nothing cached; the services and the API under one; the emulator's boot and three flows two |
 | `mobile-ios` | `macos-26` | writes the iOS project, installs the pods, builds a release app for a simulator of its own, runs the flows, and reads the built `Info.plist` | the pods 1 min, the build 8, Maestro's driver and the app's first start 1 |
 
 **The build the flows walk** is the development variant, as a release build with its JavaScript in
@@ -176,13 +181,49 @@ job of its own.
 | `harness` | a cell of each kind of the twelve-state harness, at 200 % text, in both themes | both |
 | `primitives` | a sheet opens and closes; a menu's item opens a confirmation | both |
 | `hold` | hold to complete: let go early, and held | both |
+| `shell` | a tab bar's slot opens its place and says so, Add is a sheet over it; a module is hidden from its row's menu; one pane at a phone's width and two at a tablet's; *not available* leads home | both |
+| `resolvers` | a change that was not accepted is given up: its sheet, the confirmation inside it, both gone and a toast | both |
 | `link` | a link opens the app at its address | Android |
-| `stack` | a member signs in against the real server, and is signed in still after a restart | Android, with the stack |
-| `replica` | the replica open and receiving, the offline bar | not yet: `awaiting` |
+| `stack` | a member signs in against the real server, in their household's frame over its tab bar, and is signed in still after a restart. The job then asks the server for the account's devices (`e2e:stack devices`) | Android, with the stack |
+| `sign-out` | the bar's Today and More each open their place, and More's sign-out leads back to sign-in | Android, with the stack |
+| `replica` | the member's replica opens and receives, with nothing in its inbox, and reports itself; with the connection taken away the device says so and the household's bar comes, and goes when it is back. The job then asks the server for the household's clients (`e2e:stack clients`, D-178) | Android, with the stack |
 
-Three tags keep a flow out of a run: `awaiting`, on a flow written ahead of its screens; `stack`,
-on one that needs the API and a member, which only the Android job has (a macOS runner has no
-Docker); and `android`, on one that does what only Android lets a flow do.
+Three tags keep a flow out of a run: `awaiting`, on a flow written ahead of its screens, which
+none is now; `stack`, on one that needs the API and a member, which only the Android job has (a
+macOS runner has no Docker); and `android`, on one that does what only Android lets a flow do:
+send a link, or take the connection away. Maestro runs the flows in an order of its own, so none
+leans on another: each starts the app with nothing kept, which on Android is a new installation
+to the server, and `stack`'s sign-in is still there for the job to find whatever `sign-out` did.
+
+**How a flow finds a thing**, each learnt from a run that failed:
+
+- **By its own `testID`, and never as inside another** (`childOf`). React Native mounts the
+  children of a view that is there only to be named beside it, in the nearest ancestor that
+  draws something or is a control: a cell of a dev screen and what stands in it are neighbours
+  in the tree Maestro reads, on both platforms. Where a name is drawn more than once the flow
+  narrows the screen first, or takes the first (`index: 0`); and where a state is to be read,
+  it is read off a name only that state draws (`hold:released`, `arrange:tasks:show`,
+  `sync:live:online:no`), or off `selected`.
+- **On a screen narrowed to one part.** The dev screens that are long, the page of primitives,
+  the shell's and sync's, carry a row of controls at their head, `<page>:only:<part>` and
+  `<page>:only:all` (`src/dev/Only.tsx`; the harness has its own, `harness:only:<body>`), and a
+  flow presses one before it looks for anything. It is not only the time saved. **On Android a
+  swipe that starts on a stepper's count scrolls nothing**: the field is a single line with its
+  text centred, which Android's text field takes for one that scrolls sideways, and it keeps
+  the touch. Maestro swipes from the middle of the screen, so a page of controls stopped under
+  it with a stepper there, and every swipe after was the same one. It is a defect of the
+  control and not of the flows, which a member's thumb meets as well.
+- **Scrolled to once it is there, and waited for where it stands.** `scrollUntilVisible` swipes
+  for as long as it has not found its element, one that has not come yet as one that is further
+  down: so it is for a thing that is drawn already. What a screen draws later, a replica opened
+  or a report answered, is waited for with `extendedWaitUntil`, after a scroll to a neighbour
+  that is there from the start.
+- **What stays a few seconds is looked for at once.** After a tap Maestro waits for the screen
+  to come to rest before the next command, which on a slow emulator is seconds of a toast's
+  five: the tap that brings one says `waitToSettleTimeoutMs: 500`.
+- **The connection is given back whatever became of the flow** (`onFlowComplete`, in
+  `replica`): a flow that failed with the emulator in aeroplane mode would fail every flow after
+  it that asks the server.
 
 **The way to a dev screen is by presses, and not by a link.** The sign-in screen has a control that
 leads to the dev sign-in form (`sign-in:dev`), and every dev screen leads to their index
