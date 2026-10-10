@@ -1,0 +1,133 @@
+# The twelve-state harness opens on a device, and a cell of each kind is there (plan item 28,
+# D-154): each under the `testID` its cell carries, `<body>:<state>:<theme>`, and after it what
+# its treatment draws, with the scale held at 200 %. That every one of the 192 cells is drawn
+# as its treatment says, and passes the accessibility rules, is the harness's own Jest test:
+# this reads that the screen draws on a device, at twice the text, in both themes.
+#
+# The screen is narrowed to one body first, the list's: the whole of it is two hundred cells,
+# and a long way to scroll. A cell is found, and then what it holds, each by its own name and
+# neither as inside the other: a view that is there only to be named is no parent of what
+# stands in it on a device, where React Native mounts its children beside it.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devHarness'
+    direction: DOWN
+- tapOn:
+    id: 'dev-index:devHarness'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:harness'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: 'harness:only:list'
+    direction: DOWN
+- tapOn:
+    id: 'harness:only:list'
+# The states in the order they are drawn in (src/ui/states.ts). A cell at twice the text may
+# be taller than the screen, so a part of it in view is enough.
+# A skeleton in the body's shape.
+- scrollUntilVisible:
+    element:
+      id: 'list:loading:light'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- scrollUntilVisible:
+    element:
+      id: 'skeleton'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+# The teaching empty state.
+- scrollUntilVisible:
+    element:
+      id: 'list:empty:light'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- scrollUntilVisible:
+    element:
+      id: 'empty-state'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+# The body itself, in the light theme and then in the dark.
+- scrollUntilVisible:
+    element:
+      id: 'list:populated:light'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- scrollUntilVisible:
+    element:
+      id: 'body:list'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- takeScreenshot: harness-populated-light
+- scrollUntilVisible:
+    element:
+      id: 'list:populated:dark'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- takeScreenshot: harness-populated-dark
+# A message in the body's place.
+- scrollUntilVisible:
+    element:
+      id: 'list:error:light'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- scrollUntilVisible:
+    element:
+      id: 'banner:danger'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+# The body under the offline bar.
+- scrollUntilVisible:
+    element:
+      id: 'list:offline:light'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- scrollUntilVisible:
+    element:
+      id: 'offline-bar'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+# A row's mark: a change that waits, and one in conflict.
+- scrollUntilVisible:
+    element:
+      id: 'list:pending:light'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- scrollUntilVisible:
+    element:
+      id: 'status:pending'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- scrollUntilVisible:
+    element:
+      id: 'list:conflicted:light'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- scrollUntilVisible:
+    element:
+      id: 'status:conflict'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 20
+- takeScreenshot: harness-conflicted

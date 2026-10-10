@@ -66,6 +66,16 @@ function preferencesKey(household: string | null) {
   return ['me', 'notification-preferences', household ?? 'account'] as const
 }
 
+/** `held` with `change` made to it, as the contract merges one: a member of the merge at a time. */
+function changed(held: Preferences, change: Change): Preferences {
+  return {
+    ...held,
+    ...(change.enabled === undefined ? {} : { enabled: change.enabled }),
+    categories: { ...held.categories, ...change.categories },
+    ...(change.quiet_hours === undefined ? {} : { quiet_hours: change.quiet_hours }),
+  }
+}
+
 function ThisBrowser() {
   const t = useTranslate()
   const say = useProblemText(useOwnZone())
@@ -231,6 +241,12 @@ function Settings({
   // have not been: the time fields are drawn afresh after each, holding what the server holds.
   const [refusal, setRefusal] = useState<string | null>(null)
   const [refusals, setRefusals] = useState(0)
+  // The change a press has just made, held by the screen itself until the query client holds
+  // it. React puts a switch back, as its press ends, to what was last drawn, and the query
+  // client tells a screen of what it keeps by a timer, which a browser runs only after the
+  // frame that answers the press: drawn from what is kept alone, a pressed switch stood as it
+  // was for that frame, and a second press on it in that frame sent the first one's change again.
+  const [pressed, setPressed] = useState<Change | null>(null)
   const save = useMutation({
     ...askedNow,
     mutationFn: async (change: Change) =>
@@ -240,15 +256,11 @@ function Settings({
       const before = queries.getQueryData<Preferences>(key)
       // Shown as chosen while it is asked: a switch that waited for the answer would feel stuck.
       queries.setQueryData<Preferences>(key, (was) =>
-        was === undefined
-          ? was
-          : {
-              ...was,
-              ...(change.enabled === undefined ? {} : { enabled: change.enabled }),
-              categories: { ...was.categories, ...change.categories },
-              ...(change.quiet_hours === undefined ? {} : { quiet_hours: change.quiet_hours }),
-            },
+        was === undefined ? was : changed(was, change),
       )
+      // Kept now, and read there by the draw this asks for: the screen's own hold is put away,
+      // unless a later press has taken its place.
+      setPressed((held) => (held === change ? null : held))
       return { before }
     },
     onSuccess: (saved) => {
@@ -264,7 +276,14 @@ function Settings({
     },
   })
 
-  const preferences = read.data
+  /** Makes a change: drawn in the press that made it, and asked of the server at once. */
+  const change = (next: Change) => {
+    setPressed(next)
+    save.mutate(next)
+  }
+
+  const preferences =
+    read.data === undefined || pressed === null ? read.data : changed(read.data, pressed)
   const quiet = preferences?.quiet_hours ?? null
   const state = save.isPending
     ? 'syncing'
@@ -338,7 +357,7 @@ function Settings({
                 checked={preferences.enabled}
                 aria-describedby={`${ids}-master`}
                 onChange={(event) => {
-                  save.mutate({ enabled: event.currentTarget.checked })
+                  change({ enabled: event.currentTarget.checked })
                 }}
               />
               <p id={`${ids}-master`} className={styles.note}>
@@ -356,7 +375,7 @@ function Settings({
                   checked={preferences.categories[category]}
                   aria-describedby={`${ids}-${category}`}
                   onChange={(event) => {
-                    save.mutate({ categories: { [category]: event.currentTarget.checked } })
+                    change({ categories: { [category]: event.currentTarget.checked } })
                   }}
                 />
                 <p id={`${ids}-${category}`} className={styles.note}>
@@ -372,7 +391,7 @@ function Settings({
                 checked={quiet !== null}
                 aria-describedby={`${ids}-quiet`}
                 onChange={(event) => {
-                  save.mutate({ quiet_hours: event.currentTarget.checked ? night : null })
+                  change({ quiet_hours: event.currentTarget.checked ? night : null })
                 }}
               />
               <p id={`${ids}-quiet`} className={styles.note}>
@@ -384,7 +403,7 @@ function Settings({
                 key={refusals}
                 held={quiet}
                 onChange={(next) => {
-                  save.mutate({ quiet_hours: next })
+                  change({ quiet_hours: next })
                 }}
               />
             )}

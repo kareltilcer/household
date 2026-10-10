@@ -14,6 +14,7 @@ someone who is doing it for the first time, under pressure.
 | [Notifications: keys, push services and the scheduler](notifications.md) | Before an environment's first deploy, when a notification key is rotated or leaks, when a browser's push service is refused, when notifications do not arrive, and when a nightly job did not run |
 | [Platform staff: the staff role, the first `platform_admin`, and the platform's log](platform-staff.md) | Before an environment's first deploy, when the first administrator is made, when a staff member leaves or is locked out of their second step, and when a staff request fails |
 | [Billing: Stripe's account, keys, prices and webhook](billing.md) | Before an environment's first deploy, when a price changes or a currency is added, when a Stripe key is rotated or leaks, when a payment went through and the household is not `active`, and when a month's storage was not billed |
+| [Mobile builds: the three variants, EAS, and what CI builds](mobile-builds.md) | Before the first EAS build, when a build must be told a new API or a link host, when a permission or a native library is added, when one of CI's mobile jobs fails, and when a pin of theirs is moved |
 
 The gate G-C acceptance protocol, `gate-g-c.md`, follows with plan item 34. Incident response,
 breach notification, restore and failover follow with the resilience drills (item 89), and secret

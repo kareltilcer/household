@@ -1,0 +1,149 @@
+# The shell on a device, with no household and no server (04-navigation; src/dev/shell): a tab
+# bar's slot opens its place and says that it is open; Add opens a sheet over the place that is
+# open and is no place; a module is hidden from a menu's item, which acts only once the
+# platform says the menu's sheet has gone (the line that matters on iOS, where a second modal
+# is refused while the first is leaving); the panes are one at a phone's width and two at a
+# tablet's; and the neutral screen's one way out leads home. That the bar is derived as it
+# should be, and what arranging announces, are the shell's own Jest tests.
+#
+# The screen is narrowed to one part at a time (`shell:only:<part>`): it draws the bar forty
+# times over, and a part further down is a long way to scroll.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devShell'
+    direction: DOWN
+- tapOn:
+    id: 'dev-index:devShell'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:shell'
+    timeout: 30000
+
+# The bar: five slots, light, a phone's width, the text's own size.
+- scrollUntilVisible:
+    element:
+      id: 'shell:only:bars'
+    direction: DOWN
+- tapOn:
+    id: 'shell:only:bars'
+- scrollUntilVisible:
+    element:
+      id: 'shell:bar:five:light:phone:1:today'
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    id: 'shell:bar:five:light:phone:1:today'
+- assertVisible:
+    id: 'shell:bar:five:light:phone:1:today'
+    selected: true
+- assertVisible:
+    id: 'shell:bar:five:light:phone:1:home'
+    selected: false
+# Add is an action over the place that is open: a sheet, and the bar says the same place.
+- tapOn:
+    id: 'shell:bar:five:light:phone:1:add'
+- extendedWaitUntil:
+    visible:
+      id: 'shell:add:surface'
+    timeout: 15000
+- tapOn:
+    id: 'shell:add:close'
+- extendedWaitUntil:
+    notVisible:
+      id: 'shell:add:surface'
+    timeout: 15000
+- assertVisible:
+    id: 'shell:bar:five:light:phone:1:today'
+    selected: true
+- takeScreenshot: shell-bar
+
+# Arranging: a module is hidden by an item of its row's menu. A module that is listed has a
+# menu, and one that is hidden has the control that shows it again, and neither has both.
+- scrollUntilVisible:
+    element:
+      id: 'shell:only:arrange'
+    direction: UP
+- tapOn:
+    id: 'shell:only:arrange'
+- scrollUntilVisible:
+    element:
+      id: 'arrange:menu:tasks'
+      index: 0
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    id: 'arrange:menu:tasks'
+    index: 0
+- tapOn:
+    id: 'arrange:tasks:hide'
+# The hidden modules are listed under the others, and the same lists are drawn again at a
+# tablet's width below: whichever of the two is met first.
+- scrollUntilVisible:
+    element:
+      id: 'arrange:tasks:show'
+      index: 0
+    direction: DOWN
+    timeout: 30000
+- assertNotVisible:
+    id: 'arrange:menu:tasks'
+- takeScreenshot: shell-arrange
+
+# The panes: one at a phone's width, where a row opens over the list and its own control
+# leads back, and two at a tablet's, in a room that scrolls sideways on a phone. The phone's
+# room is brought onto the screen whole, so that what a row opens is on it too; all but
+# whole, since the room is a little wider than the phone it is drawn on.
+- scrollUntilVisible:
+    element:
+      id: 'shell:only:panes'
+    direction: UP
+- tapOn:
+    id: 'shell:only:panes'
+- scrollUntilVisible:
+    element:
+      id: 'shell:panes:phone:one'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 90
+- tapOn:
+    id: 'shell:panes:phone:cellar'
+- extendedWaitUntil:
+    visible:
+      id: 'shell:panes:phone:close'
+    timeout: 15000
+- tapOn:
+    id: 'shell:panes:phone:close'
+- extendedWaitUntil:
+    visible:
+      id: 'shell:panes:phone:cellar'
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: 'shell:panes:tablet:two'
+    direction: DOWN
+    timeout: 60000
+    visibilityPercentage: 10
+
+# The neutral screen: no entity, no cause, and one way out, which here is the dev index.
+- scrollUntilVisible:
+    element:
+      id: 'shell:only:not-available'
+    direction: UP
+- tapOn:
+    id: 'shell:only:not-available'
+- scrollUntilVisible:
+    element:
+      id: 'not-available:home'
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    id: 'not-available:home'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:index'
+    timeout: 30000

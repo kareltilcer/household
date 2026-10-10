@@ -1,0 +1,58 @@
+# What only a device can show of the foundation (plan item 28): the engine screen runs its
+# checks on the engine it is drawn on, Hermes itself, and says how each came out in a `testID`
+# (src/dev/engine). Jest runs the same checks on Node, over an `Intl` cut down to Hermes's.
+#
+# It starts with nobody signed in, which is where the way to the dev screens begins
+# (parts/dev.yaml): they are in the end-to-end build alone.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devEngine'
+    direction: DOWN
+- tapOn:
+    id: 'dev-index:devEngine'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:engine'
+    timeout: 30000
+# Every check held. Where one did not, this is `engine:all:failed`, and the screenshot of the
+# failure names each case under its line.
+- extendedWaitUntil:
+    visible:
+      id: 'engine:all:passed'
+    timeout: 30000
+- takeScreenshot: engine
+# And each line by its own name: the i18n vectors, every case, on this engine's `Intl` under
+# the polyfills (D-37); the five families the type scale names, registered by the binary; the
+# operating system's random source, by the identifiers it gives; and the name the app gives
+# itself to the server.
+- scrollUntilVisible:
+    element:
+      id: 'engine:vectors-format:passed'
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: 'engine:vectors-match:passed'
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: 'engine:fonts:passed'
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: 'engine:random:passed'
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: 'engine:client:passed'
+    direction: DOWN
+# The name itself, which the run is told from package.json (e2e/run.ts): `mobile/` and the
+# version, as `Household-Client` will carry it.
+- assertVisible:
+    id: 'engine:client:found'
+    text: ${CLIENT}

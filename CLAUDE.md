@@ -33,7 +33,7 @@ pnpm run up:convert   # build and start the converter sidecar (LibreOffice, popp
 pnpm run up:stripe    # Stripe's own mock server, which the test of what billing sends Stripe runs against
 pnpm run dev:api      # serve the API on 127.0.0.1:8080 (/api/v1/healthz, /api/v1/readyz)
 pnpm run dev:web      # the web app on Vite's dev server, /api proxied to dev:api
-pnpm test             # Vitest through turbo, then go test against the compose Postgres
+pnpm test             # Vitest, and the mobile app's Jest, through turbo, then go test against the compose Postgres
 pnpm run lint         # ESLint, the stylesheets' check, golangci-lint, Redocly and Prettier
 pnpm typecheck        # tsc in every package
 pnpm run gen          # code generation (turbo run gen + the tokens' stylesheet and the vendored icons + go generate + the client registries, which need Postgres)
@@ -45,6 +45,10 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
 pnpm --filter @household/web build      # the web build a deployment serves (dist/www)
 pnpm --filter @household/web check      # that build held to its bundle budget, the policy and its own id
 pnpm --filter @household/web e2e        # builds it again with the dev-only routes (build:e2e), then Playwright against an API and a stand-in for Stripe it starts itself: axe, the pseudo-locale pass, the policy, the critical paths (needs up, db:setup and up:sync; stop dev:api first)
+pnpm --filter @household/mobile test    # Jest and React Native Testing Library over the mobile app: no device, no service and no native build
+pnpm --filter @household/mobile export  # the production bundles of both platforms, as Metro and Hermes make them on any machine (dist), with Metro's cache cleared (run `pnpm exec turbo run gen` first)
+pnpm --filter @household/mobile check   # that export held to each platform's bytecode budget, and to holding no dev screen and no stand-in
+pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-to-end build installed on an emulator that is up (or `ios`, on a simulator; `--stack` with the API up and a member made): it builds nothing and starts no device
 ```
 
 - **`pnpm run up`, never `pnpm up`.** `pnpm up` is pnpm's own `update` command and rewrites
@@ -88,13 +92,32 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   table of their imports, from the catalogs and `src/parts.ts`). turbo writes them before every typecheck, lint and test; after a
   contract or catalog change, `pnpm run gen` refreshes them for an editor. The Go ISO 4217
   table (`internal/platform/money/iso4217_gen.go`) is committed and generated from
-  `packages/domain/src/iso4217.json`, and a test fails until it is regenerated.
+  `packages/domain/src/iso4217.json`, and a test fails until it is regenerated. The mobile app's
+  native projects (`apps/mobile/android`, `apps/mobile/ios`) are no files of the repository
+  either: Expo writes them from `apps/mobile/app.config.ts` as a build is made
+  ([runbook](docs/runbooks/mobile-builds.md)).
 - CI ([`.github/workflows/`](.github/workflows/)) runs the checks above (typecheck, lint,
   format check and test), plus openapi-spec-validator, govulncheck, pnpm audit, gitleaks
   and CodeQL, and the web app's build, its check and its end-to-end suite. Typecheck, lint and test depend on each package's `gen` in turbo, so CI
   runs every package's `gen` script too; it does not run `go generate`. It also runs the
   sync conformance suite against its own stack, with a short fuzz run; a nightly workflow
   runs a long one ([ADR 0013](docs/adr/0013-conformance-suite-stand-ins-and-the-oracle.md)).
+  `pnpm audit` passes over the two advisories `pnpm-workspace.yaml` names, each with its reason
+  (`auditConfig`): one is there only while no release mends it and it ships in no client.
+- **The mobile app is launched by CI alone**, and only where a change can have reached it: the
+  job `mobile-changes` reads the diff, and three more run where it names `apps/mobile/`,
+  `packages/`, the lockfile, the workspace's settings, the root `package.json` or the workflow.
+  `mobile` makes the export and runs `check`. `mobile-android` builds the development variant
+  as a release build with the dev screens in it (`EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS=1`), starts
+  the development services and the API, makes a member (`e2e:stack member`), runs the flows on
+  an emulator at API 29 (`e2e android --stack`), asks the server for the device that signed in
+  and the client that reported (`e2e:stack devices`, `e2e:stack clients`), and holds the built
+  APK's permissions to their reasons (`build/apk.ts`). `mobile-ios` builds the same for a
+  simulator and runs the flows that ask nothing of a server (`e2e ios`), a macOS runner having
+  no Docker. The app's Jest tests
+  run in the job that runs every package's
+  ([ADR 0029](docs/adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md),
+  [runbook](docs/runbooks/mobile-builds.md)).
 
 ## Layout
 
@@ -207,7 +230,8 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   reads the sources and fails a file the first download or a shell reaches that reads a word
   outside `app`, a screen that reads a part its route does not name, and a route that names a
   part its screen does not read; the first segments `activity`, `admin`, `email` and
-  `notification` are the server's alone, in no part. A file of the app's own whose import failed is not
+  `notification` are the server's alone, in no part, and `device` is the mobile app's alone, in
+  none either (`deviceSegments`, [D-195](docs/prd/09-decisions.md)). A file of the app's own whose import failed is not
   imported again, since a browser may answer the second import with the first one's failure: the
   page is loaded again, or the screen says to reload. The shell's module list is derived from the household's own
   answer and lists a module only where `src/modules/registry.ts` has its screens, which the
@@ -285,7 +309,11 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   come in, and the picture drawn could be another than the one kept. A control that saves as it is
   changed is no busy control: a select's later choice takes an earlier save's place (the
   language), and a switch takes another change while one is on its way, sent beside it, what
-  either is refused with kept beside the mutation (`account/Notifications.tsx`); and a page the
+  either is refused with kept beside the mutation (`account/Notifications.tsx`). Such a switch,
+  drawn from what the query client keeps, is drawn as chosen in the press itself, from its
+  screen's own state, until the query client holds the change (`pressed` there): the query
+  client tells a screen by a timer, which a browser ran only after the frame that answers the
+  press, and a switch pressed again in that frame sent the first change a second time. And a page the
   browser kept and shows again puts a provider's start back whatever became of it
   (`useShownAgain`). The page an invitation's link opens
   is begun again for a link that arrives while it is drawn, as the pages of `auth/` that read a
@@ -360,7 +388,10 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   centre (`privacy/Privacy.tsx`) is the account's and its route names no part of the
   household's words: what a household's screens and an account's share, and that reads no
   household word, is in `account/common.ts`. Its two consents (`privacy/Consents.tsx`) are
-  switches that save as they are changed: one whose change made last is refused is put back to
+  switches that save as they are changed: each is drawn as chosen in the press itself, held by
+  the screen until the query client holds it (`chosen`), since a consent pressed in the frame
+  before the screen was told sent the other as it still stood and withdrew the one just given;
+  one whose change made last is refused is put back to
   what the server last said it holds, never to a snapshot another change's unsaved choice may
   be in, and *Not saved* is said of a change the server refused or one asked while the browser
   was offline, where any other unanswered change is said only not to have reached the server.
@@ -374,6 +405,91 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   replica's state and no value a member typed ([D-181](docs/prd/09-decisions.md)). In a
   household that takes no writes the conflict panel draws no answer and the refused-change
   panel keeps *Discard* (`sync/ConflictResolver.tsx`, `sync/RejectedResolver.tsx`).
+- **The mobile app**
+  ([ADR 0029](docs/adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md);
+  paths here are under `apps/mobile`). It is built on the Expo SDK whose `react`, `react-dom`
+  and `react-native` the catalog pins for the whole workspace, each held for every requester by
+  `overrides` (`pnpm-workspace.yaml`): the three move together, when the app moves to an SDK,
+  and the web moves with them. The app scales its own type: a text is `Text` (`src/ui/Text.tsx`),
+  a step of the type scale at the reader's scale, which is the device's font scale held to
+  between one and two (`textScaleOf`, `src/display/modes.ts`,
+  [D-186](docs/prd/09-decisions.md)), with the system's own scaling off, and ESLint fails an
+  import of React Native's `Text` anywhere else in the app but the accessibility rules' own test.
+  Those rules (`src/test/a11y.ts`, `expectAccessible`) stand where axe does on the web: they read
+  what a drawn tree declares, a role, a name, a target's least size, and nothing a device lays
+  out. What is said aloud goes through `src/ui/announce.ts`, the one file that calls
+  `AccessibilityInfo` ([D-188](docs/prd/09-decisions.md)). A route is a line of
+  `src/app/paths.ts` and a file under `app/`, which `src/app/routes.test.ts` holds to each
+  other, and its address is the web's own ([D-196](docs/prd/09-decisions.md)). The file is one
+  line that re-exports its screen, or its layout, from `src/`, but for a dev screen's: a dev
+  screen is under `src/dev`, and its route's file under `app/dev/` writes the gate's condition
+  out, `__DEV__ || process.env.EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS === '1'`, and imports the
+  screen behind it by `lazy(() => import(…))`, Metro folding a condition away only where it is
+  written. Nothing else outside `src/dev` imports from it (`build/check.test.ts`), and
+  `build/check.ts` fails an export that holds a dev screen, one that holds a stand-in, and one
+  whose bytecode is over a platform's budget (`build/budget.ts`,
+  [D-189](docs/prd/09-decisions.md)). A stand-in is what a test or a dev screen draws over in
+  the server's place, the replica's or a member's, written outside `src/dev`: each is a line
+  of `standIns` (`build/bundles.ts`) with words it alone holds, and `build/check.test.ts` fails
+  a file under `src` and outside `src/dev` named `*.fixtures.ts`, `standIn.ts` or `testing.ts`
+  that is not listed there. A device's sign-in is a token pair
+  kept in SecureStore under its member (`src/session/tokens.ts`, over `src/session/vault.ts`,
+  the one file that imports expo-secure-store). From elsewhere, only a renewal the server
+  answers `401 refresh_token_invalid` ends it (`src/session/renewal.ts`); a request refused
+  `401 unauthenticated` is renewed once and sent again (`src/api/transport.ts`), and ends
+  nothing. What a device keeps of a member is named for them and removed when their sign-in
+  ends, however it ends ([D-187](docs/prd/09-decisions.md)): whatever keeps something of theirs
+  registers its removal with `onForget` (`src/session/forget.ts`), as the session's kept reads,
+  the push token's note, which household was on screen and the replicas do. Every request the
+  app sends the API names it, `Household-Client: mobile/<version>` (`clientName`,
+  `src/api/client.ts`), and every `fetch` of the app's says `credentials: 'omit'` (`platform`,
+  `src/api/transport.ts`): the replica's own leave by `namedFetch`, and an upload, which leaves
+  by expo-file-system's `File.upload` and by no `fetch`, names the app itself
+  (`src/sync/files.ts`). A write through the query client spreads `askedNow`
+  (`src/api/query.ts`): `src/api/askedNow.test.ts` reads the sources of the session, push, a
+  household's own answer, the links, *please update* and the dev sign-in, and fails a
+  `useMutation` there that does not begin with it. `src/api/query.ts` is also the one source
+  file that imports NetInfo, which a test of the sources holds (`src/api/api.test.tsx`): it believes the
+  device only where it says it has no connection (`watchConnection`) and tells the query
+  client, and a screen reads the query client's word (`useOnline`), so the offline bar and a
+  read that waits for a connection never disagree. `src/sync/open.ts` is the one source file
+  that imports `@household/sync`'s values, which `src/sync/open.test.ts` holds, and the one
+  that opens a replica: once on the device however many hold it, in a file named for its member
+  and its household (`src/sync/databases.ts`), whose removal is noted step by step and taken up
+  again at the next start. `ReplicaProvider` (`src/sync/ReplicaProvider.tsx`) asks it for one
+  only for a member, of a household read as theirs. A household's screens stand in a tab
+  navigator with the guard, the replica's provider and the frame inside its `layout`
+  (`src/shell/HouseholdLayout.tsx`), and a household is a route of a stack of its own
+  (`app/households/_layout.tsx`): a guard around a navigator loses the rest of the address, and
+  an address that names another household opens it on top of the one that was open. The screen
+  of a route under a household draws in `HouseholdScreen` (`src/shell/HouseholdScreen.tsx`),
+  whose title is the screen's one header ([D-188](docs/prd/09-decisions.md)), and never in
+  `Screen` alone, which `src/app/routes.test.ts` holds by reading the sources; what the frame
+  draws in a screen's place, a wait, *could not be read* and *not available*, is a plain
+  `Screen`. A household's own answer is read by `useHousehold` (`src/household/data.ts`), only
+  for a member and of an id that can be one, by the frame and the replica's provider in one
+  commit, and by the sync dev screen beside the provider it draws: whatever else needs it is
+  handed it, as the bar above the screens is, a reader that mounts after the answer asking the
+  server again (`src/sync/bars.test.tsx` holds the household to being asked for once). The tab
+  bar is derived by `tabsOf` (`src/shell/tabs.ts`) from the
+  household's own answer and `src/modules/registry.ts`, and never authored
+  ([D-183](docs/prd/09-decisions.md), [D-184](docs/prd/09-decisions.md)): a module's mobile item
+  adds its line to the registry, its routes to `paths.ts`, and the place they stand under to
+  `tabs.ts`. `src/ui/Dialog.tsx` is the one file that draws React Native's `Modal`: a dialog
+  over a sheet is drawn inside the sheet's children, and a menu's item acts once its sheet has
+  gone (`src/ui/Menu.tsx`), since by React Native's source iOS presents no modal while another
+  of the same controller's is leaving. A word that is true only of a device is a key under
+  `device.`, which is in no part (`packages/i18n/src/parts.ts`), and the app imports
+  `@household/i18n`'s own entry, all five catalogs ([D-195](docs/prd/09-decisions.md)). A
+  permission a build asks for is a line of `build/asked.ts` with its reason, and one every build
+  removes a line of `unusedPermissions` in `app.config.ts`: CI's Android job holds the APK it
+  built to the first (`build/apk.ts`), and `build/permissions.test.ts` each variant's
+  configuration to both (FR-PR1). A Maestro flow (`e2e/flows`) selects by `testID` and never by
+  a word, which `e2e/flows.test.ts` holds, with each name held to the sources: the test
+  excuses a flow tagged `awaiting`, one written ahead of its screens, and no flow is tagged so
+  now. A flow finds a thing by its own `testID` and never as inside another, React Native
+  mounting the children of a view that is there only to be named beside it, and on a long dev
+  screen narrowed to one part first (`src/dev/Only.tsx`).
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).

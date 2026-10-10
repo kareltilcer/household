@@ -1,5 +1,6 @@
 // Notifications (F-20): what this browser says and is asked, against stand-ins for the parts of
 // a browser jsdom has none of, and the preferences as they are read, changed and refused.
+import { defaultScheduler, notifyManager } from '@tanstack/react-query'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { pushStandIns, serverKey, type Browser, type PushStandIns } from '../push/testing.ts'
@@ -12,6 +13,7 @@ import {
   noContent,
   open,
   tilcerovi,
+  untold,
   type Server,
 } from './testing.tsx'
 
@@ -77,6 +79,7 @@ function withPush(says: Browser): PushStandIns {
 afterEach(() => {
   browser?.remove()
   browser = undefined
+  notifyManager.setScheduler(defaultScheduler)
 })
 
 async function notifications(server: Server) {
@@ -256,6 +259,54 @@ describe('the preferences', () => {
     ).toBeInTheDocument()
     // The categories stay drawn and stay the member's to change.
     expect(screen.getByRole('switch', { name: 'Reminders I subscribed to' })).toBeEnabled()
+  })
+
+  // A press is answered in the press. React puts a switch back, as its event ends, to what was
+  // last drawn, and what is kept is written after that and told to the screen later still:
+  // drawn from that alone, a pressed switch stood as it was for a frame.
+  it('are drawn as chosen in the press itself, before the query client tells the screen of the change', async () => {
+    const server = createServer()
+    withPreferences(server)
+    await notifications(server)
+    const digest = screen.getByRole('switch', { name: 'The weekly digest' })
+    const tell = untold()
+    fireEvent.click(digest)
+    expect(digest).not.toBeChecked()
+    // Nor is it put back once the change is on its way, and what is kept holds it.
+    await waitFor(() => {
+      expect(server.to('PATCH /me/notification-preferences')).toHaveLength(1)
+    })
+    expect(digest).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Reminders I subscribed to' })).toBeChecked()
+    // And told, the screen draws what is kept, which is the same.
+    tell()
+    expect(await screen.findByRole('switch', { name: 'The weekly digest' })).not.toBeChecked()
+    expect(screen.queryByText('Not saved')).not.toBeInTheDocument()
+  })
+
+  // A switch sends what its press made of what it showed. Put back for a frame, a switch
+  // pressed again in that frame was pressed as it had stood, and the second press, which was
+  // to undo the first, sent the first again.
+  it('take a second press on a switch as the first left it, which the screen was not yet told of', async () => {
+    const server = createServer()
+    withPreferences(server)
+    await notifications(server)
+    const digest = screen.getByRole('switch', { name: 'The weekly digest' })
+    const tell = untold()
+    fireEvent.click(digest)
+    fireEvent.click(digest)
+    expect(digest).toBeChecked()
+    await waitFor(() => {
+      expect(server.to('PATCH /me/notification-preferences')).toHaveLength(2)
+    })
+    expect(
+      await Promise.all(
+        server.to('PATCH /me/notification-preferences').map((request) => request.clone().json()),
+      ),
+    ).toEqual([{ categories: { digest: false } }, { categories: { digest: true } }])
+    expect(digest).toBeChecked()
+    tell()
+    expect(await screen.findByRole('switch', { name: 'The weekly digest' })).toBeChecked()
   })
 
   it('are one household’s own from its first change, which the screen says', async () => {

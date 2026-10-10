@@ -9,19 +9,26 @@
 |---|---|
 | **Home** | The dashboard: widgets contributed by modules, arranged by the member |
 | **Today** | A cross-module agenda — calendar events, due reminders, chores, tasks marked *doing*, garden work — one chronological list of what today actually asks for |
-| **Add** | A centre action opening a capture sheet: the six most likely creates for this household, learned from use |
+| **Add** | A centre action opening a capture sheet: the six most likely creates for this household, learned from use. Drawn where the sheet would offer its member something |
 | **Chat** | If enabled and granted |
 | **More** | Every module the member has, as a searchable list, plus settings |
 
 This set is settled. Design owns what is inside each destination, not the set.
 
-**Chat is conditional**, and this is the one tab that can be absent. A household with Chat
+**Chat is conditional**, and it is one of the two tabs that can be absent. A household with Chat
 disabled, a member with `none` on it, and — potentially — every UK household if counsel's answer
 on the Online Safety Act goes the other way ([D-89](../prd/modules/15-chat.md)) see **four** tabs.
 
+**So is Add** ([D-183](../prd/09-decisions.md)): it is drawn only where its sheet would offer its
+member something, a module they may create in, in a household that takes writes. A member who can
+create nothing has no Add, by the same rule that leaves out a control that cannot act
+([03-patterns §2](03-patterns.md)), and sees four tabs, or **three** where Chat is absent too. A
+destination whose screens a build does not have yet is absent from that build's bar in the same
+way ([D-184](../prd/09-decisions.md)).
+
 **Settled ([DD-11](08-decisions.md)): four tabs is a first-class layout, designed in DS-0.** Not a
-degraded five, not a gap closed at runtime. The tab bar is drawn twice and both drawings are
-finished work.
+degraded five, not a gap closed at runtime. The tab bar is drawn at five, at four and at three,
+the order kept and the slots sharing the width again, and each drawing is finished work.
 
 This is not speculative work waiting on counsel: **the four-tab case already exists** through
 module enablement and through a member with `none` on Chat, both of which are ordinary
@@ -173,6 +180,7 @@ Every deep link must resolve correctly in four situations
 - **Mobile** below the minimum supported API version gets a **blocking, translated "please
   update" screen and nothing else** ([06-clients §7](../prd/06-clients.md)). This is a designed
   screen, in five languages, and it is the last thing some members will ever see of the app if it
-  is bad.
+  is bad. Its one action opens the app's page in the store, and it has no way to be put away
+  ([D-193](../prd/09-decisions.md)).
 - The server supports the current and previous minor for at least six months, so this screen is
   rare — which is exactly why it will be forgotten if it is not on the inventory.

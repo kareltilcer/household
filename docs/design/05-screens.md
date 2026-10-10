@@ -338,7 +338,7 @@ Owned by no module, needed by all.
 | **Add sheet** — [04-navigation §3](04-navigation.md) | P2 |
 | **Conflict inbox** — the cross-module list, plus the persistent badge; routes to the row, never resolves in place ([DD-4](08-decisions.md)) | P0 |
 | **Conflict resolver** and **rejected-mutation resolver** | P0 |
-| **Tab bar at four and five destinations** — both are finished layouts ([DD-11](08-decisions.md)) | P0 |
+| **Tab bar at four and five destinations** — both are finished layouts ([DD-11](08-decisions.md)), and so is three, where Add is absent too ([D-183](../prd/09-decisions.md)) | P0 |
 | **In-app contextual help** — the surface (inline hint, expandable, or panel), the content model, and the hard-screen set: tariff composer, allocation editor, merge/conflict explanation, household code, storage metering ([DD-13](08-decisions.md)) | P2 model, per-module thereafter |
 | **Offline bar**, pending / syncing / rejected marks | P0 |
 | **Storage picture** (settings) — total against allowance, split, largest items, derived overhead | P0 (§C.5) |

@@ -1,0 +1,26 @@
+# The theme changes when it is chosen, and the app stands in the other one (06-clients §3).
+# The dev toolbar's control goes to its next mode at a press and says the one in force after
+# its label: the mode's own name, which is an identifier and no word of any catalog.
+#
+# It starts as an installation that kept nothing, since the mode chosen is kept on the device
+# and a run before this one may have left dark behind. The two screenshots are where a reader
+# sees the app's faces and its two grounds, which nothing here can assert.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+# Light is the default, whatever the device prefers.
+- assertVisible:
+    id: 'dev-toolbar:theme'
+    text: '.*light'
+- takeScreenshot: theme-light
+- tapOn:
+    id: 'dev-toolbar:theme'
+- assertVisible:
+    id: 'dev-toolbar:theme'
+    text: '.*dark'
+- assertVisible:
+    id: 'household-dev-screen:index'
+- takeScreenshot: theme-dark

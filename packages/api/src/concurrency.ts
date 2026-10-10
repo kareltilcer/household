@@ -138,10 +138,11 @@ function isAbort(error: unknown): boolean {
 
 /**
  * What `fetch` rejects with once `signal` has aborted: its reason, or an AbortError where the
- * platform's AbortSignal predates `reason`, as React Native's polyfill may.
+ * platform's AbortSignal predates `reason`, as React Native's does: its types declare none, so
+ * it is asked for as a member the signal may not have.
  */
 function abortReason(signal: AbortSignal): unknown {
-  const reason: unknown = signal.reason
+  const reason: unknown = 'reason' in signal ? signal.reason : undefined
   if (reason !== undefined) return reason
   const error = new Error('The request was aborted')
   error.name = 'AbortError'

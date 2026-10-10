@@ -1,0 +1,23 @@
+# A link opens the app at the address it names (04-navigation §8): one of the development
+# variant's own scheme, to a dev screen, which a device nobody is signed in on may open. It is
+# sent to the app as the system sends one, from outside it.
+#
+# On Android alone. iOS asks before it opens a link that came from outside the app, in a
+# dialog of its own that carries no `testID` (parts/dev.yaml): there a person follows a link,
+# and no flow does.
+appId: com.kareltilcer.household.dev
+tags:
+  - android
+---
+- launchApp:
+    clearState: true
+# The first screen is drawn: a link sent before anything listens for one may be lost.
+- extendedWaitUntil:
+    visible:
+      id: 'route:signIn'
+    timeout: 60000
+- openLink: household-dev:///dev/engine
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:engine'
+    timeout: 30000

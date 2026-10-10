@@ -493,8 +493,20 @@ export default defineConfig(
   // design/ holds the clickable ES5 prototype, a reference that never ships; Prettier and
   // CodeQL skip it too. An editor that lints it with this file would flag every script.
   // src/generated/ is written by each package's `gen` script from a committed source (the
-  // contract, the catalogs) and is never edited by hand.
-  globalIgnores(['**/dist/', '**/coverage/', '**/.turbo/', 'design/', 'packages/*/src/generated/']),
+  // contract, the catalogs) and is never edited by hand. And what Expo's tools write into the
+  // mobile app's folder is theirs: the cache beside a bundle (.expo/) and the two native
+  // projects a prebuild generates from app.config.ts, which no one edits and no one commits. A
+  // bundle it exports is in dist/, as every package's build is.
+  globalIgnores([
+    '**/dist/',
+    '**/coverage/',
+    '**/.turbo/',
+    'design/',
+    'packages/*/src/generated/',
+    'apps/mobile/.expo/',
+    'apps/mobile/android/',
+    'apps/mobile/ios/',
+  ]),
   {
     linterOptions: {
       // A suppression that suppresses nothing is an error, so a rule cannot be switched
@@ -565,6 +577,29 @@ export default defineConfig(
     files: ['apps/web/src/sync/open.ts'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', { paths: [wholeCatalogs] }],
+    },
+  },
+  {
+    // The mobile app scales its own type (plan item 28): every text is its own `Text`, a step of
+    // the type scale at the reader's scale with the system's own scaling off. A text drawn with
+    // React Native's is scaled by the system instead, in the platform's face. The test of the
+    // accessibility rules draws one, to see the rule that finds it fail.
+    files: ['apps/mobile/**'],
+    ignores: ['apps/mobile/src/ui/Text.tsx', 'apps/mobile/src/test/a11y.test.tsx'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react-native',
+              importNames: ['Text'],
+              message:
+                'Draw text with the app’s own Text (apps/mobile/src/ui/Text.tsx): it is a step of the type scale at the reader’s scale, and React Native’s is neither.',
+            },
+          ],
+        },
+      ],
     },
   },
   {

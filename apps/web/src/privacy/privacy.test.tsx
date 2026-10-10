@@ -1,9 +1,10 @@
 // The privacy centre (A-34): the six rights and the one way of each, a member's own exports, the
 // households whose changes they may stop, the two consents and what changing one asks of the
 // server, and the authority of each country they are in.
-import { onlineManager } from '@tanstack/react-query'
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { defaultScheduler, notifyManager, onlineManager } from '@tanstack/react-query'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { untold } from '../account/testing.tsx'
 import { inHousehold, paths } from '../app/paths.ts'
 import {
   accountOf,
@@ -24,6 +25,7 @@ vi.mock('./leave.ts', () => ({ leaveFor: vi.fn() }))
 
 afterEach(() => {
   onlineManager.setOnline(true)
+  notifyManager.setScheduler(defaultScheduler)
   vi.mocked(leaveFor).mockClear()
   vi.restoreAllMocks()
 })
@@ -426,6 +428,61 @@ describe('the two consents', () => {
       expect(server.to('GET /me/consents').length).toBeGreaterThan(1)
     })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  // A press is answered in the press. React puts a switch back, as its event ends, to what was
+  // last drawn, and what is kept is written after that and told to the screen later still:
+  // drawn from that alone, a pressed switch stood as it was for a frame, and whatever read it
+  // as it pressed it, the end-to-end suite's `check()` among them, found the press undone.
+  it('are drawn as chosen in the press itself, before the query client tells the screen of the change', async () => {
+    const server = keeping()
+    await centre(server)
+    const control = await screen.findByRole('switch', { name: statistics })
+    const tell = untold()
+    fireEvent.click(control)
+    expect(control).toBeChecked()
+    // Nor is it put back once the change is on its way, and what is kept holds it.
+    await waitFor(() => {
+      expect(server.to('PUT /me/consents')).toHaveLength(1)
+    })
+    expect(control).toBeChecked()
+    expect(screen.getByRole('switch', { name: news })).not.toBeChecked()
+    tell()
+    await waitFor(() => {
+      expect(server.to('GET /me/consents').length).toBeGreaterThan(1)
+    })
+    expect(screen.getByRole('switch', { name: statistics })).toBeChecked()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  // The page sends what it shows (D-142), and it shows a press from the press on. Sent as the
+  // screen stood before the first, the second would withdraw what the first had just given.
+  it('send a press with the one made just before it, which the screen was not yet told of', async () => {
+    const server = keeping()
+    await centre(server)
+    const first = await screen.findByRole('switch', { name: statistics })
+    const tell = untold()
+    fireEvent.click(first)
+    fireEvent.click(screen.getByRole('switch', { name: news }))
+    expect(first).toBeChecked()
+    expect(screen.getByRole('switch', { name: news })).toBeChecked()
+    await waitFor(() => {
+      expect(server.to('PUT /me/consents')).toHaveLength(2)
+    })
+    expect(
+      await Promise.all(server.to('PUT /me/consents').map((request) => request.clone().json())),
+    ).toEqual([
+      { analytics: true, marketing_email: false },
+      { analytics: true, marketing_email: true },
+    ])
+    expect(first).toBeChecked()
+    expect(screen.getByRole('switch', { name: news })).toBeChecked()
+    tell()
+    await waitFor(() => {
+      expect(server.to('GET /me/consents').length).toBeGreaterThan(1)
+    })
+    expect(screen.getByRole('switch', { name: statistics })).toBeChecked()
+    expect(screen.getByRole('switch', { name: news })).toBeChecked()
   })
 
   // Sent side by side, which of two the server took last is not the order their answers come in.

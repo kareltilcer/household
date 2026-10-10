@@ -45,6 +45,14 @@ export const clientParts: readonly Part[] = Object.keys(parts) as Part[]
  */
 export const serverSegments = ['activity', 'admin', 'email', 'notification'] as const
 
+/**
+ * The first segment of the keys that are the mobile app's alone: its words where a shared key's
+ * are true only of a browser (*this browser*, *reload the page*). It is in no part, so no client
+ * that fetches a language in parts downloads one of them. The mobile app fetches nothing: it
+ * holds every catalog whole, in its bundle (the package's own entry, D-36).
+ */
+export const deviceSegments = ['device'] as const
+
 /** Some of one language's messages, by key: a part of its catalog, or several parts together. */
 export type CatalogPart = { readonly [K in MessageKey]?: string }
 
@@ -52,7 +60,10 @@ const partBySegment: ReadonlyMap<string, Part> = new Map(
   clientParts.flatMap((part) => parts[part].map((segment) => [segment, part] as const)),
 )
 
-/** The part that holds `key`, by its first segment, or undefined for one of the server's alone. */
+/**
+ * The part that holds `key`, by its first segment, or undefined for one in no part: the server's
+ * alone, or the mobile app's.
+ */
 export function partOf(key: string): Part | undefined {
   return partBySegment.get(key.split('.', 1)[0] ?? '')
 }

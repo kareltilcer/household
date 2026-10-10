@@ -643,7 +643,7 @@ source file — the architecture test enforces it.
 | **UI language** | Member | Two members of one household read the same data in different languages |
 | **Timezone** | Household, overridable per member | Digests, quiet hours and "today" all resolve against it |
 | **Base currency** | Household | Formatting follows the *member's* locale; the currency follows the household |
-| **Date, time, number format** | Member locale (ICU) | Never hand-rolled |
+| **Date, time, number format** | Member locale (ICU) | Never hand-rolled. On a device a plural and a number follow the member's language, of the five, and not their region: the app carries the five languages' own data, where a browser has every region's ([ADR 0029](../adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md)) |
 | **First day of week** | Member locale, overridable | |
 | **Measurement units** | Household | Metric default; imperial available for length, area, mass, temperature and volume |
 | **Country profile** | Household | Drives utility tariff presets, public holidays, vehicle-inspection naming (STK/MOT/TÜV/HU), document types, and default VAT |

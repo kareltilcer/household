@@ -1,9 +1,9 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bytesLost, stateRetryMs } from './attachments.ts'
+import { bytesLost, stateRetryMs, type AttachmentOptions, type StoredFile } from './attachments.ts'
 import { Revoked, type Credential } from './connector.ts'
 import { localTables, metaKeys } from './schema.ts'
 import { NodeFileSystemAdapter, multipart, openReplica } from './node.ts'
@@ -116,6 +116,8 @@ async function open(
     readonly credential?: Credential
     readonly onRevoked?: () => void
     readonly storage?: string
+    /** How the files are sent. Left out, as bytes in a multipart form. */
+    readonly transport?: AttachmentOptions['transport']
     readonly now?: () => Date
   } = {},
 ): Promise<{ replica: Replica; dir: string }> {
@@ -140,7 +142,7 @@ async function open(
             storage: new NodeFileSystemAdapter(options.storage),
             uploadUrl: (entity: string, h: string, id: string) =>
               entity === 'test.item' ? `${api}/households/${h}/items/${id}/content` : null,
-            transport: multipart,
+            transport: options.transport ?? multipart,
           },
         }),
   })
@@ -1338,6 +1340,52 @@ describe('a replica', waits, () => {
       { id: scan, status: 'failed', code: 'not_found' },
     ])
     expect(existsSync(waiting?.local_uri ?? '')).toBe(false)
+  })
+
+  it('sends a file from where it waits where its transport takes one by its URI, and reads none of it', async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    const read = vi.spyOn(NodeFileSystemAdapter.prototype, 'readFile')
+    const { fetch, calls } = routes({ '/content': () => json(201, {}) })
+    const sent: (StoredFile & { readonly url: string; readonly bearer: string })[] = []
+    const { replica } = await open({
+      fetch,
+      storage,
+      transport: {
+        // As a phone's app sends one: handed where the file is, and never its bytes.
+        byUri: (url, credential, file, send) => {
+          sent.push({ ...file, url, bearer: credential })
+          return send(url, { method: 'POST', body: readFileSync(file.uri) })
+        },
+      },
+    })
+    const receipt = newId()
+    await arrive(replica, 'items', receipt, { household_id: household, title: 'Paper', version: 1 })
+    await replica.attach('items', receipt, {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'r.pdf',
+    })
+    const [waiting] = await replica.attachments().list()
+    await replica.attachments().upload()
+    // What the transport was handed is where the queue kept the file, and what the file says of
+    // itself.
+    expect(sent).toEqual([
+      {
+        uri: waiting?.local_uri,
+        contentType: 'application/pdf',
+        fileName: 'r.pdf',
+        url: `${api}/households/${household}/items/${receipt}/content`,
+        bearer: 'token',
+      },
+    ])
+    // Through the replica's own fetch, as every request of its is.
+    expect(calls.filter((c) => c.url.endsWith('/content'))).toHaveLength(1)
+    expect(read).not.toHaveBeenCalled()
+    // Sent, it is forgotten as any other is: its row and its bytes.
+    expect(await replica.attachments().list()).toEqual([])
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(false)
+    read.mockRestore()
   })
 
   it('keeps a file whose bytes the device lost as refused, and sends the files behind it', async () => {

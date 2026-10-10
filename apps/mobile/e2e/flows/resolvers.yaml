@@ -1,0 +1,77 @@
+# A change the server did not accept, given up on a device (F-7, 06-clients §5; src/dev/sync):
+# its sheet opens with the reason, Discard asks first, in a confirmation drawn inside the
+# sheet, and confirmed, the confirmation and the sheet both leave and a toast says what was
+# done. It is a modal presented from a modal and then both put away, the second before the
+# first: iOS presents a modal only from the one it stands in, and told to dismiss one while
+# the one it presented is still leaving may keep it where it is, which no Jest test can show.
+# What each code's sentence is, and what a household that takes no writes offers, are the
+# resolvers' own Jest tests.
+#
+# No server and no household: the sheet stands over a stand-in replica and a fixture's answer,
+# the one refused as `forbidden`, in the light half of its cell. The screen is narrowed to its
+# resolvers (`sync:only:resolvers`), the page above them being every state of the inbox.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devSync'
+    direction: DOWN
+- tapOn:
+    id: 'dev-index:devSync'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:sync'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: 'sync:only:resolvers'
+    direction: DOWN
+- tapOn:
+    id: 'sync:only:resolvers'
+- scrollUntilVisible:
+    element:
+      id: 'sync:resolvers:rejected:light:open:forbidden'
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    id: 'sync:resolvers:rejected:light:open:forbidden'
+- extendedWaitUntil:
+    visible:
+      id: 'resolver:surface'
+    timeout: 15000
+- takeScreenshot: resolver-rejected
+# Discard asks first: a confirmation over the sheet, which stays beneath it.
+- tapOn:
+    id: 'resolver:discard'
+- extendedWaitUntil:
+    visible:
+      id: 'resolver:confirm:surface'
+    timeout: 15000
+- takeScreenshot: resolver-confirm
+# Confirmed. The toast is looked for at once, and not after the screen has come to rest: it
+# stays five seconds, and is drawn wherever it can be pressed, in the sheet while that is
+# there and on the page after.
+- tapOn:
+    id: 'resolver:confirm:discard'
+    waitToSettleTimeoutMs: 500
+- extendedWaitUntil:
+    visible:
+      id: 'toast'
+    timeout: 15000
+# And both have gone, the confirmation and then the sheet it stood in.
+- extendedWaitUntil:
+    notVisible:
+      id: 'resolver:confirm:surface'
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible:
+      id: 'resolver:surface'
+    timeout: 15000
+# The page behind them takes a press again: the control that opened the sheet is in reach.
+- assertVisible:
+    id: 'sync:resolvers:rejected:light:open:forbidden'
+- takeScreenshot: resolver-discarded
