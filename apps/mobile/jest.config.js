@@ -19,6 +19,9 @@ export default {
   // it, and the next one added would fail until somebody knew to add it. Babel's own preset
   // stays out, being part of the transformer.
   transformIgnorePatterns: ['/node_modules/@react-native/babel-preset/'],
+  // Which is why a file's first test may wait on Babel for most of React Native where nothing
+  // is cached yet, as on CI's runner at every run: Jest's five seconds are that test's alone.
+  testTimeout: 60_000,
   // And a module named `.mjs` or `.cjs` is one Metro transforms too, where the preset's
   // pattern stops at `.js`: PowerSync's SDK ships such files.
   transform: { '\\.[cm]js$': babel },
@@ -29,5 +32,8 @@ export default {
     // test wrote for as long as the test file runs.
     '^@react-native-async-storage/async-storage$':
       '@react-native-async-storage/async-storage/jest/async-storage-mock',
+    // And what says whether the device has a connection: the library's own stand-in, which
+    // answers that it has one until a test says otherwise.
+    '^@react-native-community/netinfo$': '@react-native-community/netinfo/jest/netinfo-mock.js',
   },
 }
