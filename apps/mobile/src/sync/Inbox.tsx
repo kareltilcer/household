@@ -17,18 +17,17 @@
 // merge asks nothing, and is put away there as anywhere: that is the member's own note that
 // they have seen it, and gives no change up.
 import type { RecordedOutcome } from '@household/sync'
-import { useLocalSearchParams } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
-import type { Household } from '../household/data.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { useHouseholdShown } from '../shell/HouseholdContext.tsx'
+import { HouseholdScreen } from '../shell/HouseholdScreen.tsx'
 import { announce, focusOn } from '../ui/announce.ts'
 import { Button } from '../ui/Button.tsx'
 import { ModuleChip } from '../ui/Chip.tsx'
 import { EmptyState } from '../ui/EmptyState.tsx'
 import { List, ListRow } from '../ui/ListRow.tsx'
-import { Screen } from '../ui/Screen.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import type { DataState } from '../ui/states.ts'
@@ -40,7 +39,6 @@ import {
   type Reading,
   type Words,
 } from './describe.ts'
-import { useOwn } from './household.ts'
 import { KeptLoser, overrode } from './KeptLoser.tsx'
 import { useInbox, useReplica, useSync, type ReplicaState } from './ReplicaProvider.tsx'
 import { Resolver } from './Resolver.tsx'
@@ -295,24 +293,19 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
   )
 }
 
-/** The inbox over the household its address names, once that household has been read. */
-function Held({ household }: { readonly household: Household }) {
-  const setting = useSetting(household)
-  return <InboxView setting={setting} />
-}
-
 /**
- * The inbox's screen: its one title, and the inbox under it. The household's frame draws what
- * stands in a screen's place where the household could not be read or is not the member's
- * (shell/HouseholdFrame.tsx): this draws nothing of its own then.
+ * The inbox's screen, as every screen of a household stands (shell/HouseholdScreen.tsx): its
+ * one title, in the app bar, with the way back to where its member came from, and the inbox
+ * under it, over the household its frame read. The frame draws what stands in a screen's place
+ * where the household could not be read or is not the member's (shell/HouseholdFrame.tsx), so
+ * this is drawn for a household that was.
  */
 export function Inbox() {
   const t = useTranslate()
-  const { household } = useLocalSearchParams<{ household: string }>()
-  const own = useOwn(household)
+  const setting = useSetting(useHouseholdShown())
   return (
-    <Screen testID="route:sync" title={t('sync.inbox.title')}>
-      {own === undefined ? null : <Held household={own.household} />}
-    </Screen>
+    <HouseholdScreen title={t('sync.inbox.title')} back testID="route:sync">
+      <InboxView setting={setting} />
+    </HouseholdScreen>
   )
 }

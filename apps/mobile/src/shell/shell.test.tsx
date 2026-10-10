@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { controls } from '@household/icons'
 import { catalogs, createTranslator } from '@household/i18n'
-import { act, fireEvent, screen, userEvent, within } from '@testing-library/react-native'
+import { act, fireEvent, screen, userEvent, waitFor, within } from '@testing-library/react-native'
 import { router } from 'expo-router'
 import { Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { HouseholdNotAvailable, NotAvailable } from '../app/NotAvailable.tsx'
@@ -12,6 +12,9 @@ import { inHousehold, paths } from '../app/paths.ts'
 import type { Household, ModuleKey } from '../household/data.ts'
 import type { ModuleRegistry } from '../modules/registry.ts'
 import { SessionFixture } from '../session/fixture.tsx'
+import { SyncFixture, type Sync } from '../sync/ReplicaProvider.tsx'
+import { standIn } from '../sync/standIn.ts'
+import { conflict, overriddenMerge, registry as entities } from '../sync/sync.fixtures.ts'
 import { expectAccessible } from '../test/a11y.ts'
 import { households, ids, words } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
@@ -76,11 +79,17 @@ const registry: ModuleRegistry = {
 
 const name = (module: ModuleKey) => en[`module.${module}.name`]
 
-function inside(ui: React.ReactElement, arrangement?: Arrangement) {
+/** A household's replica that is still being opened: nothing is known to wait in it. */
+const opening: Sync = { replica: { phase: 'opening' }, online: true, receiving: null }
+
+/** `ui` as the household's frame draws a screen: under the household it read, and its replica. */
+function inside(ui: React.ReactElement, arrangement?: Arrangement, sync: Sync = opening) {
   return (
-    <HouseholdFixture household={household} {...(arrangement ? { arrangement } : {})}>
-      {ui}
-    </HouseholdFixture>
+    <SyncFixture value={sync}>
+      <HouseholdFixture household={household} {...(arrangement ? { arrangement } : {})}>
+        {ui}
+      </HouseholdFixture>
+    </SyncFixture>
   )
 }
 
@@ -249,6 +258,31 @@ describe('More', () => {
     expect(screen.queryByText(en['shell.sidebar.arrange'])).toBeNull()
     expect(screen.queryByTestId('badge', { includeHiddenElements: true })).toBeNull()
     expectAccessible()
+  })
+
+  // The count is the replica's own: each answer of its that still asks for attention (F-5).
+  it('counts what waits in the household’s replica, and leads to it, once that has been read', async () => {
+    const stand = standIn({ registry: entities, entries: [conflict, overriddenMerge] })
+    const open: Sync = {
+      replica: { phase: 'open', ...stand.opened },
+      online: true,
+      receiving: true,
+    }
+    await render(inside(<More />, undefined, open))
+    const row = await screen.findByRole('link', {
+      name: t('shell.sidebar.attention', { count: 2 }),
+    })
+    expect(row.props.testID).toBe('more:sync')
+    await userEvent.press(row)
+    expect(jest.mocked(router.navigate).mock.calls).toEqual([[inHousehold.sync(ids.household)]])
+    // And no longer once the member has answered one of them and seen the other.
+    await act(async () => {
+      await stand.opened.replica.discard(conflict.mutation_id)
+      await stand.opened.replica.resolve(overriddenMerge.mutation_id)
+    })
+    await waitFor(() => {
+      expect(links()).toEqual([])
+    })
   })
 
   it('lists the modules the member holds that the build can open, and no other', async () => {

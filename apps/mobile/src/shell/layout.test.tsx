@@ -6,10 +6,12 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { controls } from '@household/icons'
 import { catalogs, createTranslator } from '@household/i18n'
+import type { RecordedOutcome } from '@household/sync'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { act, fireEvent, screen, userEvent, waitFor, within } from '@testing-library/react-native'
 import { router, Stack } from 'expo-router'
 import { renderRouter } from 'expo-router/testing-library'
+import type { ReactNode } from 'react'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { answering, json, problem, testClient } from '../api/testing.ts'
 import { HouseholdNotAvailable, NotAvailable } from '../app/NotAvailable.tsx'
@@ -19,6 +21,8 @@ import { heldDestination, takeDestination } from '../links/destination.ts'
 import { linkArrived, resetSwitched } from '../links/switched.ts'
 import type { SessionState } from '../session/context.ts'
 import { SessionFixture } from '../session/fixture.tsx'
+import { Inbox } from '../sync/Inbox.tsx'
+import { conflict, rejectionWith } from '../sync/sync.fixtures.ts'
 import { households, ids } from '../test/fixtures.ts'
 import { TestProviders } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
@@ -31,10 +35,37 @@ import { More } from './More.tsx'
 import { Today } from './Today.tsx'
 import type { Place } from './tabs.ts'
 
-// The sync group's two, which this layout stands in and draws: neither is this test's to open.
-jest.mock('../sync/ReplicaProvider.tsx', () => ({
-  ReplicaProvider: ({ children }: { readonly children: unknown }) => children,
-}))
+/** What waits in the household's replica, as a test says before it opens the app. */
+const mockWaiting: { entries: readonly RecordedOutcome[] } = { entries: [] }
+
+// The household's replica is a stand-in, open, holding what a test says waits in it: no SQLite
+// is opened on a developer's machine. Everything else of the provider's file is its own, so
+// what the layout and its screens read of the replica they read as they do on a device.
+jest.mock('../sync/ReplicaProvider.tsx', () => {
+  const { createElement, useState } = jest.requireActual<typeof import('react')>('react')
+  const actual = jest.requireActual<typeof import('../sync/ReplicaProvider.tsx')>(
+    '../sync/ReplicaProvider.tsx',
+  )
+  const { standIn } = jest.requireActual<typeof import('../sync/standIn.ts')>('../sync/standIn.ts')
+  const { registry } = jest.requireActual<typeof import('../sync/sync.fixtures.ts')>(
+    '../sync/sync.fixtures.ts',
+  )
+  return {
+    ...actual,
+    ReplicaProvider: ({ children }: { readonly children: ReactNode }) => {
+      const [value] = useState(() => ({
+        replica: {
+          phase: 'open' as const,
+          ...standIn({ registry, entries: mockWaiting.entries }).opened,
+        },
+        online: true,
+        receiving: true,
+      }))
+      return createElement(actual.SyncFixture, { value, children })
+    },
+  }
+})
+// The bar above the screens has a test of its own (sync/bars.test.tsx).
 jest.mock('../sync/HouseholdBars.tsx', () => ({ HouseholdBars: () => null }))
 
 const en = catalogs.en
@@ -71,6 +102,7 @@ async function opened(address: string, { state, signOut }: Opening = {}) {
     [`GET /households/${ids.otherHousehold}`]: () => json(200, other),
     [`GET /households/${strangers}`]: () => problem(404, 'not_found'),
     'GET /households': () => json(200, { items: [own, other] }),
+    [`GET /households/${ids.household}/members`]: () => json(200, { items: [] }),
   })
   function Root() {
     return (
@@ -96,6 +128,7 @@ async function opened(address: string, { state, signOut }: Opening = {}) {
       'households/[household]/today': Today,
       'households/[household]/more': More,
       'households/[household]/arrange': Arrange,
+      'households/[household]/sync': Inbox,
       'households/[household]/[...rest]': HouseholdNotAvailable,
       '+not-found': NotAvailable,
     },
@@ -136,6 +169,7 @@ async function isOpen(place: Place | null): Promise<void> {
 
 beforeEach(async () => {
   await AsyncStorage.clear()
+  mockWaiting.entries = []
   resetSwitched()
   takeDestination()
   jest.spyOn(announcer, 'announce').mockImplementation(() => undefined)
@@ -189,6 +223,36 @@ describe('a household’s layout', () => {
       }),
     )
     await userEvent.press(back)
+    await isOpen('more')
+    expect(router.canGoBack()).toBe(false)
+  })
+
+  // F-5: the count is the replica's own, and the inbox is a screen of the household's like any
+  // other, under the one app bar, with More still the place that is open.
+  it('says on More how many changes wait, and opens them from it under one bar and one title', async () => {
+    mockWaiting.entries = [conflict, rejectionWith('forbidden')]
+    const attention = t('shell.sidebar.attention', { count: 2 })
+    await opened(more)
+    await shows('route:more')
+    // On the slot, for whoever is on another screen, and on the row that leads to them.
+    await waitFor(() => {
+      expect(
+        screen.getByRole('tab', { name: `${en['device.nav.more']}, ${attention}` }),
+      ).toBeOnTheScreen()
+    })
+    await userEvent.press(screen.getByTestId('more:sync'))
+    await shows('route:sync')
+    await isOpen('more')
+    const inbox = within(screen.getByTestId('route:sync'))
+    await waitFor(() => {
+      expect(inbox.getByTestId('sync:inbox:list')).toBeOnTheScreen()
+    })
+    expect(inbox.getAllByTestId('app-bar')).toHaveLength(1)
+    expect(inbox.getAllByRole('header')).toHaveLength(1)
+    expect(inbox.getByTestId('app-bar:title')).toHaveTextContent(en['sync.inbox.title'])
+    expect(inbox.getByTestId('app-bar:household')).toHaveTextContent(households.own.name)
+    // And back goes to where its member came from.
+    await userEvent.press(inbox.getByTestId('app-bar:back'))
     await isOpen('more')
     expect(router.canGoBack()).toBe(false)
   })

@@ -2,6 +2,7 @@
 // paths.ts and a file under app/, and neither without the other.
 import { describe, expect, it, jest } from '@jest/globals'
 import requireContext from 'expo-router/build/testing-library/require-context-ponyfill'
+import { sourcesIn } from '../test/sources.ts'
 import { fileOf, fill, inHousehold, isOwnPath, layoutFiles, paths, routeIds } from './paths.ts'
 
 /** Every file under app/, as a path from it with no extension. Jest runs in apps/mobile. */
@@ -34,6 +35,30 @@ describe('the routes', () => {
     for (const id of routeIds) {
       const inside = paths[id].path.startsWith('/households/[household]')
       expect([id, paths[id].layout]).toEqual([id, inside ? 'household' : 'plain'])
+    }
+  })
+
+  // The frame has taken the top of the device for the bars and the tab bar its foot, and the
+  // app bar is where a household's screen is titled: a screen drawn in `Screen` alone under it
+  // would keep clear of the top a second time, and carry a second title and no bar.
+  it('under a household each draw in the household’s own screen, and never in a screen alone', () => {
+    const sources = sourcesIn(['app', 'src'])
+    const sourceOf = (path: string) => sources.find((each) => each.path === path)?.source ?? ''
+    const household = routeIds.filter((id) => paths[id].layout === 'household')
+    expect(household.length).toBeGreaterThan(0)
+    for (const id of household) {
+      // The route's file names its screen and where it is written.
+      const [, screen = '', from = ''] =
+        /export \{ (\w+) as default \} from '(?:\.\.\/)+(src\/[^']+)'/.exec(
+          sourceOf(`app/${fileOf(id)}.tsx`),
+        ) ?? []
+      // The screen's own function, to its closing brace: a file may hold another beside it.
+      const drawn =
+        new RegExp(`export function ${screen}\\(\\) \\{[\\s\\S]*?\\n\\}\\n`).exec(
+          sourceOf(from),
+        )?.[0] ?? ''
+      expect([id, drawn]).toEqual([id, expect.stringContaining('<HouseholdScreen ')])
+      expect([id, drawn]).toEqual([id, expect.not.stringContaining('<Screen ')])
     }
   })
 
