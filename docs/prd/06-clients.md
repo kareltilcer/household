@@ -6,9 +6,9 @@ Two client applications, one contract, one design system, one set of translation
 |---|---|---|
 | **Stack** | React Native via **Expo** (managed workflow, EAS Build/Update), TypeScript | React 19, Vite, TypeScript |
 | **TypeScript** | `strict: true` plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`. **No `any`, no non-null assertions** — both are lint errors, not warnings |
-| **Platforms** | iOS 16+, Android 10+ | Evergreen Chrome, Safari, Firefox, Edge; last two majors |
+| **Platforms** | iOS 16.4+, the floor of the SDK the app is built on (**D-185**), Android 10+ | Evergreen Chrome, Safari, Firefox, Edge; last two majors |
 | **Primary role** | Daily use, capture, notifications, everything offline | Setup, configuration, planning, long-form reading, admin, billing |
-| **Offline** | Full local replica, queued writes | Reads from cache, queued writes; a browser is not the offline-first surface. A sign-in and a change to a member's own account are no household's writes, and are asked at once, never queued (**D-164**); nor is a change to a household's settings, which is made on the server or not at all (**D-170**) |
+| **Offline** | Full local replica, queued writes. What a device keeps is its member's, named for them, and goes when their sign-in ends, however it ends (**D-187**) | Reads from cache, queued writes; a browser is not the offline-first surface. A sign-in and a change to a member's own account are no household's writes, and are asked at once, never queued (**D-164**); nor is a change to a household's settings, which is made on the server or not at all (**D-170**) |
 | **Data layer** | SQLite as the replica, kept by the sync engine: PowerSync's React Native SDK on op-sqlite, in a dev build (D-93) | TanStack Query with a persisted cache |
 
 **D-36: two codebases, not React Native Web.** The shared surface is the *contract, the tokens
@@ -22,7 +22,7 @@ presentation, which is where the two platforms genuinely differ; nothing else is
 | Shared artefact | Produced from | Consumed by |
 |---|---|---|
 | **`@household/api`** | Generated from `openapi.yaml` on every build | Both clients. A contract change that breaks a client breaks the build |
-| **`@household/i18n`** | The translation catalogs, ICU MessageFormat, typed keys | Both clients and the server's render path |
+| **`@household/i18n`** | The translation catalogs, ICU MessageFormat, typed keys | Both clients and the server's render path. The web fetches a language in parts (**D-175**); the mobile app holds all five, and its own words, where a shared key's are true only of a browser, are keys under `device.`, in no part (**D-195**) |
 | **`@household/tokens`** | The design tokens (see §3) | Both clients, as CSS custom properties and as a JS object |
 | **`@household/sync`** | The sync client over PowerSync's SDKs (D-93): the replica, the connector that pushes the mutation queue, conflict surfacing | Both clients; the SDK differs (React Native on op-sqlite, web on wa-sqlite) |
 | **`@household/domain`** | Pure functions with no I/O: money arithmetic, tariff evaluation for preview, allocation preview, recurrence expansion, unit conversion | Both clients — and **the same rules are implemented server-side and cross-checked by a shared test-vector file**, so a preview never disagrees with the saved result |
@@ -37,15 +37,26 @@ implementations honest over time.
 
 Seventeen modules cannot be seventeen tabs.
 
-**Mobile** — five destinations, fixed:
+**Mobile** — five destinations, in a fixed order:
 
 | Tab | Contents |
 |---|---|
 | **Home** | The dashboard: widgets contributed by modules, arranged by the member |
 | **Today** | A cross-module agenda: calendar events, due reminders, chores, tasks marked *doing*, garden work — one chronological list of what today actually asks for |
-| **Add** | A centre action opening a capture sheet: the six most likely creates for this household, learned from use |
+| **Add** | A centre action opening a capture sheet: the six most likely creates for this household, learned from use. Drawn where the sheet would offer its member something (**D-183**) |
 | **Chat** | If enabled and granted |
 | **More** | Every module the member has, as a searchable list, plus settings |
+
+A member's bar holds the destinations that exist for them. Add is drawn only where its sheet
+would offer something, a module the member may create in, in a household that takes writes, and
+Chat where it is enabled and granted: so the bar is five slots, four or three, and each is a
+whole bar, the order kept and no slot left empty (**D-183**). A destination is in the bar from
+the build that can open it: Home and Today from the first, each with an empty state that says
+what will stand there, and More lists a module only where the build has screens for it
+(**D-184**). What needs a member's attention is reached from More while something does, and the
+More tab carries its count (**D-191**). A tablet is a layout of the same app: two panes from 744
+points of width, counted in the reader's text size (**D-192**). And an address is the web's own:
+a link and a pressed notification open the app at the path the web would open (**D-196**).
 
 **Today is the product's spine.** It is what makes seventeen modules feel like one app rather
 than a launcher. Each module contributes to it through the reminder strand and the metric
@@ -126,11 +137,12 @@ applies to consumer services from June 2025, and this is a consumer service sold
 | Requirement | How it is held |
 |---|---|
 | Contrast ≥ 4.5:1 body, 3:1 large text and UI components | Token pairs are contrast-tested in CI; a failing pair fails the build |
-| Every interactive element reachable and operable by keyboard | Automated axe pass on every route, both themes, in CI |
+| Every interactive element reachable and operable by keyboard | Automated axe pass on every route, both themes, in CI. On a device, where nothing reads a tree as axe reads a page, the app's own rules run over what each component's test draws, and say what they cannot hold ([ADR 0029](../adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md)) |
 | Screen reader | VoiceOver and TalkBack manual passes per release on the primary flows; every icon-only control has a label |
 | Page titles (web) | Each screen names the page in its title, before the app's name; the end-to-end walk of the routes holds each route's title to its heading (**D-165**) |
 | Refusals and failures (web) | A refusal that marks a field moves the focus to that field, whose sentence is read with it; one that marks none is announced where it is drawn. Neither is left beside a control for whoever can see it alone (**D-166**) |
-| Dynamic type | Layouts survive 200 % text scaling without clipping or loss of function |
+| Screen names, refusals and failures (mobile) | A screen's title is its one header, which a screen reader names it by. A refusal that marks a field moves the accessibility focus to that field; one that marks none is announced as it arrives; and a success no control of its screen says is a toast, which stays while a screen reader is on (**D-188**) |
+| Dynamic type | Layouts survive 200 % text scaling without clipping or loss of function. On a device the text follows the system's size up to 200 % and is held there (**D-186**) |
 | Motion | `prefers-reduced-motion` respected; no essential information conveyed by motion alone |
 | Colour | Never the sole carrier of meaning — status is always colour **and** icon **and** text |
 | Targets | Minimum 44×44 pt |
@@ -155,15 +167,24 @@ care.** For `lww_field` entities the merge is invisible because nothing was lost
 `strict_version` entities — money, tariffs, allocations — the member is always asked. The dividing
 line is whether a wrong answer costs anything.
 
+With the device online and the sync service unreachable, a household is not receiving changes
+(D-105): on a phone that sentence stands in the offline bar's place, above every screen of the
+household, and is said as it arrives (**D-191**).
+
 ## 6. Notifications on device
 
 - Permission is requested **contextually** — the first time the member does something that implies
-  wanting to be told — never on first launch.
+  wanting to be told — never on first launch. The mobile foundation has no such action and asks
+  nobody: the question is put by a press alone, on the notifications screen and by the first
+  module whose action implies it, and a build that belongs to no push project asks nothing
+  (**D-194**).
 - The system-level permission and the in-app category preferences are shown together, so
   "notifications are off" is diagnosable in one screen.
 - Deep links from a notification resolve to the exact entity, and resolve correctly when the app
   was cold-started, when the member is in a different household, and when they no longer have
-  access — the last of which shows a neutral message and never a leak.
+  access — the last of which shows a neutral message and never a leak. On a device the address a
+  notification carries is the web's own, and a path the app has no screen for yet is that same
+  neutral message (**D-196**).
 - On the web a push is shown by a service worker that does nothing else: it serves no file and
   keeps no cache, and a press on a notification hands its address to a page that is open, or
   opens one ([ADR 0026](../adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)).
@@ -172,7 +193,7 @@ line is whether a wrong answer costs anything.
 
 | | |
 |---|---|
-| **Mobile** | EAS Build; **EAS Update** for JavaScript-only fixes, store submission for native changes. An update never changes the API version the client speaks |
+| **Mobile** | EAS Build; **EAS Update** for JavaScript-only fixes, store submission for native changes. An update never changes the API version the client speaks. A build names itself `mobile/<version>`, and one the server refuses as too old draws the *please update* screen, whose one action on a device opens the app's page in the store (**D-193**) |
 | **Web** | Continuous deployment; the SPA checks its build id and prompts a reload when a new one is live. A build's id is a digest of its files, which its page carries and `build.json` beside it names; an open page asks for that file when it is looked at again and every fifteen minutes, and never reloads by itself ([ADR 0025](../adr/0025-the-web-foundation-policy-harness-budget-and-build-id.md)). A build names itself `web/<version>+<build id>`: the version is raised only by a change after which a deployment must refuse older builds, and a build the server refuses as too old draws the *please update* screen, whose action on the web is a reload (**D-158**) |
 | **API compatibility** | The server supports the current and the previous minor for **at least 6 months**. Clients send a version header, `Household-Client: mobile/1.4.2` or `web/…`; a client below the minimum supported version for its type, set per deployment, gets a blocking, translated *"please update"* screen and nothing else. The server answers such a client's every request `400 update_required`, naming the oldest version it serves, before it checks anything else, so an old client is never refused for a request the contract has since changed. A request naming no client is held to no minimum ([ADR 0010](../adr/0010-mobile-tokens-second-step-providers-and-client-versions.md)) |
 | **Feature flags** | Per household and per platform, so a module can ship dark and be enabled progressively. A flag is on or off for the platform, and a household's own setting of it comes first; the flag `module.<id>` is its module's, and a household for which it is off holds no level on the module, as for one it does not enable; household settings alone has no flag that gates it. A household's representation names the flags that are on for it, which a client shows what ships dark by (**D-146**) |
@@ -192,13 +213,20 @@ Both clients, in CI, on every pull request:
   runs against the server itself, which it starts on the development services, each test a
   network of its own to the server's limits ([ADR 0026](../adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)).
   It pays at stand-ins for the payment processor, its API and its script alike, so that the path
-  needs no account, no secret and no network of the processor's (**D-176**).
+  needs no account, no secret and no network of the processor's (**D-176**). The mobile app's
+  flows run under Maestro on an Android emulator and an iOS simulator, in CI, on a build that
+  holds the dev screens, and select by a `testID` and never by a word
+  ([ADR 0029](../adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md)).
 - Accessibility: axe on every route, both themes. On the web the routes are one list the router is
   built from, which the suite walks, and the twelve-state harness is among them: a dev-only page,
-  in no build a deployment serves, whose words are fixtures (**D-154**).
+  in no build a deployment serves, whose words are fixtures (**D-154**). The mobile app's harness
+  is dev-only in the same way, and has eight data bodies, a phone having no data table
+  (**D-190**).
 - Pseudolocalisation pass, to catch layouts that only survive English.
 - Bundle-size budget per platform, enforced. The web's is what a first visit downloads before the
   app can draw: 200 kB of script and 20 kB of stylesheet, compressed, and 150 kB for any one script
   loaded later (**D-153**). The web holds one language at a time (**D-159**), and a language in
   parts: the app's own words are counted with the scripts, in the largest language, and a
-  screen's are fetched with the screen (**D-175**).
+  screen's are fetched with the screen (**D-175**). The mobile app's is each platform's bytecode
+  as a production export holds it: what it measured when the budget was last set, and a fifth
+  (**D-189**).
