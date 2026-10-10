@@ -36,7 +36,19 @@ interface Kept {
   readonly locale: DisplayLocale
 }
 
-/** The device's own chrome, in step with the theme: the status bar's ink and the ground behind every screen. */
+/**
+ * The device's own chrome, in step with the theme: the status bar's ink and the ground behind
+ * every screen.
+ *
+ * Not the band behind Android's three navigation buttons, which nothing here reaches. It is the
+ * platform's own scrim, light or dark by a flag of the window that React Native sets once, as
+ * the activity is made, from the device's night mode (`Window.enableEdgeToEdge`), and the app's
+ * theme is its member's choice, read after that. So with the app dark on a device that is
+ * light, or the other way about, the band is the device's and the buttons on it are legible.
+ * Neither React Native nor a module this app links sets that flag from here: what does is
+ * `expo-navigation-bar`, a native module the app does not have. A device that navigates by
+ * gestures draws no band.
+ */
 function Chrome({ children }: { readonly children: ReactNode }) {
   const { theme: name } = useDisplay()
   const theme = useTheme()
