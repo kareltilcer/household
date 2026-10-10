@@ -1,0 +1,15 @@
+# The app starts, and on a device that keeps nobody's sign-in it opens at sign-in (plan item
+# 28). It is started as an installation that kept nothing: no token, no display mode, no
+# language. A selector is a `testID` and never a word: the app draws in five languages.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    # iOS keeps a keychain past an app's removal, and the tokens are in it.
+    clearKeychain: true
+# The first start of a release build on an emulator with no graphics card of its own.
+- extendedWaitUntil:
+    visible:
+      id: 'route:signIn'
+    timeout: 60000
+- takeScreenshot: launch

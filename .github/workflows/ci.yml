@@ -189,6 +189,372 @@ jobs:
           path: apps/web/dist/test-results
           retention-days: 7
 
+  # The mobile app is proven on a device of each platform, which no developer's machine need be
+  # able to launch, and only where a change can have reached it: the three jobs after this one
+  # run when this one says so, and are skipped otherwise, which holds nothing up. Its unit tests
+  # are Jest's, in the typescript job with every other package's, whatever changed.
+  mobile-changes:
+    name: Mobile — whether the app, or anything it bundles, changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The commit and the one before it: a pull request is checked out as its merge into
+          # its base, and that merge's first parent is the base.
+          fetch-depth: 2
+      - name: Read what changed
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # The app; every package, since it bundles them all, the vectors among them in the
+          # build the flows walk; what decides which dependencies are installed and on which
+          # Node; and this workflow, which is how the three jobs are run at all.
+          paths='^(apps/mobile/|packages/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/ci\.yml$)'
+          if [ "$EVENT" = pull_request ]; then
+            base='HEAD^1'
+          else
+            # A push: measured from where the branch stood before it, which a push of several
+            # commits leaves further back than the commit before this one.
+            base="$BEFORE"
+            git fetch --no-tags --depth=1 origin "$base" || base=''
+          fi
+          # Nothing to measure from, a branch's first push or a history rewritten: the jobs run.
+          if [ -z "$base" ] || ! files="$(git diff --name-only "$base" HEAD)"; then
+            echo "nothing to compare with: the mobile jobs run"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s\n' "$files" | grep --extended-regexp "$paths"; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "nothing of the mobile app's changed: its jobs are skipped"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  mobile:
+    name: Mobile — bundle budget and no dev screen
+    needs: mobile-changes
+    if: needs.mobile-changes.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          cache: true
+          require-lockfile: true
+      # The typed client and the catalogs, which the app's sources import.
+      - name: Generate
+        run: pnpm exec turbo run gen
+      # What a store's build embeds, for both platforms, as Metro and Hermes make it on any
+      # machine: no device and no native project. It is a job of its own because Metro keeps
+      # what it transformed, and does not know that the build the two jobs below make was told
+      # to hold the dev screens: one made after the other on one machine would be the other's.
+      - name: Export
+        run: pnpm --filter @household/mobile run export
+      # Held to what can be read off its files: each platform's bytecode under its budget, and
+      # no dev screen in either (apps/mobile/build/check.ts).
+      - name: Bundle budget and no dev screen
+        run: pnpm --filter @household/mobile run check
+
+  mobile-android:
+    name: Mobile — the app on an Android emulator, under Maestro
+    needs: mobile-changes
+    if: needs.mobile-changes.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    # A cold build is most of it: the first run downloads Gradle, its dependencies and the NDK
+    # React Native names. An emulator that hangs is stopped by its own step's limit, below.
+    timeout-minutes: 75
+    env:
+      # The build the flows walk (apps/mobile/e2e): the development variant, which asks the API
+      # where an emulator finds the machine it runs on, as a release build with its JavaScript
+      # in it and the dev screens among it. Metro reads the second as it bundles.
+      APP_VARIANT: development
+      EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS: '1'
+      EXPO_NO_TELEMETRY: '1'
+      MAESTRO_CLI_NO_ANALYTICS: '1'
+      MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
+      # Milliseconds. An emulator drawing without a graphics card takes its time to start
+      # Maestro's driver, and Maestro's own allowance is a developer's machine's.
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: '180000'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The API the app is run against is started from its sources, below.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      # pnpm, and the Node the workspace names, which it puts on PATH: Gradle runs `node` to
+      # find React Native and to bundle the app.
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          cache: true
+          require-lockfile: true
+      # The Android Gradle plugin React Native 0.86 builds with runs on Java 17, which the
+      # runner holds beside others: named, so that the runner's default moving on changes
+      # nothing here.
+      - name: Java 17
+        run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      # What Gradle downloads, itself and every dependency of the build, which the lockfile
+      # decides the versions of. Nothing a build made is kept from one run to the next.
+      - name: Gradle's downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: mobile-gradle-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Generate
+        run: pnpm exec turbo run gen
+      # The native project is no file of the repository: Expo writes it from app.config.ts
+      # (PL-5), for the variant the environment names.
+      - name: Write the Android project
+        run: pnpm --filter @household/mobile exec expo prebuild --platform android --no-install
+      # A release build, signed with the template's debug key, for the emulator's architecture
+      # alone: the three others are a device's, and each is the native code compiled again.
+      - name: Build the app
+        id: build
+        working-directory: apps/mobile/android
+        timeout-minutes: 40
+        run: ./gradlew --no-daemon --console=plain :app:assembleRelease -PreactNativeArchitectures=x86_64
+      # What the build asks of its device, as the manifests of every library merged into it
+      # leave it (FR-PR1): the configuration's own part is held by a test
+      # (apps/mobile/build/permissions.test.ts), and the libraries' is in no file of the
+      # repository. Read here and held to nothing yet: a staging or a production build asks
+      # for this less the three the configuration removes.
+      - name: What the build asks of its device
+        continue-on-error: true
+        run: |
+          aapt2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort --version-sort | tail -n 1)aapt2"
+          "$aapt2" dump permissions apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+      # What the app's API runs on, as a developer starts it and as the web's job does:
+      # PostgreSQL, the object store and the mail catcher, the database's roles and
+      # migrations, and then PowerSync, which a member's replica connects to
+      # (docker-compose.yml). A macOS runner has no Docker, so the flow that signs in is this
+      # job's alone.
+      - name: Start the development services
+        id: services
+        run: |
+          pnpm run up
+          pnpm run db:setup
+          pnpm run up:sync
+      # The API, from its sources, on the development services, which are its defaults. It is
+      # told two things. Where it listens, every interface: PowerSync, in its container,
+      # fetches the keys it verifies a replica's token with at host.docker.internal, which on
+      # a Linux runner is the docker bridge's address and not the loopback. And where a client
+      # reaches PowerSync, which the API hands a replica with its credentials: an emulator
+      # reaches the machine it runs on at 10.0.2.2, where the app's development build also
+      # looks for the API itself (apps/mobile/src/api/client.ts).
+      - name: Start the API where the emulator reaches it
+        id: api
+        if: ${{ !cancelled() && steps.services.outcome == 'success' }}
+        working-directory: server
+        env:
+          HOUSEHOLD_ENV: development
+          HOUSEHOLD_HTTP_ADDR: 0.0.0.0:8080
+          HOUSEHOLD_POWERSYNC_URL: http://10.0.2.2:8081
+          HOUSEHOLD_LOG_LEVEL: warn
+        run: |
+          go build -o "$RUNNER_TEMP/household-api" ./cmd/household-api
+          nohup "$RUNNER_TEMP/household-api" serve > "$RUNNER_TEMP/api.log" 2>&1 &
+          for _ in $(seq 60); do
+            curl --fail --silent --output /dev/null http://127.0.0.1:8080/api/v1/readyz && break
+            sleep 1
+          done
+          curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/api/v1/readyz
+      # Who the flow with the stack signs in as: a person nobody has registered and a household
+      # they own, made through the API and named to the steps after this one
+      # (apps/mobile/e2e/stack.ts).
+      - name: Make a member and their household
+        id: member
+        if: ${{ !cancelled() && steps.api.outcome == 'success' }}
+        run: pnpm --filter @household/mobile run e2e:stack member
+      # The runner's own virtual machine is what makes an emulator fast enough to use: its
+      # device is opened to the runner's user, as the emulator action's documentation has it.
+      - name: Let the emulator use KVM
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      # Maestro, at the version the flows are written for and held to its release's digest
+      # (apps/mobile/e2e/install-maestro.sh).
+      - name: Install Maestro
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: bash apps/mobile/e2e/install-maestro.sh
+      # An emulator of the oldest Android the app supports (06-clients: Android 10, API 29),
+      # with the build installed, and the flows over it: every flow of apps/mobile/e2e/flows
+      # but those written ahead of their screens and the one that needs the stack, which
+      # joins them when its screens are built. They run whatever became of the stack above:
+      # they ask nothing of it. The action runs each line of its script as a command of its
+      # own, and stops the emulator when the last has run.
+      - name: Run the flows on an emulator
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        timeout-minutes: 30
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 29
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          cores: 3
+          ram-size: 4096M
+          disable-animations: true
+          script: |
+            adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+            pnpm --filter @household/mobile run e2e android
+      - name: The services' logs
+        if: failure()
+        run: |
+          docker compose logs --tail 200
+          cat "$RUNNER_TEMP/api.log" || true
+      # Maestro's report, its own log and a screenshot of each failure, what the flows kept,
+      # and what the device logged meanwhile. Kept of a run that passed too: a screenshot is
+      # the one place the app's faces and its two themes are seen.
+      - name: Keep what the flows left
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mobile-android-e2e
+          path: apps/mobile/dist/e2e
+          retention-days: 7
+          if-no-files-found: ignore
+
+  mobile-ios:
+    name: Mobile — the app on an iOS simulator, under Maestro
+    needs: mobile-changes
+    if: needs.mobile-changes.outputs.changed == 'true'
+    # Named, and not `macos-latest`: the Xcode and the simulator below are this image's.
+    runs-on: macos-26
+    # The pods and a cold build are most of it. A simulator or a driver that hangs is stopped
+    # by its own step's limit, below.
+    timeout-minutes: 90
+    env:
+      # The same build as the Android job's: the development variant, as a release build with
+      # its JavaScript in it and the dev screens among it.
+      APP_VARIANT: development
+      EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS: '1'
+      EXPO_NO_TELEMETRY: '1'
+      MAESTRO_CLI_NO_ANALYTICS: '1'
+      MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
+      # Milliseconds: Maestro's driver is a test runner Xcode starts on the simulator.
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: '240000'
+      # One Xcode of the several the image holds, and a simulator of the runtime that Xcode
+      # builds for: the three move together, when the image does.
+      XCODE: /Applications/Xcode_26.6.app
+      IOS_RUNTIME: iOS26.5
+      IOS_DEVICE: iPhone 17
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # pnpm, and the Node the workspace names, which it puts on PATH: CocoaPods runs `node`
+      # to find React Native, and Xcode to bundle the app.
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          cache: true
+          require-lockfile: true
+      - name: Xcode
+        run: |
+          sudo xcode-select --switch "$XCODE"
+          xcodebuild -version
+          xcrun simctl list runtimes
+      # A simulator of the job's own, made before the build, which is for it alone.
+      - name: Make a simulator
+        run: |
+          simulator="$(xcrun simctl create household-e2e "$IOS_DEVICE" "$IOS_RUNTIME")"
+          echo "SIMULATOR=$simulator" >> "$GITHUB_ENV"
+      - name: Generate
+        run: pnpm exec turbo run gen
+      # The native project is no file of the repository: Expo writes it from app.config.ts
+      # (PL-5), for the variant the environment names.
+      - name: Write the iOS project
+        run: pnpm --filter @household/mobile exec expo prebuild --platform ios --no-install
+      # What CocoaPods downloads, React Native's and Expo's precompiled frameworks among it,
+      # which the lockfile decides the versions of. Neither the pods as installed nor anything
+      # Xcode built is kept from one run to the next.
+      - name: CocoaPods' downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: mobile-pods-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install the pods
+        working-directory: apps/mobile/ios
+        run: pod install
+      # A release build for the simulator made above, and for its architecture alone. The
+      # workspace and its scheme are named for the app, so they are found and not written
+      # here. Xcode's own output is kept whole for the artifact, and drawn shorter in the log.
+      - name: Build the app
+        id: build
+        working-directory: apps/mobile/ios
+        timeout-minutes: 45
+        run: |
+          set -o pipefail
+          workspace="$(ls -d *.xcworkspace)"
+          scheme="${workspace%.xcworkspace}"
+          xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release \
+            -destination "platform=iOS Simulator,id=$SIMULATOR" -derivedDataPath build \
+            ONLY_ACTIVE_ARCH=YES build | tee "$RUNNER_TEMP/xcodebuild.log" | xcbeautify
+          app="$(ls -d "$PWD"/build/Build/Products/Release-iphonesimulator/*.app)"
+          echo "APP=$app" >> "$GITHUB_ENV"
+      # Maestro, at the version the flows are written for and held to its release's digest
+      # (apps/mobile/e2e/install-maestro.sh).
+      - name: Install Maestro
+        run: bash apps/mobile/e2e/install-maestro.sh
+      # The flows that ask nothing of a server: every flow of apps/mobile/e2e/flows but those
+      # written ahead of their screens and the one that needs the stack.
+      - name: Run the flows on the simulator
+        timeout-minutes: 30
+        run: |
+          xcrun simctl bootstatus "$SIMULATOR" -b
+          xcrun simctl install "$SIMULATOR" "$APP"
+          HOUSEHOLD_E2E_DEVICE="$SIMULATOR" pnpm --filter @household/mobile run e2e ios
+      # What a release build may ask of its device (FR-PR1). The dev launcher's plugin writes
+      # a reason for the local network and its Bonjour service into every Info.plist, for
+      # finding a developer's machine, and adds the build phase that takes both out of every
+      # build but a debug one: read off the app that was built, since nothing else shows that
+      # the phase ran. A staging and a production build are release builds as this one is.
+      - name: The built app gives no reason for the local network
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          plutil -p "$APP/Info.plist" | grep -E 'UsageDescription|NSBonjourServices' || true
+          for key in NSLocalNetworkUsageDescription NSBonjourServices; do
+            if /usr/libexec/PlistBuddy -c "Print :$key" "$APP/Info.plist" > /dev/null 2>&1; then
+              echo "::error::The release build's Info.plist holds $key, which only a debug build needs"
+              exit 1
+            fi
+          done
+      # Maestro's report, its own log and a screenshot of each failure, what the flows kept,
+      # and what the simulator logged meanwhile; beside them Xcode's output and the log of
+      # Maestro's driver, which Xcode runs. Kept of a run that passed too: a screenshot is the
+      # one place the app's faces and its two themes are seen.
+      - name: Gather Xcode's output and the driver's log
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p apps/mobile/dist/e2e
+          cp "$RUNNER_TEMP/xcodebuild.log" apps/mobile/dist/e2e/ || true
+          cp -R "$HOME/Library/Logs/maestro" apps/mobile/dist/e2e/maestro-driver || true
+      - name: Keep what the flows left
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mobile-ios-e2e
+          path: apps/mobile/dist/e2e
+          retention-days: 7
+          if-no-files-found: ignore
+
   conformance:
     name: Sync conformance — PowerSync clients against the stack
     runs-on: ubuntu-latest
