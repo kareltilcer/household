@@ -90,8 +90,9 @@ eas build --profile production --platform all
   (`HOUSEHOLD_HTTP_ADDR=0.0.0.0:8080`), and so must the address it gives a replica for the sync
   service (`HOUSEHOLD_POWERSYNC_URL`).
 - **A staging and a production build** hold their JavaScript, ask the API they were built for, and
-  carry no dev screen: `pnpm --filter @household/mobile run export` and `run check` hold the same
-  bundle to that, and to its budget, with no build at all.
+  carry no dev screen and nothing that stands in for the server or the replica:
+  `pnpm --filter @household/mobile run export` and `run check` hold the same bundle to that, and
+  to its budget, with no build at all.
 - **Without EAS**, on a machine with Android Studio or Xcode: `pnpm --filter @household/mobile exec
   expo prebuild --platform android`, then `expo run:android` (or `ios`). The folders it writes,
   `apps/mobile/android` and `apps/mobile/ios`, are ignored by git, ESLint and Prettier; delete them
@@ -159,7 +160,7 @@ the `typescript` job, whatever changed.
 
 | Job | Runner | What it does | The first run took |
 |---|---|---|---|
-| `mobile` | Linux | `export` and `check`: the production bundles of both platforms, under their budget and with no dev screen | 1 min |
+| `mobile` | Linux | `export` and `check`: the production bundles of both platforms, under their budget, with no dev screen and no stand-in | 1 min |
 | `mobile-android` | Linux, KVM | writes the Android project, builds a release APK for `x86_64`, starts the development services and the API, makes a member, boots an emulator at API 29, runs the flows, asks the server for the member's devices and for the household's clients, and holds the build's permissions to their reasons | 13 min: the build 9, with nothing cached; the services and the API under one; the emulator's boot and three flows two |
 | `mobile-ios` | `macos-26` | writes the iOS project, installs the pods, builds a release app for a simulator of its own, runs the flows, and reads the built `Info.plist` | the pods 1 min, the build 8, Maestro's driver and the app's first start 1 |
 
