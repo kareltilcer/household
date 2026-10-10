@@ -1,18 +1,26 @@
 // The accessibility rules themselves: each with something that breaks it, and the same thing
 // mended. A rule that never fails holds nothing.
-import { describe, expect, it } from '@jest/globals'
+import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { controls } from '@household/icons'
 import { catalogs } from '@household/i18n'
 import { screen } from '@testing-library/react-native'
-import { Image, Pressable, Text as NativeText, TextInput, View } from 'react-native'
+import { Image, Platform, Pressable, Text as NativeText, TextInput, View } from 'react-native'
+import { Svg } from 'react-native-svg'
 import { BaseIcon, StatusIcon } from '../ui/Icon.tsx'
 import { Text } from '../ui/Text.tsx'
-import { expectAccessible, statusTestID, violations } from './a11y.ts'
+import { drawingsOf, expectAccessible, statusTestID, violations } from './a11y.ts'
 import { words } from './fixtures.ts'
 import { render } from './render.tsx'
 
 const target = { minHeight: 44, minWidth: 44 }
 const noop = () => undefined
+
+/** The platforms a test runs as: Jest's own, and the one a test names where the two differ. */
+const platforms = ['ios', 'android'] as const
+
+afterEach(() => {
+  jest.restoreAllMocks()
+})
 
 /** The rules `testID` breaks, by name. */
 function broken(testID: string, options?: Parameters<typeof violations>[1]): string[] {
@@ -154,49 +162,64 @@ describe('the accessibility rules', () => {
     expect(broken('said-off', { outOfForm: [words.open] })).toEqual([])
   })
 
-  it('want a picture named, or hidden from a screen reader', async () => {
-    await render(
-      <View>
-        <View testID="bare">
-          <Image source={{ uri: 'file:///picture.png' }} />
-        </View>
-        <View testID="named">
-          <Image source={{ uri: 'file:///picture.png' }} accessibilityLabel={words.title} />
-        </View>
-        <View testID="glyph">
-          <BaseIcon name="x" />
-        </View>
-        <View testID="named-glyph">
-          <BaseIcon name="x" label={words.title} />
-        </View>
-      </View>,
-    )
-    expect(broken('bare')).toEqual(['picture'])
-    expect(broken('named')).toEqual([])
-    // A glyph with no label is decoration, and hides itself.
-    expect(broken('glyph')).toEqual([])
-    expect(broken('named-glyph')).toEqual([])
-  })
+  // A drawing is another host element on each platform, and a rule that knew one of them would
+  // pass every drawing of the other unread.
+  it.each(platforms)(
+    'want a picture named, or hidden from a screen reader, as %s draws one',
+    async (os) => {
+      jest.replaceProperty(Platform, 'OS', os)
+      await render(
+        <View>
+          <View testID="bare">
+            <Image source={{ uri: 'file:///picture.png' }} />
+          </View>
+          <View testID="named">
+            <Image source={{ uri: 'file:///picture.png' }} accessibilityLabel={words.title} />
+          </View>
+          <View testID="bare-drawing">
+            <Svg />
+          </View>
+          <View testID="glyph">
+            <BaseIcon name="x" />
+          </View>
+          <View testID="named-glyph">
+            <BaseIcon name="x" label={words.title} />
+          </View>
+        </View>,
+      )
+      expect(broken('bare')).toEqual(['picture'])
+      expect(broken('named')).toEqual([])
+      expect(broken('bare-drawing')).toEqual(['picture'])
+      // A glyph with no label is decoration, and hides itself.
+      expect(broken('glyph')).toEqual([])
+      expect(broken('named-glyph')).toEqual([])
+      expect(drawingsOf(screen.getByTestId('named-glyph'))).toHaveLength(1)
+    },
+  )
 
-  it('want a status said three ways: its colour, its glyph and its word', async () => {
-    await render(
-      <View>
-        <View testID={statusTestID('pending')}>
-          <StatusIcon status="pending" />
-          <Text color="status-pending">{catalogs.en['a11y.status.pending']}</Text>
-        </View>
-        <View testID={statusTestID('conflict')}>
-          <Text color="status-conflict">{catalogs.en['a11y.status.conflict']}</Text>
-        </View>
-        <View testID={statusTestID('rejected')}>
-          <StatusIcon status="rejected" />
-        </View>
-      </View>,
-    )
-    expect(broken(statusTestID('pending'))).toEqual([])
-    expect(broken(statusTestID('conflict'))).toEqual(['status'])
-    expect(broken(statusTestID('rejected'))).toEqual(['status'])
-  })
+  it.each(platforms)(
+    'want a status said three ways: its colour, its glyph and its word, as %s draws one',
+    async (os) => {
+      jest.replaceProperty(Platform, 'OS', os)
+      await render(
+        <View>
+          <View testID={statusTestID('pending')}>
+            <StatusIcon status="pending" />
+            <Text color="status-pending">{catalogs.en['a11y.status.pending']}</Text>
+          </View>
+          <View testID={statusTestID('conflict')}>
+            <Text color="status-conflict">{catalogs.en['a11y.status.conflict']}</Text>
+          </View>
+          <View testID={statusTestID('rejected')}>
+            <StatusIcon status="rejected" />
+          </View>
+        </View>,
+      )
+      expect(broken(statusTestID('pending'))).toEqual([])
+      expect(broken(statusTestID('conflict'))).toEqual(['status'])
+      expect(broken(statusTestID('rejected'))).toEqual(['status'])
+    },
+  )
 
   it('want a hold-to-complete completed with no hold: the action, the tap and the click', async () => {
     const activate = [{ name: 'activate', label: words.remove }]

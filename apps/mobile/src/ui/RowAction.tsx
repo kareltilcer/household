@@ -4,9 +4,10 @@
 // Pixel 8*, and drawn as the word its name holds, together and in order, so that what is seen
 // is what somebody who speaks to their device says to press it (WCAG 2.1, 2.5.3). The catalogs'
 // own test holds each such pair of keys to that in all five languages.
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Pressable } from 'react-native'
 import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
+import { useFocusRing } from './focus.ts'
 import { StatusIcon } from './Icon.tsx'
 import { Text } from './Text.tsx'
 import type { ColorName } from '@household/tokens/native'
@@ -45,7 +46,7 @@ export function Worded({
   const theme = useTheme()
   const target = useTarget()
   // A keyboard's focus, or a switch's: a touch gives none.
-  const [focused, setFocused] = useState(false)
+  const focus = useFocusRing()
   return (
     <Pressable
       testID={testID}
@@ -54,12 +55,8 @@ export function Worded({
       accessibilityLabel={name}
       accessibilityState={loading ? { busy: true } : {}}
       {...(loading ? {} : { onPress })}
-      onFocus={() => {
-        setFocused(true)
-      }}
-      onBlur={() => {
-        setFocused(false)
-      }}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
       style={({ pressed }) => ({
         minHeight: target,
         minWidth: target,
@@ -72,14 +69,7 @@ export function Worded({
         borderWidth: 1,
         borderColor: edged ? theme.color['border-strong'] : 'transparent',
         backgroundColor: pressed && !loading ? theme.color['surface-sunken'] : 'transparent',
-        ...(focused
-          ? {
-              outlineWidth: 2,
-              outlineStyle: 'solid',
-              outlineOffset: 2,
-              outlineColor: theme.color.focus,
-            }
-          : {}),
+        ...focus.ring,
       })}
     >
       {loading ? <StatusIcon status="syncing" color={color} /> : null}

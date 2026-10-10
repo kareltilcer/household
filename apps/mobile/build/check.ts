@@ -5,6 +5,8 @@
 // - carries a dev screen: the harness and its neighbours are in no build a member is served
 //   (D-154). Each holds one marker (src/dev/marker.ts), and a bundle is searched for it as bytes,
 //   so Hermes bytecode is read as plain JavaScript is;
+// - carries what stands in for the server, the replica or a member in a test, which is written
+//   outside src/dev for the tests' sake and is found the same way (bundles.ts, `standIns`);
 // - is over its bundle budget, a platform's bytecode against that platform's figure (budget.ts).
 //
 // It reads the export made with no `EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS`: the end-to-end build is
@@ -36,4 +38,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`check: ${failure}`)
   process.exit(1)
 }
-console.log(`check: ${String(bundles.length)} bundles, under budget, no dev screen`)
+console.log(`check: ${String(bundles.length)} bundles, under budget, no dev screen, no stand-in`)

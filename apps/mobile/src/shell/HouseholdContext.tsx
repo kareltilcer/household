@@ -1,7 +1,9 @@
 // The household whose screens are drawn, as its frame read it (HouseholdFrame.tsx), and its
 // member's arrangement of its modules, as this device keeps it (arrangement.ts). A screen under
 // a household's frame reads both from here: neither is being read any more by the time a screen
-// is drawn, so no screen of the shell has a wait of its own for them.
+// is drawn, so no screen of a household has a wait of its own for them. It is no second reading
+// of the household: the app has one (`useHousehold`, household/data.ts), which the frame asks
+// and this hands down, read already.
 //
 // Which household that is is in the address and nowhere else (D-4): this holds the answer to the
 // address, never a household that is "current".

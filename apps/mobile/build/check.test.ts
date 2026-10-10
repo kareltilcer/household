@@ -6,7 +6,7 @@ import { globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { devMarker } from '../src/dev/marker.ts'
-import { bundlesOf, check, holds } from './bundles.ts'
+import { bundlesOf, check, holds, standIns } from './bundles.ts'
 
 /** apps/mobile: Jest runs in it. */
 const app = resolve('.')
@@ -52,6 +52,50 @@ describe('a dev screen', () => {
     for (const file of routes) {
       const screen = /import\('\.\.\/\.\.\/(src\/dev\/[^']+)'\)/.exec(read(file))?.[1] ?? ''
       expect([file, read(screen)]).toEqual([file, expect.stringContaining('<DevScreen ')])
+    }
+  })
+})
+
+describe('what stands in for the server and the replica outside src/dev', () => {
+  it('is each named by words its file still holds, and no other: the check would look for nothing, or name the wrong file', () => {
+    expect(Object.keys(standIns).length).toBeGreaterThan(0)
+    const others = sources('{app,src}/**/*.{ts,tsx}')
+      .map((file) => file.replaceAll('\\', '/'))
+      .filter((file) => !/\.test\.tsx?$/.test(file))
+    for (const [source, words] of Object.entries(standIns)) {
+      expect([source, read(source)]).toEqual([source, expect.stringContaining(words)])
+      expect([source, others.filter((file) => read(file).includes(words))]).toEqual([
+        source,
+        [source],
+      ])
+    }
+  })
+
+  // The files this is about: written for a test or a dev screen to draw over, and so named.
+  it('is every file outside src/dev and src/test that is named as a fixture or a stand-in', () => {
+    const named = sources('src/**/{*.fixtures.ts,standIn.ts,testing.ts}')
+      .map((file) => file.replaceAll('\\', '/'))
+      .filter((file) => !file.startsWith('src/dev/'))
+    expect(named.length).toBeGreaterThan(0)
+    for (const file of named) expect(Object.keys(standIns)).toContain(file)
+  })
+
+  it('is found in an export that holds it, and named by its file', () => {
+    const root = mkdtempSync(join(tmpdir(), 'household-mobile-check-'))
+    try {
+      mkdirSync(join(root, '_expo', 'static', 'js', 'ios'), { recursive: true })
+      const [[source, words] = ['', '']] = Object.entries(standIns)
+      // As bytecode keeps a string that is not plain ASCII.
+      writeFileSync(
+        join(root, '_expo', 'static', 'js', 'ios', 'index-3.hbc'),
+        Buffer.from(`\0${words}\0`, 'utf16le'),
+      )
+      const { failures } = check(root)
+      expect(failures).toHaveLength(1)
+      expect(failures[0]).toContain(source)
+      expect(failures[0]).toContain('index-3.hbc')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
     }
   })
 })

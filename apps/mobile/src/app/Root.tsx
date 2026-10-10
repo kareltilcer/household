@@ -1,13 +1,12 @@
 // The root layout: what stands around every route, in the order each needs what is above it.
 //
-//   display → i18n → [the session group's: problem hub and query client → session → please
-//   update] → [the controls group's: toasts] → the router's stack
+//   display → i18n → [session/Providers.tsx: problem hub and query client → session → please
+//   update] → [ui/Toast.tsx: toasts] → the router's stack
 //
 // The display modes and the language are read from the device before anything is drawn, and the
 // splash screen stays up until they are: a first screen drawn in the default theme and then in
-// the member's own is a flash a dark room notices. The two groups whose providers stand here
-// each fill a file of their own (session/Providers.tsx, ui/Toast.tsx), so this one is not
-// edited for them.
+// the member's own is a flash a dark room notices. What the session and the toasts stand on is
+// each written in its own file, and composed here.
 import type { DisplayLocale } from '@household/i18n'
 import { Stack, type ErrorBoundaryProps } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
@@ -36,7 +35,19 @@ interface Kept {
   readonly locale: DisplayLocale
 }
 
-/** The device's own chrome, in step with the theme: the status bar's ink and the ground behind every screen. */
+/**
+ * The device's own chrome, in step with the theme: the status bar's ink and the ground behind
+ * every screen.
+ *
+ * Not the band behind Android's three navigation buttons, which nothing here reaches. It is the
+ * platform's own scrim, light or dark by a flag of the window that React Native sets once, as
+ * the activity is made, from the device's night mode (`Window.enableEdgeToEdge`), and the app's
+ * theme is its member's choice, read after that. So with the app dark on a device that is
+ * light, or the other way about, the band is the device's and the buttons on it are legible.
+ * Neither React Native nor a module this app links sets that flag from here: what does is
+ * `expo-navigation-bar`, a native module the app does not have. A device that navigates by
+ * gestures draws no band.
+ */
 function Chrome({ children }: { readonly children: ReactNode }) {
   const { theme: name } = useDisplay()
   const theme = useTheme()

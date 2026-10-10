@@ -6,7 +6,7 @@
 //
 // Whatever keeps something of a member's says so here (`onForget`), once, as its module is
 // loaded: the session's own, the reads it kept and what it holds in memory, and the replicas
-// with their files, which the sync group registers. What is the device's and no member's
+// with their files, which sync/open.ts registers. What is the device's and no member's
 // content stays: how the app is shown, the order a member gave their modules (D-155), and which
 // household they were last in.
 type Forgetter = (member: string) => void | Promise<void>

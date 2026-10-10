@@ -6,14 +6,17 @@ import { catalogs } from '@household/i18n'
 import type { RecordedOutcome } from '@household/sync'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { act, screen, userEvent, waitFor, within } from '@testing-library/react-native'
+import { router } from 'expo-router'
 import { useState } from 'react'
 import { Platform } from 'react-native'
 import { answering, json, problem, testClient } from '../api/testing.ts'
 import type { Household } from '../household/data.ts'
 import { createFormatters } from '../i18n/format.ts'
+import type { Me } from '../session/context.ts'
 import { account, SessionFixture } from '../session/fixture.tsx'
+import { HouseholdFixture } from '../shell/fixture.tsx'
 import { elementsOf, expectAccessible, textOf } from '../test/a11y.ts'
-import { households, people } from '../test/fixtures.ts'
+import { householdOf, households, people } from '../test/fixtures.ts'
 import { render, type DrawOptions } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Inbox, inboxState, InboxView, type InboxFacts } from './Inbox.tsx'
@@ -32,12 +35,10 @@ import {
   settingFor,
 } from './sync.fixtures.ts'
 
-/** The household an address names, as a test says it. */
-const mockAt = { household: households.own.id as string }
-
+// The router's own: where a row's editor leads, and whether there is a screen to go back to.
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn() },
-  useLocalSearchParams: () => ({ household: mockAt.household }),
+  router: { push: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => false) },
+  useIsFocused: () => true,
 }))
 
 const en = catalogs.en
@@ -108,7 +109,7 @@ const row = (name: string) => {
 
 beforeEach(async () => {
   await AsyncStorage.clear()
-  mockAt.household = households.own.id
+  jest.mocked(router.canGoBack).mockReturnValue(false)
 })
 
 afterEach(() => {
@@ -247,6 +248,8 @@ describe('the inbox', () => {
     await userEvent.press(within(row('March electricity')).getByTestId('status:conflict'))
     expect(screen.getByTestId('resolver:surface')).toBeOnTheScreen()
     expect(screen.getByText(en['sync.conflict.question'])).toBeOnTheScreen()
+    // The marks of the rows and of the sheet, as Android draws a glyph: held to the same rules.
+    expectAccessible()
     await userEvent.press(screen.getByTestId('resolver:keep-theirs'))
     await waitFor(() => {
       expect(rows()).toHaveLength(1)
@@ -278,8 +281,114 @@ describe('the inbox', () => {
     })
     // One thing to a screen reader, which says what the list under it is.
     const place = focus.mock.lastCall?.[0].current
-    expect({ ...place?.props }).toMatchObject({ accessible: true })
-    expect(screen.getByText(en['device.sync.inbox.lead'])).toBeOnTheScreen()
+    expect({ ...place?.props }).toMatchObject({ accessible: true, testID: 'sync:inbox:lead' })
+    expect(screen.getByTestId('sync:inbox:lead')).toHaveTextContent(en['device.sync.inbox.lead'], {
+      exact: true,
+    })
+  })
+
+  // With the last row answered there is no list: its place is the sentence that says so.
+  it('puts the focus on the sentence that nothing waits once the last row has been answered', async () => {
+    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    await inbox({ entries: [conflict] })
+    await userEvent.press(screen.getByTestId('status:conflict'))
+    const { onDismiss } = screen.getByTestId('resolver').props as {
+      readonly onDismiss: () => void
+    }
+    focus.mockClear()
+    await userEvent.press(screen.getByTestId('resolver:keep-theirs'))
+    await waitFor(() => {
+      expect(screen.getByTestId('empty-state')).toBeOnTheScreen()
+    })
+    // The sheet is still leaving.
+    expect(focus).not.toHaveBeenCalled()
+    await act(async () => {
+      onDismiss()
+      await Promise.resolve()
+    })
+    await waitFor(() => {
+      expect(focus).toHaveBeenCalledTimes(1)
+    })
+    // One thing to a screen reader, which reads the sentence as the focus lands on it.
+    expect({ ...focus.mock.lastCall?.[0].current?.props }).toMatchObject({
+      accessible: true,
+      testID: 'sync:inbox:empty',
+    })
+    expect(screen.getByTestId('sync:inbox:empty')).toHaveTextContent(en['sync.inbox.empty'], {
+      exact: true,
+    })
+    expectAccessible()
+  })
+
+  // A device's own watch of its inbox is a moment behind the answer, and on the platform that
+  // says a sheet has gone as it closes the sheet is gone first.
+  it('waits for the list to have heard before it puts the focus, where the sheet had gone first', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android')
+    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    const stand = standIn({ registry, entries: [conflict] })
+    // What the replica says of its inbox after the first time, held until the test lets it by.
+    let tell: () => void = () => undefined
+    const behind: StandIn = {
+      ...stand,
+      opened: {
+        ...stand.opened,
+        watchInbox: (listener) => {
+          let first = true
+          return stand.opened.watchInbox((entries) => {
+            if (first) listener(entries)
+            else
+              tell = () => {
+                listener(entries)
+              }
+            first = false
+          })
+        },
+      },
+    }
+    await render(<Over stand={behind} />)
+    await userEvent.press(screen.getByTestId('status:conflict'))
+    focus.mockClear()
+    await userEvent.press(screen.getByTestId('resolver:keep-theirs'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('resolver:surface')).toBeNull()
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // The sheet has gone, the answer was given, and the row is still drawn: the lead above it
+    // is about to leave with it, and is no place to put the focus on.
+    expect(rows()).toHaveLength(1)
+    expect(focus).not.toHaveBeenCalled()
+    await act(() => {
+      tell()
+    })
+    await waitFor(() => {
+      expect(focus).toHaveBeenCalledTimes(1)
+    })
+    expect({ ...focus.mock.lastCall?.[0].current?.props }).toMatchObject({
+      testID: 'sync:inbox:empty',
+    })
+  })
+
+  it('takes the focus once for an answered row: a row the replica sends by itself later takes none', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android')
+    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    const stand = await inbox({
+      entries: [conflict, rejectionWith('forbidden'), rejectionWith('not_found')],
+    })
+    await userEvent.press(within(row('March electricity')).getByTestId('status:conflict'))
+    focus.mockClear()
+    await userEvent.press(screen.getByTestId('resolver:keep-theirs'))
+    await waitFor(() => {
+      expect(focus).toHaveBeenCalledTimes(1)
+    })
+    await act(async () => {
+      await stand.opened.replica.discard(rejectionWith('forbidden').mutation_id)
+    })
+    await waitFor(() => {
+      expect(rows()).toHaveLength(1)
+    })
+    expect(focus).toHaveBeenCalledTimes(1)
   })
 
   it('leaves the focus where the sheet gave it back when it was closed with no answer', async () => {
@@ -376,16 +485,7 @@ describe('the inbox', () => {
 })
 
 describe('the inbox’s screen', () => {
-  const home: Household = {
-    ...households.own,
-    country: 'CZ',
-    timezone: 'Europe/Prague',
-    base_currency: 'CZK',
-    locale: 'cs-CZ',
-    my_role: 'member',
-    my_grants: {},
-    entitlement: { state: 'active', can_write: true },
-  }
+  const home = householdOf()
   const members = {
     items: [
       { user_id: petr.toUpperCase(), display_name: people.member.name, role: 'member' },
@@ -396,45 +496,64 @@ describe('the inbox’s screen', () => {
   interface ScreenOptions {
     readonly household?: Household
     readonly listed?: () => Response
-    readonly read?: () => Response
     readonly entries?: readonly RecordedOutcome[]
+    /** Who is signed in. Left out, the fixtures' owner, whose account names no zone. */
+    readonly me?: Me
   }
 
+  /** The screen as the household's frame draws it: under the household it read (shell/). */
   async function drawn({
     household = home,
     listed = () => json(200, members),
-    read = () => json(200, household),
     entries = [conflict],
+    me = account(),
   }: ScreenOptions = {}) {
     const stand = standIn({ registry, entries })
-    const api = answering({
-      [`GET /households/${home.id}`]: read,
-      [`GET /households/${home.id}/members`]: listed,
-    })
+    const api = answering({ [`GET /households/${home.id}/members`]: listed })
     const sync: Sync = {
       replica: { phase: 'open', ...stand.opened },
       online: true,
       receiving: true,
     }
     await render(
-      <SessionFixture api={testClient(api.transport)} state={{ status: 'member', me: account() }}>
-        <SyncFixture value={sync}>
-          <Inbox />
-        </SyncFixture>
+      <SessionFixture api={testClient(api.transport)} state={{ status: 'member', me }}>
+        <HouseholdFixture household={household}>
+          <SyncFixture value={sync}>
+            <Inbox />
+          </SyncFixture>
+        </HouseholdFixture>
       </SessionFixture>,
     )
     return { stand, api }
   }
 
-  it('has one title, which is its header, and keeps the name its route is found by', async () => {
+  it('stands as every screen of a household does: one title, in the app bar, under the household’s name', async () => {
     await drawn()
     expect(screen.getByTestId('route:sync')).toBeOnTheScreen()
+    // One title, and it is the app bar's: the screen draws none of its own under it.
     expect(screen.getAllByRole('header')).toHaveLength(1)
-    expect(screen.getByRole('header', { name: en['sync.inbox.title'] })).toBeOnTheScreen()
+    expect(screen.getByTestId('app-bar:title')).toHaveTextContent(en['sync.inbox.title'], {
+      exact: true,
+    })
+    expect(screen.getAllByTestId('app-bar')).toHaveLength(1)
+    expect(screen.getByTestId('app-bar:household')).toHaveTextContent(households.own.name, {
+      exact: true,
+    })
     await waitFor(() => {
       expect(screen.getByTestId('sync:inbox:list')).toBeOnTheScreen()
     })
     expectAccessible()
+  })
+
+  // It is opened from More, and by a notification's address with nothing behind it.
+  it('leads back to where its member came from, where there is somewhere to go back to', async () => {
+    await drawn()
+    expect(screen.queryByTestId('app-bar:back')).toBeNull()
+    await screen.unmount()
+    jest.mocked(router.canGoBack).mockReturnValue(true)
+    await drawn()
+    await userEvent.press(screen.getByTestId('app-bar:back'))
+    expect(router.back).toHaveBeenCalledTimes(1)
   })
 
   it('names the other author from the household’s members, whom the replica does not name', async () => {
@@ -464,26 +583,7 @@ describe('the inbox’s screen', () => {
   })
 
   it('reads an instant in the member’s own zone where their account names one', async () => {
-    const stand = standIn({ registry, entries: [conflict] })
-    const api = answering({
-      [`GET /households/${home.id}`]: () => json(200, home),
-      [`GET /households/${home.id}/members`]: () => json(200, members),
-    })
-    const sync: Sync = {
-      replica: { phase: 'open', ...stand.opened },
-      online: true,
-      receiving: true,
-    }
-    await render(
-      <SessionFixture
-        api={testClient(api.transport)}
-        state={{ status: 'member', me: account({ timezone: 'America/New_York' }) }}
-      >
-        <SyncFixture value={sync}>
-          <Inbox />
-        </SyncFixture>
-      </SessionFixture>,
-    )
+    await drawn({ me: account({ timezone: 'America/New_York' }) })
     await waitFor(() => {
       expect(rows()[0]).toContain(
         `Since ${format.instant('2026-03-03T17:41:00Z', 'America/New_York')}`,
@@ -503,14 +603,12 @@ describe('the inbox’s screen', () => {
     })
   })
 
-  it('draws nothing under its title for a household that could not be read: the frame says that', async () => {
-    const { api } = await drawn({ read: () => problem(404, 'not_found') })
+  // The frame read the household, and hands it down: the screen asks for its members alone.
+  it('asks the server for nothing the frame above it has read', async () => {
+    const { api } = await drawn()
     await waitFor(() => {
-      expect(api.sent(`GET /households/${home.id}`)).toHaveLength(1)
+      expect(api.sent(`GET /households/${home.id}/members`)).toHaveLength(1)
     })
-    expect(screen.queryByTestId('sync:inbox:list')).toBeNull()
-    expect(screen.queryByTestId('skeleton')).toBeNull()
-    // And nothing was asked about a household that is not the member's.
-    expect(api.sent(`GET /households/${home.id}/members`)).toEqual([])
+    expect(api.asked).toHaveLength(1)
   })
 })

@@ -1,7 +1,7 @@
 // A household's layout, which every route under /households/[household] is drawn in: a tab
 // navigator, and inside it, around what it draws, the guard, since everything of a household is
-// a member's; the household's replica, the sync group's, opened for the household in the
-// address; and the frame, which reads the household and draws the bars above its screens
+// a member's; the household's replica (sync/ReplicaProvider.tsx), opened for the household in
+// the address; and the frame, which reads the household and draws the bars above its screens
 // (HouseholdFrame.tsx). Under them stand the screens, and the tab bar under those.
 //
 // The bar draws the destinations a member has (tabs.ts) and leaves the other routes to be

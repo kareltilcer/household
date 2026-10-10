@@ -9,7 +9,7 @@ import { inHousehold, paths } from '../app/paths.ts'
 import { holdDestination, takeDestination } from '../links/destination.ts'
 import { expectAccessible } from '../test/a11y.ts'
 import { ids } from '../test/fixtures.ts'
-import { render, TestProviders } from '../test/render.tsx'
+import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { account, SessionFixture } from './fixture.tsx'
 import { SignIn } from './SignIn.tsx'
@@ -104,7 +104,7 @@ describe('a sign-in that ended', () => {
     const urgent = jest.spyOn(announcer, 'announceNow').mockImplementation(() => undefined)
     const view = await render(visitor())
     expect(said).not.toHaveBeenCalled()
-    await view.rerender(<TestProviders>{visitor({ ended: true })}</TestProviders>)
+    await view.rerender(visitor({ ended: true }))
     expect(screen.getByTestId('sign-in:ended')).toBeOnTheScreen()
     expect(said).toHaveBeenCalledTimes(1)
     expect(said).toHaveBeenCalledWith(ended)

@@ -8,7 +8,7 @@ import { paths } from '../app/paths.ts'
 import { heldDestination, holdDestination, takeDestination } from '../links/destination.ts'
 import { expectAccessible } from '../test/a11y.ts'
 import { ids } from '../test/fixtures.ts'
-import { render, TestProviders } from '../test/render.tsx'
+import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Screen } from '../ui/Screen.tsx'
 import type { SessionState } from './context.ts'
@@ -119,13 +119,11 @@ describe('a household’s screen', () => {
     )
     mockAt.path = paths.signIn.path
     await view.rerender(
-      <TestProviders>
-        <SessionFixture state={{ status: 'visitor' }}>
-          <Signed>
-            <Inside />
-          </Signed>
-        </SessionFixture>
-      </TestProviders>,
+      <SessionFixture state={{ status: 'visitor' }}>
+        <Signed>
+          <Inside />
+        </Signed>
+      </SessionFixture>,
     )
     expect(heldDestination()).toBe(today)
   })
@@ -227,17 +225,9 @@ describe('what could not be read', () => {
 
   it('is said again where it is drawn anew, having given way to a wait', async () => {
     const said = jest.spyOn(announcer, 'announceNow').mockImplementation(() => undefined)
-    const unread = (
-      <TestProviders>
-        <Unread title={title} body={body} retry={() => undefined} />
-      </TestProviders>
-    )
-    const view = await render(<Unread title={title} body={body} retry={() => undefined} />)
-    await view.rerender(
-      <TestProviders>
-        <Waiting />
-      </TestProviders>,
-    )
+    const unread = <Unread title={title} body={body} retry={() => undefined} />
+    const view = await render(unread)
+    await view.rerender(<Waiting />)
     await view.rerender(unread)
     expect(said).toHaveBeenCalledTimes(2)
   })

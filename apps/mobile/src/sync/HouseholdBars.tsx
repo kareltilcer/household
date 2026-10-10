@@ -19,15 +19,18 @@
 import { usePathname } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { inHousehold } from '../app/paths.ts'
-import { writes } from '../household/data.ts'
+import { writes, type Household } from '../household/data.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { OfflineBar } from '../ui/OfflineBar.tsx'
-import { useOwn } from './household.ts'
 import { useReplica, useSync } from './ReplicaProvider.tsx'
 
 export interface HouseholdBarsProps {
-  /** The household in the address, which may be no household's id at all. */
-  readonly household: string
+  /**
+   * The household whose screens the bar stands above, as it was read: whoever draws the bar
+   * hands it over, so a household that could not be read, and an address that opens none, have
+   * no bar, and the bar asks the server nothing.
+   */
+  readonly household: Pick<Household, 'id' | 'entitlement'>
 }
 
 /**
@@ -64,40 +67,33 @@ export function HouseholdBars({ household }: HouseholdBarsProps) {
   const t = useTranslate()
   const { online, receiving } = useSync()
   const replica = useReplica()
-  const own = useOwn(household)
   const pathname = usePathname()
-  // Not known until the household is read as its member's: a household that could not be read,
-  // and an address that opens none, have no bar of their own.
-  const takesWrites = own === undefined ? null : writes(own.household)
+  const { id } = household
+  const takesWrites = writes(household)
   useEffect(() => {
-    if (takesWrites === true) replica?.resume()
+    if (takesWrites) replica?.resume()
   }, [replica, takesWrites])
 
-  const sentence: Sentence =
-    takesWrites === null
-      ? null
-      : !online
-        ? changesAtOnce(pathname, household)
-          ? t('device.sync.offline.settings')
-          : takesWrites
-            ? t('ui.offline.bar')
-            : t('device.sync.offline.reading')
-        : receiving === false
-          ? takesWrites
-            ? t('sync.not_receiving')
-            : t('shell.not_receiving.reading')
-          : null
+  const sentence: Sentence = !online
+    ? changesAtOnce(pathname, id)
+      ? t('device.sync.offline.settings')
+      : takesWrites
+        ? t('ui.offline.bar')
+        : t('device.sync.offline.reading')
+    : receiving === false
+      ? takesWrites
+        ? t('sync.not_receiving')
+        : t('shell.not_receiving.reading')
+      : null
 
   // A bar that stood here when the household was first drawn is read in its place. One that
   // arrives later, and a sentence that takes another's place, is said: nothing moved the focus
   // to it.
-  const [stood, setStood] = useState<Stood | null>(null)
+  const [stood, setStood] = useState<Stood>({ household: id, sentence, moved: false })
   let moved = false
-  if (takesWrites !== null) {
-    if (stood?.household !== household) setStood({ household, sentence, moved: false })
-    else if (!stood.moved && stood.sentence !== sentence) setStood({ ...stood, moved: true })
-    else moved = stood.moved
-  }
+  if (stood.household !== id) setStood({ household: id, sentence, moved: false })
+  else if (!stood.moved && stood.sentence !== sentence) setStood({ ...stood, moved: true })
+  else moved = stood.moved
 
   return sentence === null ? null : <OfflineBar sentence={sentence} announce={moved} />
 }

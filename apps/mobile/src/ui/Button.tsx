@@ -6,9 +6,10 @@
 // `accessibilityState`, and drops every press. A control taken out of a screen reader's reach in
 // the middle of a write is one its member has to go looking for; `disabled` is for a control
 // out of its form, and one that cannot act at all is absent.
-import { useState, type ReactNode, type Ref } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { Pressable, View, type PressableProps, type ViewStyle } from 'react-native'
 import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
+import { useFocusRing } from './focus.ts'
 import { Ink, StatusIcon } from './Icon.tsx'
 import { Text } from './Text.tsx'
 import type { ColorName } from '@household/tokens/native'
@@ -72,7 +73,7 @@ function useControl({ variant = 'secondary', loading = false, idle = false, ...r
   const theme = useTheme()
   const target = useTarget()
   // A keyboard's focus, or a switch's: a touch gives none, so this is drawn for them alone.
-  const [focused, setFocused] = useState(false)
+  const focus = useFocusRing()
   const unheard = loading || idle
   const { ground, words, edge } = paint[variant]
   const { onPress, onLongPress, onPressIn, onPressOut, onFocus, onBlur, ...others } = rest
@@ -96,14 +97,7 @@ function useControl({ variant = 'secondary', loading = false, idle = false, ...r
           : theme.color[ground],
     // Pressed is shown by more than a ground that may not change: the whole control gives.
     opacity: pressed && !unheard ? 0.72 : 1,
-    ...(focused
-      ? {
-          outlineWidth: 2,
-          outlineStyle: 'solid',
-          outlineOffset: 2,
-          outlineColor: theme.color.focus,
-        }
-      : {}),
+    ...focus.ring,
   })
   return {
     words,
@@ -118,11 +112,11 @@ function useControl({ variant = 'secondary', loading = false, idle = false, ...r
       // Dropped, not passed on: a busy control starts nothing, a menu and a second write alike.
       ...(unheard ? {} : { onPress, onLongPress, onPressIn, onPressOut }),
       onFocus: (event: Parameters<NonNullable<PressableProps['onFocus']>>[0]) => {
-        setFocused(true)
+        focus.onFocus()
         onFocus?.(event)
       },
       onBlur: (event: Parameters<NonNullable<PressableProps['onBlur']>>[0]) => {
-        setFocused(false)
+        focus.onBlur()
         onBlur?.(event)
       },
       style,

@@ -4,16 +4,18 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { controls } from '@household/icons'
 import { catalogs, createTranslator } from '@household/i18n'
-import { act, fireEvent, screen, userEvent, within } from '@testing-library/react-native'
+import { act, fireEvent, screen, userEvent, waitFor, within } from '@testing-library/react-native'
 import { router } from 'expo-router'
 import { Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { HouseholdNotAvailable, NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold, paths } from '../app/paths.ts'
-import type { Household, ModuleKey } from '../household/data.ts'
-import type { ModuleRegistry } from '../modules/registry.ts'
+import type { ModuleKey } from '../household/data.ts'
 import { SessionFixture } from '../session/fixture.tsx'
+import { SyncFixture, type Sync } from '../sync/ReplicaProvider.tsx'
+import { standIn } from '../sync/standIn.ts'
+import { conflict, overriddenMerge, registry as entities } from '../sync/sync.fixtures.ts'
 import { expectAccessible } from '../test/a11y.ts'
-import { households, ids, words } from '../test/fixtures.ts'
+import { fiveModules, householdOf, households, ids, words } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { AppBar, HouseholdName } from './AppBar.tsx'
@@ -32,6 +34,7 @@ import { Today } from './Today.tsx'
 jest.mock('expo-router', () => ({
   router: {
     navigate: jest.fn(),
+    push: jest.fn(),
     replace: jest.fn(),
     back: jest.fn(),
     canGoBack: jest.fn(() => false),
@@ -42,13 +45,7 @@ jest.mock('expo-router', () => ({
 const en = catalogs.en
 const t = createTranslator('en')
 
-const household: Household = {
-  ...households.own,
-  country: 'CZ',
-  timezone: 'Europe/Prague',
-  base_currency: 'CZK',
-  locale: 'cs',
-  my_role: 'member',
+const household = householdOf({
   // Four modules held, Finance at none, and Chat, which the fixture's build cannot open.
   my_grants: {
     dashboard: 'view',
@@ -59,28 +56,24 @@ const household: Household = {
     chat: 'view',
     admin: 'view',
   },
-  entitlement: { state: 'active', can_write: true },
-}
-
-const at = (module: ModuleKey) => ({
-  home: (id: string) => inHousehold.module(id, module),
 })
+
 /** A build with screens for five modules, the household's own settings among them. */
-const registry: ModuleRegistry = {
-  tasks: at('tasks'),
-  shopping: at('shopping'),
-  finance: at('finance'),
-  garden: at('garden'),
-  admin: at('admin'),
-}
+const registry = fiveModules
 
 const name = (module: ModuleKey) => en[`module.${module}.name`]
 
-function inside(ui: React.ReactElement, arrangement?: Arrangement) {
+/** A household's replica that is still being opened: nothing is known to wait in it. */
+const opening: Sync = { replica: { phase: 'opening' }, online: true, receiving: null }
+
+/** `ui` as the household's frame draws a screen: under the household it read, and its replica. */
+function inside(ui: React.ReactElement, arrangement?: Arrangement, sync: Sync = opening) {
   return (
-    <HouseholdFixture household={household} {...(arrangement ? { arrangement } : {})}>
-      {ui}
-    </HouseholdFixture>
+    <SyncFixture value={sync}>
+      <HouseholdFixture household={household} {...(arrangement ? { arrangement } : {})}>
+        {ui}
+      </HouseholdFixture>
+    </SyncFixture>
   )
 }
 
@@ -249,6 +242,49 @@ describe('More', () => {
     expect(screen.queryByText(en['shell.sidebar.arrange'])).toBeNull()
     expect(screen.queryByTestId('badge', { includeHiddenElements: true })).toBeNull()
     expectAccessible()
+  })
+
+  // The count is the replica's own: each answer of its that still asks for attention (F-5).
+  it('counts what waits in the household’s replica, and leads to it, once that has been read', async () => {
+    const stand = standIn({ registry: entities, entries: [conflict, overriddenMerge] })
+    const open: Sync = {
+      replica: { phase: 'open', ...stand.opened },
+      online: true,
+      receiving: true,
+    }
+    await render(inside(<More />, undefined, open))
+    const row = await screen.findByRole('link', {
+      name: t('shell.sidebar.attention', { count: 2 }),
+    })
+    expect(row.props.testID).toBe('more:sync')
+    await userEvent.press(row)
+    expect(jest.mocked(router.navigate).mock.calls).toEqual([[inHousehold.sync(ids.household)]])
+    // And no longer once the member has answered one of them and seen the other.
+    await act(async () => {
+      await stand.opened.replica.discard(conflict.mutation_id)
+      await stand.opened.replica.resolve(overriddenMerge.mutation_id)
+    })
+    await waitFor(() => {
+      expect(links()).toEqual([])
+    })
+  })
+
+  // A visitor has a way to the dev screens on the sign-in screen; a member's is here.
+  it('leads to the dev screens in a build that holds them, and holds no trace of them in one that does not', async () => {
+    const view = await render(inside(<More />))
+    await userEvent.press(screen.getByTestId('more:dev'))
+    expect(jest.mocked(router.push).mock.calls).toEqual([[paths.dev.path]])
+    await view.unmount()
+    // D-154: a dev-only screen is in no build a store serves, and neither is a way to one.
+    Object.assign(globalThis, { __DEV__: false })
+    try {
+      await render(inside(<More />))
+      expect(screen.getByTestId('route:more')).toBeOnTheScreen()
+      expect(screen.queryByTestId('more:dev')).toBeNull()
+      expect(screen.queryByText(paths.dev.path)).toBeNull()
+    } finally {
+      Object.assign(globalThis, { __DEV__: true })
+    }
   })
 
   it('lists the modules the member holds that the build can open, and no other', async () => {

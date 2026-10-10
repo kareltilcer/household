@@ -12,6 +12,7 @@ import { createProblemHub } from '../api/problems.ts'
 import { testApi } from '../api/testing.ts'
 import type { ReplicaCredential } from '../session/context.ts'
 import { forget } from '../session/forget.ts'
+import { sourcesIn } from '../test/sources.ts'
 import { keptReplicas, replicaDatabase } from './databases.ts'
 import { filesOf, fileStorage } from './files.ts'
 import { opened, openHouseholdReplica, type OpenOptions } from './open.ts'
@@ -353,30 +354,43 @@ describe('a sign-in that ended', () => {
     const forgotten = forget(who.member)
     await expect(opening).rejects.toThrow(/has ended/)
     await forgotten
-    // Nothing was opened under the sign-in that ended: what was, was opened to be emptied.
-    expect(mockOpened.map((each) => each.options.apiUrl)).not.toContain(testApi)
+    // Nothing was opened under the sign-in that ended, and nothing at all: it had not been
+    // noted yet, so there is no note to say a replica is kept that never was.
+    expect(mockOpened).toEqual([])
+    expect(await keptReplicas()).toEqual([])
+  })
+
+  it('removes the note of a replica whose sign-in ended while the note was being made', async () => {
+    const who = pair()
+    // The device's storage is slow to answer the note's own reading: the sign-in ends meanwhile.
+    const getItem = jest.mocked(AsyncStorage.getItem)
+    const atOnce = getItem.getMockImplementation() ?? (() => Promise.resolve(null))
+    let answer: () => void = () => undefined
+    getItem.mockImplementationOnce(
+      (...asked) =>
+        new Promise<string | null>((resolve, reject) => {
+          answer = () => {
+            atOnce(...asked).then(resolve, reject)
+          }
+        }),
+    )
+    const opening = openHouseholdReplica(options(who))
+    // Asked for, and waiting on its note.
+    await Promise.resolve()
+    await Promise.resolve()
+    const forgotten = forget(who.member)
+    answer()
+    await expect(opening).rejects.toThrow(/has ended/)
+    await forgotten
+    // Noted, and marked as leaving in its turn: emptied for nobody, deleted, and its note gone.
+    expect(await keptReplicas()).toEqual([])
+    expect(mockOpened.map((each) => each.options.apiUrl)).toEqual(['about:blank'])
+    expect(mockOpened[0]?.asked).toEqual(['wipe', 'close'])
   })
 })
 
-/** Node's own, asked for by name: the app's sources know nothing of Node, and its tests read them. */
-interface Files {
-  readonly readdirSync: (
-    path: string,
-    options: { readonly recursive: true; readonly encoding: 'utf8' },
-  ) => string[]
-  readonly readFileSync: (path: string, encoding: 'utf8') => string
-}
-
 describe('the sync library', () => {
-  const files = jest.requireActual<Files>('node:fs')
-  // Jest runs in apps/mobile.
-  const sources = ['app', 'src'].flatMap((directory) =>
-    files
-      .readdirSync(directory, { recursive: true, encoding: 'utf8' })
-      .map((name) => `${directory}/${name.replaceAll('\\', '/')}`)
-      .filter((path) => /\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path))
-      .map((path) => ({ path, source: files.readFileSync(path, 'utf8') })),
-  )
+  const sources = sourcesIn(['app', 'src'])
 
   it('is imported for its values by this one file of the app, and for its types alone by every other', () => {
     // One import at a time: the names it takes, in braces, and where from.

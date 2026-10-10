@@ -6,7 +6,7 @@
 // A modal tells its owner when it has gone from the screen. Android says so as it is closed and
 // iOS some time after, by an event Jest's stand-in for the platform's modal never sends. Jest
 // runs as iOS: a case in which something waits for a modal to have gone runs as Android
-// (`asAndroid`), or sends iOS's event itself.
+// (`asAndroid`), or sends iOS's event itself. The accessibility rules hold what either draws.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { money } from '@household/domain'
 import { controls } from '@household/icons'
@@ -438,6 +438,8 @@ describe('a change that was not accepted', () => {
     const [safe, destroys] = within(confirmation).getAllByRole('button')
     expect(safe).toHaveTextContent(en['sync.discard.keep'])
     expect(destroys).toHaveTextContent(en['sync.discard.confirm'])
+    // The sheet's mark and the confirmation over it, as Android draws a glyph.
+    expectAccessible()
 
     // Kept: the confirmation leaves, the sheet stays, and nothing was asked.
     await userEvent.press(screen.getByTestId('resolver:confirm:keep'))

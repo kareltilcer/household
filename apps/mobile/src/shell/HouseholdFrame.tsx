@@ -10,8 +10,9 @@
 //   household's id asks the server nothing. Item 29 draws the lockout here, for a household the
 //   member's own list still names.
 // - Once it is read, the screens, and above them the bars that are the household's and no one
-//   screen's: the sync group's first (offline, and *not receiving*), then the place for item
-//   29's one entitlement banner, then the notice that a link changed the household.
+//   screen's: the connection's first (offline, and *not receiving*: sync/HouseholdBars.tsx),
+//   then the place for item 29's one entitlement banner, then the notice that a link changed
+//   the household.
 //
 // It also remembers the household as the one its member was last in on this device, which is
 // where the app opens next (D-162), and reads their arrangement of its modules, so that no
@@ -67,7 +68,8 @@ function Opened({ household, arrangement, arrange, children }: OpenedProps) {
             paddingRight: insets.right + theme.density['dens-pad-x'],
           }}
         >
-          <HouseholdBars household={id} />
+          {/* Handed what was read here: the bars ask the server nothing of their own. */}
+          <HouseholdBars household={household} />
           {/* Item 29's entitlement banner stands here, under the offline bar's place. */}
           <Switched household={id} />
         </View>

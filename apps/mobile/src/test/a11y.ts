@@ -243,13 +243,31 @@ export const neverDisabled: Rule = (tree, { outOfForm }) =>
       ),
     )
 
-/** The host elements that are a picture: an image, and a drawing of react-native-svg's. */
-const pictures: readonly string[] = ['Image', 'RNSVGSvgView']
+/**
+ * What a drawing of react-native-svg's is as a host element. The library has a view for each
+ * platform and picks one as it draws, so a test that runs as Android draws the second.
+ */
+const drawings: readonly string[] = ['RNSVGSvgView', 'RNSVGSvgViewAndroid']
+
+/** Whether `element` is a drawing: a glyph or an illustration, on whichever platform the test runs as. */
+export function isDrawing(element: TestInstance): boolean {
+  return drawings.includes(element.type)
+}
+
+/** The drawings under `element`, in the order they are drawn: every glyph and illustration. */
+export function drawingsOf(element: TestInstance): TestInstance[] {
+  return elementsOf(element).filter(isDrawing)
+}
+
+/** Whether `element` is a picture: an image, or a drawing. */
+function isPicture(element: TestInstance): boolean {
+  return element.type === 'Image' || isDrawing(element)
+}
 
 /** An image or a drawing is named, or hidden from a screen reader: never met as *image* alone. */
 export const picturesNamedOrHidden: Rule = (tree) =>
   elementsOf(tree)
-    .filter((element) => pictures.includes(element.type))
+    .filter(isPicture)
     .filter((element) => !isHiddenFromAccessibility(element))
     .filter((element) => {
       const props = propsOf(element)
@@ -280,9 +298,9 @@ export const statusSaidThreeWays: Rule = (tree) =>
   elementsOf(tree)
     .filter((element) => text(propsOf(element).testID).startsWith(statusPrefix))
     .flatMap((element) => {
-      const drawing = elementsOf(element).some((inner) => pictures.includes(inner.type))
+      const drawn = elementsOf(element).some(isPicture)
       return [
-        ...(drawing ? [] : [failure('status', element, 'is a status with no glyph')]),
+        ...(drawn ? [] : [failure('status', element, 'is a status with no glyph')]),
         ...(nameOf(element) === '' ? [failure('status', element, 'is a status with no word')] : []),
       ]
     })
@@ -388,7 +406,7 @@ export const neverTruncated: Rule = (tree) =>
       failure('truncated', element, 'is a text held to a number of lines, and cut off past them'),
     )
 
-/** Every rule, in the order a failure is listed. A group that adds a rule adds it here. */
+/** Every rule, in the order a failure is listed. A rule that is added is added here. */
 export const rules: readonly Rule[] = [
   named,
   registeredName,

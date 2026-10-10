@@ -10,9 +10,10 @@
 // that opens nothing for them makes no file.
 //
 // With the replica comes what the app knows of the connection: whether the device says it has
-// one, and whether the replica is receiving changes, which with the sync service down and the
-// API up it is not, though everything else works (D-105). The replica connects as it is opened
-// and keeps trying by itself: nothing here tells it to connect again.
+// one, which is what the query client was told too (api/query.ts), and whether the replica is
+// receiving changes, which with the sync service down and the API up it is not, though
+// everything else works (D-105). The replica connects as it is opened and keeps trying by
+// itself: nothing here tells it to connect again.
 import type { RecordedOutcome, Replica } from '@household/sync'
 import {
   createContext,
@@ -24,9 +25,9 @@ import {
   type ReactNode,
 } from 'react'
 import { useProblems } from '../api/ApiProvider.tsx'
+import { useOnline } from '../api/query.ts'
+import { useHousehold } from '../household/data.ts'
 import { useSession } from '../session/context.ts'
-import { useOwn } from './household.ts'
-import { useOnline } from './online.ts'
 import { openHouseholdReplica, type Opened } from './open.ts'
 
 export type ReplicaState =
@@ -87,13 +88,14 @@ const opening: ReplicaState = { phase: 'opening' }
 
 export function ReplicaProvider({ household, children, open }: ReplicaProviderProps) {
   const problems = useProblems()
-  const { credential } = useSession()
+  const { state: session, credential } = useSession()
   const online = useOnline()
-  // A member's, of a household that is theirs (household.ts): nothing is opened otherwise.
-  const own = useOwn(household)
-  const member = own?.member ?? null
-  const theirs = own === undefined ? null : household.toLowerCase()
-  const of = member === null || theirs === null ? null : `${member}/${theirs}`
+  // A member's, of a household read as theirs (household/data.ts): nothing is opened otherwise.
+  // Whose it is and which household's are what its file is named for, each in one case.
+  const theirs = useHousehold(household).status === 'read'
+  const member = theirs && session.status === 'member' ? session.me.id.toLowerCase() : null
+  const which = member === null ? null : household.toLowerCase()
+  const of = member === null || which === null ? null : `${member}/${which}`
 
   const [held, setHeld] = useState<Held | null>(null)
   // What a member asked to be tried once more: each press opens anew.
@@ -103,8 +105,8 @@ export function ReplicaProvider({ household, children, open }: ReplicaProviderPr
   }, [])
 
   useEffect(() => {
-    if (member === null || theirs === null) return undefined
-    const mine = `${member}/${theirs}`
+    if (member === null || which === null) return undefined
+    const mine = `${member}/${which}`
     // Read through an object: what is true of it changes under the closures below.
     const left = { over: false }
     let release: () => void = () => undefined
@@ -120,7 +122,7 @@ export function ReplicaProvider({ household, children, open }: ReplicaProviderPr
     const keep = async () => {
       let opened: Opened
       try {
-        opened = await openIt(member, theirs)
+        opened = await openIt(member, which)
       } catch {
         if (!left.over) {
           setHeld({ of: mine, attempt, state: { phase: 'unavailable', retry }, receiving: null })
@@ -153,7 +155,7 @@ export function ReplicaProvider({ household, children, open }: ReplicaProviderPr
       left.over = true
       release()
     }
-  }, [member, theirs, problems, credential, open, attempt, retry])
+  }, [member, which, problems, credential, open, attempt, retry])
 
   // What was opened for another member or another household says nothing of this one, and
   // neither does what an attempt before this one came to.

@@ -15,11 +15,12 @@
 // room, counted in the reader's text (width.ts).
 import { remPx } from '@household/tokens'
 import type { ColorName } from '@household/tokens/native'
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Platform, Pressable, View } from 'react-native'
 import { useDisplay, useTarget, useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Badge } from '../ui/Badge.tsx'
+import { useFocusRing } from '../ui/focus.ts'
 import { BaseIcon, Ink, ModuleIcon } from '../ui/Icon.tsx'
 import { Text } from '../ui/Text.tsx'
 import type { Destination, Place } from './tabs.ts'
@@ -112,7 +113,7 @@ function Slot({ slot, label, name, open, wide, onPress, beside, testID }: SlotPr
   const target = useTarget()
   const { textScale } = useDisplay()
   // A keyboard's focus, or a switch's: a touch gives none.
-  const [focused, setFocused] = useState(false)
+  const focus = useFocusRing('inside')
   const ink: ColorName = open || slot === 'add' ? 'text-primary' : 'text-muted'
   return (
     <Pressable
@@ -122,12 +123,8 @@ function Slot({ slot, label, name, open, wide, onPress, beside, testID }: SlotPr
       accessibilityLabel={name}
       accessibilityState={slot === 'add' ? {} : { selected: open }}
       onPress={onPress}
-      onFocus={() => {
-        setFocused(true)
-      }}
-      onBlur={() => {
-        setFocused(false)
-      }}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
       style={({ pressed }) => ({
         minHeight: target,
         alignItems: 'center',
@@ -151,14 +148,7 @@ function Slot({ slot, label, name, open, wide, onPress, beside, testID }: SlotPr
         borderTopWidth: 2,
         borderTopColor: open ? theme.color.accent : 'transparent',
         backgroundColor: pressed ? theme.color['surface-sunken'] : 'transparent',
-        ...(focused
-          ? {
-              outlineWidth: 2,
-              outlineStyle: 'solid' as const,
-              outlineOffset: -2,
-              outlineColor: theme.color.focus,
-            }
-          : {}),
+        ...focus.ring,
       })}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space['space-05'] }}>

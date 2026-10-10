@@ -1,7 +1,7 @@
 // The primitives' dev screen: every component that needs no household's data, in every state it
-// has. The page is the core's and its two sections are their groups', each a file of its own
-// (primitives/controls, primitives/status), so that two groups at work at once never edit one
-// page. What the core built itself is drawn first: the type scale, and the button.
+// has. The type scale and the button are drawn first, here; the controls and overlays, and what
+// says a state, are each a section in a file of its own (primitives/controls,
+// primitives/status).
 //
 // It is long, so it can be narrowed to one part of itself (Only.tsx): its own two, the two
 // halves of the controls' section, and each part of the status section, by the names those

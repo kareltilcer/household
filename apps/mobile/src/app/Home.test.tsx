@@ -8,7 +8,7 @@ import { answering, json, testClient, unanswered } from '../api/testing.ts'
 import { rememberHousehold, type HouseholdSummary } from '../household/data.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { expectAccessible } from '../test/a11y.ts'
-import { households, ids } from '../test/fixtures.ts'
+import { households, ids, summaryOf } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Home } from './Home.tsx'
@@ -25,12 +25,9 @@ jest.mock('expo-router', () => {
   }
 })
 
-const own: HouseholdSummary = { ...households.own, entitlement: { state: 'active' } }
-const other: HouseholdSummary = { ...households.other, entitlement: { state: 'trialing' } }
-const suspended = (household: HouseholdSummary): HouseholdSummary => ({
-  ...household,
-  entitlement: { state: 'suspended' },
-})
+const own = summaryOf(households.own)
+const other = summaryOf(households.other, 'trialing')
+const suspended = (household: HouseholdSummary) => summaryOf(household, 'suspended')
 
 /** The index for a member whose list of households the server answers with `items`. */
 async function opened(items: readonly HouseholdSummary[]) {

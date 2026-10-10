@@ -14,16 +14,11 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { answering, json, problem, testClient, testQueries, unanswered } from '../api/testing.ts'
 import { inHousehold } from '../app/paths.ts'
-import {
-  householdKey,
-  lastHousehold,
-  type Household,
-  type HouseholdSummary,
-} from '../household/data.ts'
+import { householdKey, lastHousehold, type HouseholdSummary } from '../household/data.ts'
 import { linkArrived, householdShown, resetSwitched, shownHousehold } from '../links/switched.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { elementsOf, expectAccessible } from '../test/a11y.ts'
-import { households, ids } from '../test/fixtures.ts'
+import { householdOf, households, ids, summaryOf } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Button } from '../ui/Button.tsx'
@@ -43,33 +38,21 @@ jest.mock('expo-router', () => ({
   Redirect: () => null,
 }))
 
-// The sync group's bars, as a mark of where the frame draws them and for which household.
+// The bars above the screens (sync/HouseholdBars.tsx), as a mark of where the frame draws them
+// and for which household: what they say has a test of its own.
 jest.mock('../sync/HouseholdBars.tsx', () => {
   const { createElement } = jest.requireActual<typeof import('react')>('react')
   const { View: Mark } = jest.requireActual<typeof import('react-native')>('react-native')
   return {
-    HouseholdBars: ({ household }: { readonly household: string }) =>
-      createElement(Mark, { testID: `bars:${household}` }),
+    HouseholdBars: ({ household }: { readonly household: { readonly id: string } }) =>
+      createElement(Mark, { testID: `bars:${household.id}` }),
   }
 })
 
 const en = catalogs.en
 const t = createTranslator('en')
 
-const own: Household = {
-  ...households.own,
-  country: 'CZ',
-  timezone: 'Europe/Prague',
-  base_currency: 'CZK',
-  locale: 'cs',
-  my_role: 'owner',
-  my_grants: { dashboard: 'view', tasks: 'manage' },
-  entitlement: { state: 'active', can_write: true },
-}
-const summary = (household: { id: string; name: string }): HouseholdSummary => ({
-  ...household,
-  entitlement: { state: 'active' },
-})
+const own = householdOf({ my_role: 'owner', my_grants: { dashboard: 'view', tasks: 'manage' } })
 
 const route = `GET /households/${ids.household}`
 type Answer = () => Response | Promise<Response>
@@ -116,7 +99,7 @@ function Frame({
 }
 
 /** The frame of the fixtures' household, whose own address the server answers with `answer`. */
-async function opened(answer: Answer, others: readonly HouseholdSummary[] = [summary(own)]) {
+async function opened(answer: Answer, others: readonly HouseholdSummary[] = [summaryOf(own)]) {
   const api = answering({ [route]: answer, 'GET /households': () => json(200, { items: others }) })
   await render(<Frame api={api} />)
   return api
@@ -201,7 +184,7 @@ describe('a household’s frame, while its household is not read', () => {
     let gone = false
     const api = answering({
       [route]: () => (gone ? problem(404, 'not_found') : json(200, own)),
-      'GET /households': () => json(200, { items: [summary(own)] }),
+      'GET /households': () => json(200, { items: [summaryOf(own)] }),
     })
     const queries = testQueries()
     await render(
@@ -235,7 +218,7 @@ describe('a household’s frame, once its household is read', () => {
     await drawn()
     const frame = screen.getByTestId('household-frame')
     const order = elementsOf(frame).map((element) => String(element.props.testID))
-    // The sync group's bars first, told whose they are; the screens under them.
+    // The household's bars first, told whose they are; the screens under them.
     expect(order.indexOf(`bars:${ids.household}`)).toBeGreaterThan(-1)
     expect(order.indexOf(`bars:${ids.household}`)).toBeLessThan(order.indexOf('inside'))
     expect(screen.getByTestId(`inside:name:${households.own.name}`)).toBeOnTheScreen()
@@ -245,7 +228,7 @@ describe('a household’s frame, once its household is read', () => {
   it('takes the top of the device for the bars, so no screen under it does', async () => {
     const api = answering({
       [route]: () => json(200, own),
-      'GET /households': () => json(200, { items: [summary(own)] }),
+      'GET /households': () => json(200, { items: [summaryOf(own)] }),
     })
     await render(
       <SafeAreaProvider
@@ -337,7 +320,7 @@ describe('a household’s frame, once its household is read', () => {
 })
 
 describe('the notice that a link changed the household', () => {
-  const others = [summary(own), summary(households.other)]
+  const others = [summaryOf(own), summaryOf(households.other)]
   const back = t('shell.switched.back', { household: households.other.name })
 
   /** A link arrives for the fixtures' household while the other one is on screen. */
@@ -382,11 +365,8 @@ describe('the notice that a link changed the household', () => {
 
   // One they have left since is named to nobody, and one suspended since opens no household.
   it.each([
-    ['is theirs no longer', [summary(own)]],
-    [
-      'the platform has suspended',
-      [summary(own), { ...households.other, entitlement: { state: 'suspended' as const } }],
-    ],
+    ['is theirs no longer', [summaryOf(own)]],
+    ['the platform has suspended', [summaryOf(own), summaryOf(households.other, 'suspended')]],
   ])('names no household that %s', async (_, list) => {
     arrive()
     await opened(() => json(200, own), list)

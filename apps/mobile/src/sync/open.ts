@@ -201,10 +201,16 @@ async function start(
   { member, household, problems, credential, api }: OpenOptions,
   one: () => Shared,
 ): Promise<Replica> {
+  // A sign-in that ended before the note was asked for: nothing is noted for it. Its member's
+  // notes were marked as leaving already, and one made now would be marked by nobody, a replica
+  // said to be kept that never was, until that member's sign-in ended here again.
+  if (one().gone) throw new Error('the sign-in this replica was opened under has ended')
   if (!(await claimReplica(member, household, removal))) {
     throw new Error('what an ended sign-in left of this replica could not be removed')
   }
   one().claimed = true
+  // And one that ended while the note waited its turn: the note is marked as leaving after it,
+  // in turn, and removed as every other of its member's is (databases.ts).
   if (one().gone) throw new Error('the sign-in this replica was opened under has ended')
   const replica = await openReplica({
     dbFilename: replicaDatabase(member, household),

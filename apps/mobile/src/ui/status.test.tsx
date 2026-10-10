@@ -4,12 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { controls, statusGlyphs, type StatusId } from '@household/icons'
 import { catalogs } from '@household/i18n'
 import { nativeThemes, type ColorName } from '@household/tokens/native'
-import { act, screen, userEvent, within, type RenderResult } from '@testing-library/react-native'
-import type { ReactElement } from 'react'
-import { Animated, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import { act, screen, userEvent, within } from '@testing-library/react-native'
+import { Animated } from 'react-native'
 import type { TestInstance } from 'test-renderer'
-import { elementsOf, expectAccessible, nameOf, statusTestID } from '../test/a11y.ts'
-import { render, TestProviders } from '../test/render.tsx'
+import { drawingsOf, elementsOf, expectAccessible, nameOf, statusTestID } from '../test/a11y.ts'
+import { render, styleOf } from '../test/render.tsx'
 import * as announcer from './announce.ts'
 import { Banner, type BannerTone } from './Banner.tsx'
 import { Button } from './Button.tsx'
@@ -33,23 +32,9 @@ const words = {
 
 const statuses = Object.keys(statusGlyphs) as StatusId[]
 
-function styleOf(element: TestInstance): ViewStyle {
-  return StyleSheet.flatten(element.props.style as StyleProp<ViewStyle>)
-}
-
-/** The drawings under `element`: every glyph and illustration. */
-function drawings(element: TestInstance): TestInstance[] {
-  return elementsOf(element).filter((inner) => inner.type === 'RNSVGSvgView')
-}
-
 /** Whether `element` draws the kit's illustration, by its frame. */
 function isIllustration(element: TestInstance): boolean {
   return element.props.vbWidth === 200 && element.props.vbHeight === 140
-}
-
-/** Draws `ui` where `view` drew what it did, inside the same providers: the owner drew again. */
-async function redraw(view: RenderResult, ui: ReactElement): Promise<void> {
-  await view.rerender(<TestProviders>{ui}</TestProviders>)
 }
 
 /** Moves the test's clock on, and draws what became due. */
@@ -76,7 +61,7 @@ describe('a status', () => {
     for (const theme of ['light', 'dark'] as const) {
       const view = await render(<StatusMark status={status} />, { theme })
       const mark = screen.getByTestId(statusTestID(status))
-      const [glyph] = drawings(mark)
+      const [glyph] = drawingsOf(mark)
       // The token is the status's own, whose pair on each ground is declared and tested.
       expect(glyph?.props.color).toBe(nativeThemes[theme].color[statusGlyphs[status].token])
       expect(within(mark).getByText(en[statusGlyphs[status].labelKey])).toBeOnTheScreen()
@@ -130,8 +115,8 @@ describe('the sync mark', () => {
     expectAccessible()
 
     // A sync that finished in time was never shown, and one that starts again waits again.
-    await redraw(view, <SyncMark state="pending" />)
-    await redraw(view, <SyncMark state="syncing" />)
+    await view.rerender(<SyncMark state="pending" />)
+    await view.rerender(<SyncMark state="syncing" />)
     expect(mark('syncing')).toBeNull()
   })
 
@@ -156,9 +141,9 @@ describe('the sync mark', () => {
     await advance(800)
     expect(mark('syncing')).not.toBeNull()
     // No timer has run since: withdrawn and drawn again a moment later, it would be gone here.
-    await redraw(view, <SyncMark state="syncing" since={Date.now() - 800} />)
+    await view.rerender(<SyncMark state="syncing" since={Date.now() - 800} />)
     expect(mark('syncing')).not.toBeNull()
-    await redraw(view, <SyncMark state="syncing" />)
+    await view.rerender(<SyncMark state="syncing" />)
     expect(mark('syncing')).not.toBeNull()
   })
 
@@ -167,7 +152,7 @@ describe('the sync mark', () => {
     const view = await render(<SyncMark state="syncing" since={Date.now() - 5000} />)
     expect(mark('syncing')).not.toBeNull()
     await advance(1000)
-    await redraw(view, <SyncMark state="syncing" since={Date.now()} />)
+    await view.rerender(<SyncMark state="syncing" since={Date.now()} />)
     expect(mark('syncing')).toBeNull()
     await advance(800)
     expect(mark('syncing')).not.toBeNull()
@@ -177,7 +162,7 @@ describe('the sync mark', () => {
     jest.useFakeTimers()
     const view = await render(<SyncMark state="pending" />)
     await advance(10_000)
-    await redraw(view, <SyncMark state="syncing" since={Date.now() - 1000} />)
+    await view.rerender(<SyncMark state="syncing" since={Date.now() - 1000} />)
     expect(mark('syncing')).not.toBeNull()
   })
 
@@ -267,7 +252,7 @@ describe('a banner', () => {
         expect(within(banner).getByText(words.reason)).toBeOnTheScreen()
         // The tone's own colour is its rule's, and never the sentence's ink.
         expect(styleOf(banner).borderStartColor).toBe(nativeThemes[theme].color[rules[tone]])
-        expect(drawings(banner)).toHaveLength(1)
+        expect(drawingsOf(banner)).toHaveLength(1)
         expectAccessible()
         await view.unmount()
       }
@@ -321,15 +306,13 @@ describe('a banner', () => {
         {words.reason}
       </Banner>,
     )
-    await redraw(
-      view,
+    await view.rerender(
       <Banner tone="warning" announce actions={<Button>{words.retry}</Button>}>
         {words.reason}
       </Banner>,
     )
     expect(said).toHaveBeenCalledTimes(1)
-    await redraw(
-      view,
+    await view.rerender(
       <Banner tone="warning" announce>
         {words.sentence}
       </Banner>,
@@ -351,8 +334,7 @@ describe('a banner', () => {
     const onDismiss = jest.fn()
     const view = await render(<Banner tone="info">{words.reason}</Banner>)
     expect(screen.queryByRole('button')).toBeNull()
-    await redraw(
-      view,
+    await view.rerender(
       <Banner tone="info" onDismiss={onDismiss}>
         {words.reason}
       </Banner>,
@@ -368,7 +350,7 @@ describe('the offline bar', () => {
     await render(<OfflineBar />)
     const bar = screen.getByTestId('offline-bar')
     expect(within(bar).getByText(en['ui.offline.bar'])).toBeOnTheScreen()
-    const [glyph] = drawings(bar)
+    const [glyph] = drawingsOf(bar)
     expect(glyph?.props.color).toBe(nativeThemes.light.color['status-offline'])
     expectAccessible()
   })
@@ -377,10 +359,10 @@ describe('the offline bar', () => {
     const view = await render(<OfflineBar />)
     expect(said.mock.calls).toEqual([[en['ui.offline.bar']]])
     expect(saidNow).not.toHaveBeenCalled()
-    await redraw(view, <OfflineBar />)
+    await view.rerender(<OfflineBar />)
     expect(said).toHaveBeenCalledTimes(1)
     // One bar, whose words change where it stands.
-    await redraw(view, <OfflineBar sentence={words.receiving} />)
+    await view.rerender(<OfflineBar sentence={words.receiving} />)
     expect(screen.getByText(words.receiving)).toBeOnTheScreen()
     expect(said.mock.calls).toEqual([[en['ui.offline.bar']], [words.receiving]])
   })
@@ -453,14 +435,14 @@ describe('the teaching empty state', () => {
 
   it('draws its illustration as decoration at 100 % text', async () => {
     await render(empty)
-    const pictures = drawings(screen.getByTestId('empty-state')).filter(isIllustration)
+    const pictures = drawingsOf(screen.getByTestId('empty-state')).filter(isIllustration)
     expect(pictures).toHaveLength(1)
     expect(pictures[0]?.props.accessibilityElementsHidden).toBe(true)
   })
 
   it('gives the illustration’s room to the sentence at 200 % text', async () => {
     await render(empty, { scale: 2 })
-    expect(drawings(screen.getByTestId('empty-state')).filter(isIllustration)).toEqual([])
+    expect(drawingsOf(screen.getByTestId('empty-state')).filter(isIllustration)).toEqual([])
     expect(screen.getByText(words.sentence)).toBeOnTheScreen()
     expectAccessible()
   })

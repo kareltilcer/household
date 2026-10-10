@@ -23,7 +23,7 @@ import type { RecordedOutcome, Replica } from '@household/sync'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { ThemeScope, useTheme } from '../../display/DisplayProvider.tsx'
-import { opening, useHouseholds } from '../../household/data.ts'
+import { opening, useHousehold, useHouseholds } from '../../household/data.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import { useSession } from '../../session/context.ts'
 import type { Describers } from '../../sync/describe.ts'
@@ -428,11 +428,13 @@ function LiveLines({ household }: { readonly household: string }) {
   const theme = useTheme()
   const { replica, online, receiving } = useSync()
   const waiting = useInbox()
+  // The household's own answer, which the provider above reads too: asked once for both.
+  const read = useHousehold(household)
   const told = receiving === null ? 'unknown' : receiving ? 'yes' : 'no'
   return (
     <View style={{ gap: theme.space['space-1'] }}>
       {/* The household's own bar, as its screens have it above them. */}
-      <HouseholdBars household={household} />
+      {read.status === 'read' ? <HouseholdBars household={read.household} /> : null}
       <Line of="replica" stands={replica.phase}>
         {sample(`The replica: ${replica.phase}`)}
       </Line>

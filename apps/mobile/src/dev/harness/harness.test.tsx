@@ -16,11 +16,12 @@ import { storageKey } from '../../display/modes.ts'
 import {
   elementsOf,
   expectAccessible,
+  isDrawing,
   neverDisabled,
   statusTestID,
   violations,
 } from '../../test/a11y.ts'
-import { render } from '../../test/render.tsx'
+import { render, root } from '../../test/render.tsx'
 import * as announcer from '../../ui/announce.ts'
 import { Button } from '../../ui/Button.tsx'
 import { dataStates, treatments, type DataState, type Treatment } from '../../ui/states.ts'
@@ -121,11 +122,6 @@ describe('the harness’s model', () => {
   })
 })
 
-function root(): TestInstance {
-  if (screen.root === null) throw new Error('nothing is drawn')
-  return screen.root
-}
-
 function cell(body: BodyId, state: DataState, theme: CellTheme = 'light'): TestInstance {
   return screen.getByTestId(cellId(body, state, theme))
 }
@@ -142,11 +138,7 @@ function cells(): TestInstance[] {
 
 /** Whether `element` draws the kit's illustration, by its frame. */
 function isIllustration(element: TestInstance): boolean {
-  return (
-    element.type === 'RNSVGSvgView' &&
-    element.props.vbWidth === 200 &&
-    element.props.vbHeight === 140
-  )
+  return isDrawing(element) && element.props.vbWidth === 200 && element.props.vbHeight === 140
 }
 
 /** What a cell draws, as one of the five kinds a treatment has, read off the cell itself. */

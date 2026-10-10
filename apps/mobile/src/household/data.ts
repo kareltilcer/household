@@ -22,6 +22,8 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
+import { couldNotBeRead } from '../api/query.ts'
+import { sameId, useSession } from '../session/context.ts'
 import type { DataState } from '../ui/states.ts'
 
 export type HouseholdSummary = components['schemas']['HouseholdSummary']
@@ -84,9 +86,10 @@ export function useHouseholds(): UseQueryResult<HouseholdSummary[]> {
 
 /**
  * The household `household` names, as its member reads it. A household the member is not in, one
- * that is `suspended`, and an id that is none answer `404` alike, and read the same here.
+ * that is `suspended`, and an id that is none answer `404` alike, and read the same here. It is
+ * asked through `useHousehold` alone, which says for whom.
  */
-export function householdQuery(api: ApiClient, household: string) {
+function householdQuery(api: ApiClient, household: string) {
   return queryOptions({
     queryKey: householdKey(household),
     queryFn: async ({ signal }) =>
@@ -119,8 +122,17 @@ export type HouseholdRead =
   | { readonly status: 'read'; readonly household: Household }
 
 /**
- * The household an address names, as its frame draws it. An id that is no UUID asks the server
- * nothing: no household has such an address.
+ * The household an address names, as its member reads it: the app's one reading of it. The
+ * frame its screens stand in draws by it and hands it on, to the screens under it and to the
+ * bar above them (shell/HouseholdFrame.tsx). The replica's provider stands above the frame and
+ * opens nothing on an address's word, so it reads it here too, by the same key and as the frame
+ * does, and the household is asked for once. Whatever else needs it is handed it: a reader that
+ * arrived after the answer would ask for it again.
+ *
+ * It is asked for a member, of an id that can be a household's. Anybody else is answered
+ * nothing but a refusal, so nothing is asked for them and nothing kept is theirs: it is being
+ * read, for as long as nobody is signed in. An id that is no UUID asks the server nothing
+ * either: no household has such an address.
  *
  * The server's `404` is its last word, whether or not the device kept the household from when
  * it was its member's, and it stands while the household is asked for again with nothing kept
@@ -130,8 +142,10 @@ export type HouseholdRead =
  */
 export function useHousehold(household: string): HouseholdRead {
   const api = useApi()
+  const { state } = useSession()
+  const member = state.status === 'member'
   const named = isUuid(household)
-  const read = useQuery({ ...householdQuery(api, household), enabled: named })
+  const read = useQuery({ ...householdQuery(api, household), enabled: member && named })
   const refused = problemIn(read.error)?.status === 404
   const [wasRefused, setWasRefused] = useState(false)
   const asking = read.data === undefined && read.status === 'pending'
@@ -141,12 +155,9 @@ export function useHousehold(household: string): HouseholdRead {
     void refetch()
   }, [refetch])
   if (!named || refused || (wasRefused && asking)) return { status: 'gone' }
+  if (!member) return { status: 'reading' }
   if (read.data !== undefined) return { status: 'read', household: read.data }
-  // A read asked for with no connection may wait for one, neither loading nor failed: to a
-  // member it could not be made, and is said so.
-  return read.isError || read.fetchStatus === 'paused'
-    ? { status: 'unread', retry }
-    : { status: 'reading' }
+  return couldNotBeRead(read) ? { status: 'unread', retry } : { status: 'reading' }
 }
 
 /** Where the household a member was last in is kept, on this device, for each member. */
@@ -202,11 +213,7 @@ export function opening(
   last: string | null,
 ): HouseholdSummary | undefined {
   const open = households.filter((household) => household.entitlement?.state !== 'suspended')
-  return (
-    open.find((household) => household.id.toLowerCase() === last?.toLowerCase()) ??
-    open[0] ??
-    households[0]
-  )
+  return open.find((household) => sameId(household.id, last)) ?? open[0] ?? households[0]
 }
 
 /** What a read tells of itself, as TanStack Query holds it. */
@@ -221,12 +228,10 @@ export interface Read {
  * read that failed and one that cannot be made for want of a connection are the same to a
  * member: the body could not be read, and no skeleton says otherwise. With something kept it
  * is drawn, and `offline` where it is as it was last read. `online` is the device's own word
- * for it (sync's `useOnline`).
+ * for it (`useOnline`, api/query.ts).
  */
 export function readState(read: Read, online: boolean, empty = false): DataState {
-  if (read.data === undefined) {
-    return read.isError || read.fetchStatus === 'paused' ? 'error' : 'loading'
-  }
+  if (read.data === undefined) return couldNotBeRead(read) ? 'error' : 'loading'
   if (empty) return 'empty'
   return online ? 'populated' : 'offline'
 }

@@ -10,6 +10,7 @@
 import { useState, type Ref } from 'react'
 import { Pressable, View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
+import { useFocusRing } from './focus.ts'
 import { Radio } from './Choice.tsx'
 import { Field, useAttached, useControlStyle, type FieldProps } from './Field.tsx'
 import { BaseIcon } from './Icon.tsx'
@@ -56,9 +57,13 @@ export function Select({
 }: SelectProps) {
   const theme = useTheme()
   const [open, setOpen] = useState(false)
-  const [focused, setFocused] = useState(false)
+  const focus = useFocusRing()
   const invalid = error !== undefined
-  const control = useControlStyle({ invalid, focused, fixed: disabled ? 'disabled' : undefined })
+  const control = useControlStyle({
+    invalid,
+    ring: focus.ring,
+    fixed: disabled ? 'disabled' : undefined,
+  })
   const opener = useRefusable(invalid)
   const attach = useAttached(opener, ref)
   const chosen = options.find((option) => option.value === value)
@@ -81,12 +86,8 @@ export function Select({
             onPress={() => {
               setOpen(true)
             }}
-            onFocus={() => {
-              setFocused(true)
-            }}
-            onBlur={() => {
-              setFocused(false)
-            }}
+            onFocus={focus.onFocus}
+            onBlur={focus.onBlur}
             style={[
               control,
               {

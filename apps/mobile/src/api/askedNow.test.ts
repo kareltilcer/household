@@ -1,40 +1,22 @@
 // Every write that is no part of a replica is asked at once, connection or none (D-164, D-170):
 // the sources say so, each file as it is written. The web holds its screens to the same by the
 // same reading (apps/web/src/api/api.test.ts); what `askedNow` does is api.test.tsx's.
-import { describe, expect, it, jest } from '@jest/globals'
-
-/** Node's own, asked for by name: the app's sources know nothing of Node, and its tests read them. */
-interface Files {
-  readonly readdirSync: (
-    path: string,
-    options: { readonly recursive: true; readonly encoding: 'utf8' },
-  ) => string[]
-  readonly readFileSync: (path: string, encoding: 'utf8') => string
-}
-
-const files = jest.requireActual<Files>('node:fs')
+import { describe, expect, it } from '@jest/globals'
+import { sourcesIn } from '../test/sources.ts'
 
 /**
  * The directories whose writes are no replica's: the session's, push's, a household's own
  * answer, what stands beside them, and the dev screens' sign-in, which is the one screen of
- * this build that signs anybody in. Jest runs in apps/mobile.
+ * this build that signs anybody in.
  */
-const directories = [
+const sources = sourcesIn([
   'src/session',
   'src/push',
   'src/household',
   'src/links',
   'src/update',
   'src/dev/signin',
-]
-
-const sources = directories.flatMap((directory) =>
-  files
-    .readdirSync(directory, { recursive: true, encoding: 'utf8' })
-    .map((name) => `${directory}/${name.replaceAll('\\', '/')}`)
-    .filter((path) => /\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path))
-    .map((path) => ({ path, source: files.readFileSync(path, 'utf8') })),
-)
+])
 
 describe('a write that must not wait', () => {
   // A device registered for notifications, or its registration removed, when a connection

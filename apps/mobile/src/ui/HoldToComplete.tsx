@@ -44,6 +44,7 @@ import {
 } from 'react-native'
 import { Circle, Svg } from 'react-native-svg'
 import { useDisplay, useTarget, useTheme } from '../display/DisplayProvider.tsx'
+import { useFocusRing } from './focus.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { announce as say } from './announce.ts'
 import { BaseIcon } from './Icon.tsx'
@@ -138,7 +139,7 @@ export function HoldToComplete({ label, onComplete }: HoldToCompleteProps) {
   // Where the ring stands on the screen, which a finger's leaving is told against.
   const origin = useRef({ x: 0, y: 0 })
   // A keyboard's focus, or a switch's: a touch gives none, so this is drawn for them alone.
-  const [focused, setFocused] = useState(false)
+  const focus = useFocusRing()
 
   useEffect(() => {
     mounted.current = true
@@ -267,24 +268,13 @@ export function HoldToComplete({ label, onComplete }: HoldToCompleteProps) {
         onAccessibilityTap={activate}
         // A press that reaches the button is no finger's: the ring is over all of it.
         onPress={activate}
-        onFocus={() => {
-          setFocused(true)
-        }}
-        onBlur={() => {
-          setFocused(false)
-        }}
+        onFocus={focus.onFocus}
+        onBlur={focus.onBlur}
         style={{
           minWidth: target,
           minHeight: target,
           borderRadius: theme.radii['radius-full'],
-          ...(focused
-            ? {
-                outlineWidth: 2,
-                outlineStyle: 'solid',
-                outlineOffset: 2,
-                outlineColor: theme.color.focus,
-              }
-            : {}),
+          ...focus.ring,
         }}
       >
         <View

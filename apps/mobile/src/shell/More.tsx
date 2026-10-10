@@ -16,14 +16,16 @@
 // has a module's screens yet, so today the list is the way out alone, and says nothing of what
 // is not there.
 import { router } from 'expo-router'
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
-import { inHousehold } from '../app/paths.ts'
+import { inHousehold, paths } from '../app/paths.ts'
 import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
 import type { Household, ModuleKey } from '../household/data.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { homeOf, modules, type ModuleRegistry } from '../modules/registry.ts'
 import { Badge } from '../ui/Badge.tsx'
+import { Button } from '../ui/Button.tsx'
+import { useFocusRing } from '../ui/focus.ts'
 import { BaseIcon, ModuleIcon } from '../ui/Icon.tsx'
 import { List } from '../ui/ListRow.tsx'
 import { Text } from '../ui/Text.tsx'
@@ -50,7 +52,7 @@ function NavRow({ to, icon, trailing, children, testID }: NavRowProps) {
   const theme = useTheme()
   const target = useTarget()
   // A keyboard's focus, or a switch's: a touch gives none.
-  const [focused, setFocused] = useState(false)
+  const focus = useFocusRing('inside')
   return (
     <Pressable
       testID={testID}
@@ -60,12 +62,8 @@ function NavRow({ to, icon, trailing, children, testID }: NavRowProps) {
       onPress={() => {
         router.navigate(to)
       }}
-      onFocus={() => {
-        setFocused(true)
-      }}
-      onBlur={() => {
-        setFocused(false)
-      }}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
       style={({ pressed }) => ({
         alignSelf: 'stretch',
         minHeight: target,
@@ -76,14 +74,7 @@ function NavRow({ to, icon, trailing, children, testID }: NavRowProps) {
         paddingHorizontal: theme.space['space-1'],
         borderRadius: theme.radii['radius-control'],
         backgroundColor: pressed ? theme.color['surface-sunken'] : 'transparent',
-        ...(focused
-          ? {
-              outlineWidth: 2,
-              outlineStyle: 'solid' as const,
-              outlineOffset: -2,
-              outlineColor: theme.color.focus,
-            }
-          : {}),
+        ...focus.ring,
       })}
     >
       {icon}
@@ -173,6 +164,25 @@ export function More() {
       />
       <View style={{ alignItems: 'flex-start' }}>
         <SignOut />
+        {
+          // The dev screens' way in for whoever is signed in, in a build that holds them
+          // (src/dev/gate.ts), as the sign-in screen has one for a visitor: the sync screen
+          // opens a real replica only for a member, and nothing else of a member's leads
+          // there by a press. The condition is written out, as each of their routes writes
+          // it, so that a store's build holds neither the control nor a word of it. Its name
+          // is its address, which is data.
+          __DEV__ || process.env.EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS === '1' ? (
+            <Button
+              variant="ghost"
+              testID="more:dev"
+              onPress={() => {
+                router.push(paths.dev.path)
+              }}
+            >
+              {paths.dev.path}
+            </Button>
+          ) : null
+        }
       </View>
     </HouseholdScreen>
   )

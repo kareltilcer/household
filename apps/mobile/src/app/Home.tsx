@@ -10,6 +10,7 @@
 // household.
 import { Redirect } from 'expo-router'
 import { useState } from 'react'
+import { couldNotBeRead } from '../api/query.ts'
 import { opening, useHouseholds, useLastHousehold } from '../household/data.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useSession, type Me } from '../session/context.ts'
@@ -53,7 +54,7 @@ function MemberHome({ me }: { readonly me: Me }) {
   const last = useLastHousehold(me.id)
   if (households.data === undefined) {
     // A read that waits for a connection could not be made, to a member: it is said so.
-    if (!households.isError && households.fetchStatus !== 'paused') return <Waiting />
+    if (!couldNotBeRead(households)) return <Waiting />
     return (
       <Unread
         title={t('shell.households.error.title')}

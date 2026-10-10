@@ -4,10 +4,13 @@
 // accessibility rules over what was drawn (`expectAccessible`, a11y.ts).
 import type { DisplayLocale } from '@household/i18n'
 import type { Theme } from '@household/tokens/native'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render as draw, type RenderResult } from '@testing-library/react-native'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { render as draw, screen, type RenderResult } from '@testing-library/react-native'
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import type { TestInstance } from 'test-renderer'
+import { testQueries } from '../api/testing.ts'
 import { DisplayProvider, useDisplay } from '../display/DisplayProvider.tsx'
 import type { MotionPreference } from '../display/modes.ts'
 import { I18nProvider } from '../i18n/I18nProvider.tsx'
@@ -57,18 +60,9 @@ export function TestProviders({
   motion = 'system',
   languages = ['en'],
 }: DrawOptions & { readonly children: ReactNode }) {
-  // A client of the test's own: nothing one test read is another's, and nothing is asked twice.
-  // Nothing is collected on a timer either, a write's entry no more than a read's: a timer
-  // left running keeps a test's process from ending.
-  const [queries] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: { retry: false, gcTime: Infinity },
-          mutations: { gcTime: Infinity },
-        },
-      }),
-  )
+  // A client of the test's own: nothing one test read is another's, nothing is asked twice, and
+  // nothing is held by a timer once the test has ended (api/testing.ts).
+  const [queries] = useState(testQueries)
   return (
     <SafeAreaProvider initialMetrics={metrics}>
       <DisplayProvider preferences={{ theme, motion }}>
@@ -86,9 +80,36 @@ export function TestProviders({
   )
 }
 
-/** Draws `ui` inside the app's providers, in the modes `options` names. */
+/**
+ * Draws `ui` inside the app's providers, in the modes `options` names. What the test draws in
+ * its place afterwards (`rerender`) stands in the same providers, as they were: its owner drew
+ * again, and what it stands in did not.
+ */
 export async function render(ui: ReactElement, options: DrawOptions = {}): Promise<RenderResult> {
   drawn.scale = options.scale ?? 1
   drawn.locale = options.locale ?? 'en'
-  return draw(<TestProviders {...options}>{ui}</TestProviders>)
+  function Around({ children }: { readonly children: ReactNode }) {
+    return <TestProviders {...options}>{children}</TestProviders>
+  }
+  return draw(ui, { wrapper: Around })
+}
+
+/** Everything the test drew. */
+export function root(): TestInstance {
+  if (screen.root === null) throw new Error('nothing is drawn')
+  return screen.root
+}
+
+/**
+ * The style an element draws with, a pressable's as it is when nothing presses it: the element
+ * itself, or the one a `testID` names.
+ */
+export function styleOf(target: TestInstance | string): ViewStyle {
+  const element = typeof target === 'string' ? screen.getByTestId(target) : target
+  const style: unknown = element.props.style
+  return StyleSheet.flatten(
+    (typeof style === 'function'
+      ? (style as (state: { readonly pressed: boolean }) => unknown)({ pressed: false })
+      : style) as StyleProp<ViewStyle>,
+  )
 }

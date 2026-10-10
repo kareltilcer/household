@@ -3,8 +3,8 @@
 // theme and motion in their account's settings (item 29) and the text size in the device's; the
 // pseudo-locale and a held scale are chosen here alone. Its words are fixtures.
 //
-// Each control is a button that goes to its next value and says the one in force: the fields a
-// chooser is made of are another group's, and the end-to-end flow presses these by `testID`.
+// Each control is a button that goes to its next value and says the one in force: one press a
+// value, which the end-to-end flow makes by `testID`, where a chooser would be a sheet to open.
 import { locales, pseudoLocale, type DisplayLocale } from '@household/i18n'
 import { useEffect, useState } from 'react'
 import { View } from 'react-native'

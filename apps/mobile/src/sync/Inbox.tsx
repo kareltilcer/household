@@ -17,18 +17,17 @@
 // merge asks nothing, and is put away there as anywhere: that is the member's own note that
 // they have seen it, and gives no change up.
 import type { RecordedOutcome } from '@household/sync'
-import { useLocalSearchParams } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
-import type { Household } from '../household/data.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { useHouseholdShown } from '../shell/HouseholdContext.tsx'
+import { HouseholdScreen } from '../shell/HouseholdScreen.tsx'
 import { announce, focusOn } from '../ui/announce.ts'
 import { Button } from '../ui/Button.tsx'
 import { ModuleChip } from '../ui/Chip.tsx'
 import { EmptyState } from '../ui/EmptyState.tsx'
 import { List, ListRow } from '../ui/ListRow.tsx'
-import { Screen } from '../ui/Screen.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import type { DataState } from '../ui/states.ts'
@@ -40,7 +39,6 @@ import {
   type Reading,
   type Words,
 } from './describe.ts'
-import { useOwn } from './household.ts'
 import { KeptLoser, overrode } from './KeptLoser.tsx'
 import { useInbox, useReplica, useSync, type ReplicaState } from './ReplicaProvider.tsx'
 import { Resolver } from './Resolver.tsx'
@@ -163,24 +161,35 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
     openedId === null ? undefined : entries?.find((entry) => entry.mutation_id === openedId)
 
   // The row a sheet was opened from is gone once its answer is given, and the focus the sheet
-  // gave back went with it: it is put on the list's own place, where the next row is. Not
-  // before the sheet has gone from the screen, which would take the focus back from under it;
-  // and by asking the replica whether the answer still waits, since the list drawn here hears
-  // of it a moment later on one platform and a moment sooner on the other.
+  // gave back went with it: it is put on the list's own place, where the next row is, or,
+  // where that was the last row, on the sentence that says nothing waits. Not before the sheet
+  // has gone from the screen, which would take the focus back from under it; by asking the
+  // replica whether the answer still waits, since a sheet closed with no answer leaves its row
+  // and the focus on it; and not before the list drawn here has heard, which it does a moment
+  // later on one platform and a moment sooner on the other: the place the focus would be put
+  // on is what stands once the row has left.
   const place = useRef<View>(null)
   const answering = useRef<string | null>(null)
+  const [answered, setAnswered] = useState<string | null>(null)
   const closed = () => {
     const id = answering.current
     answering.current = null
     if (id === null || replica === undefined) return
     replica.inbox().then(
       (waiting) => {
-        if (!waiting.some((entry) => entry.mutation_id === id)) focusOn(place)
+        if (!waiting.some((entry) => entry.mutation_id === id)) setAnswered(id)
       },
       // A replica that was closed meanwhile has no list to put the focus on.
       () => undefined,
     )
   }
+  useEffect(() => {
+    if (answered === null || entries === undefined) return
+    if (entries.some((entry) => entry.mutation_id === answered)) return
+    // Once: a row the replica sends by itself later takes the focus from nowhere.
+    setAnswered(null)
+    focusOn(place)
+  }, [answered, entries])
 
   const empty = !online
     ? t('sync.inbox.empty_offline')
@@ -224,7 +233,12 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
             ]}
           />
         }
-        empty={<EmptyState sentence={empty} />}
+        empty={
+          // The list's place once its last row has been answered: one thing to a screen reader.
+          <View ref={place} accessible testID="sync:inbox:empty">
+            <EmptyState sentence={empty} />
+          </View>
+        }
         texts={{
           error: {
             title: t('sync.inbox.error.title'),
@@ -254,7 +268,7 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
         {() => (
           <>
             {/* One thing to a screen reader, and where its focus is put once a row has left. */}
-            <View ref={place} accessible>
+            <View ref={place} accessible testID="sync:inbox:lead">
               <Text color="text-muted">{t('device.sync.inbox.lead')}</Text>
             </View>
             {/* Said where there is something to decide: a household that does not write reads. */}
@@ -295,24 +309,19 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
   )
 }
 
-/** The inbox over the household its address names, once that household has been read. */
-function Held({ household }: { readonly household: Household }) {
-  const setting = useSetting(household)
-  return <InboxView setting={setting} />
-}
-
 /**
- * The inbox's screen: its one title, and the inbox under it. The household's frame draws what
- * stands in a screen's place where the household could not be read or is not the member's
- * (shell/HouseholdFrame.tsx): this draws nothing of its own then.
+ * The inbox's screen, as every screen of a household stands (shell/HouseholdScreen.tsx): its
+ * one title, in the app bar, with the way back to where its member came from, and the inbox
+ * under it, over the household its frame read. The frame draws what stands in a screen's place
+ * where the household could not be read or is not the member's (shell/HouseholdFrame.tsx), so
+ * this is drawn for a household that was.
  */
 export function Inbox() {
   const t = useTranslate()
-  const { household } = useLocalSearchParams<{ household: string }>()
-  const own = useOwn(household)
+  const setting = useSetting(useHouseholdShown())
   return (
-    <Screen testID="route:sync" title={t('sync.inbox.title')}>
-      {own === undefined ? null : <Held household={own.household} />}
-    </Screen>
+    <HouseholdScreen title={t('sync.inbox.title')} back testID="route:sync">
+      <InboxView setting={setting} />
+    </HouseholdScreen>
   )
 }

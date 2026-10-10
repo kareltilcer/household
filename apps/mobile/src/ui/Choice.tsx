@@ -6,9 +6,10 @@
 // the reader's text is, and it would be a second target inside the row that is the first. What
 // is chosen is said by more than a colour: a check or a dash in the box, where the thumb
 // stands, a dot in the ring.
-import { useState, type ReactNode, type Ref } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { Pressable, View, type AccessibilityState } from 'react-native'
 import { useDisplay, useTarget, useTheme } from '../display/DisplayProvider.tsx'
+import { useFocusRing } from './focus.ts'
 import { BaseIcon } from './Icon.tsx'
 import { Text } from './Text.tsx'
 
@@ -43,7 +44,7 @@ function Row({
   const theme = useTheme()
   const target = useTarget()
   // A keyboard's focus, or a switch's: a touch gives none.
-  const [focused, setFocused] = useState(false)
+  const focus = useFocusRing()
   return (
     <Pressable
       ref={ref}
@@ -52,12 +53,8 @@ function Row({
       accessibilityState={{ ...state, ...(disabled ? { disabled: true } : {}) }}
       disabled={disabled}
       onPress={onPress}
-      onFocus={() => {
-        setFocused(true)
-      }}
-      onBlur={() => {
-        setFocused(false)
-      }}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
       style={{
         // The row is as wide as what it stands in: the press is the row's, not the mark's.
         alignSelf: 'stretch',
@@ -66,14 +63,7 @@ function Row({
         alignItems: 'center',
         gap: theme.space['space-15'],
         borderRadius: theme.radii['radius-control'],
-        ...(focused
-          ? {
-              outlineWidth: 2,
-              outlineStyle: 'solid',
-              outlineOffset: 2,
-              outlineColor: theme.color.focus,
-            }
-          : {}),
+        ...focus.ring,
       }}
     >
       {children}

@@ -4,45 +4,42 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { catalogs } from '@household/i18n'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { onlineManager } from '@tanstack/react-query'
 import { act, screen, waitFor } from '@testing-library/react-native'
 import { useState } from 'react'
 import { inHousehold } from '../app/paths.ts'
-import { answering, json, problem, testClient } from '../api/testing.ts'
+import { answering, json, testClient } from '../api/testing.ts'
 import type { Household } from '../household/data.ts'
-import type { SessionState } from '../session/context.ts'
 import { SessionFixture } from '../session/fixture.tsx'
+import { HouseholdFrame } from '../shell/HouseholdFrame.tsx'
 import { expectAccessible } from '../test/a11y.ts'
-import { households } from '../test/fixtures.ts'
+import { householdOf, households, summaryOf } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Text } from '../ui/Text.tsx'
-import { useOwn } from './household.ts'
 import { changesAtOnce, HouseholdBars } from './HouseholdBars.tsx'
-import { SyncFixture, type Sync } from './ReplicaProvider.tsx'
+import { ReplicaProvider, SyncFixture, type Sync } from './ReplicaProvider.tsx'
 import { standIn, type StandIn } from './standIn.ts'
 import { registry } from './sync.fixtures.ts'
 
 /** Where the router says the app is, as a test moves it. */
 const mockAt = { path: '/' }
 
-jest.mock('expo-router', () => ({ usePathname: () => mockAt.path }))
+// The router's own: where the app is, and what the frame's other parts ask of it.
+jest.mock('expo-router', () => ({
+  usePathname: () => mockAt.path,
+  useIsFocused: () => true,
+  router: { navigate: jest.fn(), replace: jest.fn() },
+  Redirect: () => null,
+}))
 
 const en = catalogs.en
 const id = households.own.id
 
 function home(canWrite: boolean): Household {
-  return {
-    ...households.own,
-    country: 'CZ',
-    timezone: 'Europe/Prague',
-    base_currency: 'CZK',
-    locale: 'cs-CZ',
-    my_role: 'member',
-    my_grants: {},
-    entitlement: canWrite
-      ? { state: 'active', can_write: true }
-      : { state: 'read_only', can_write: false },
-  }
+  return canWrite
+    ? householdOf()
+    : householdOf({ entitlement: { state: 'read_only', can_write: false } })
 }
 
 interface Stands {
@@ -53,19 +50,23 @@ interface Stands {
 /** Moves what the bars are drawn by, as the device and the sync service move it. */
 let move: (next: Partial<Stands>) => void = () => undefined
 
-function Drawn({ stand, first }: { readonly stand: StandIn; readonly first: Stands }) {
+interface DrawnProps {
+  readonly stand: StandIn
+  readonly first: Stands
+  /** The household, as its frame read it and hands it to the bars (shell/HouseholdFrame.tsx). */
+  readonly household: Household
+}
+
+function Drawn({ stand, first, household }: DrawnProps) {
   const [stands, setStands] = useState(first)
   move = (next) => {
     setStands((was) => ({ ...was, ...next }))
   }
   const sync: Sync = { replica: { phase: 'open', ...stand.opened }, ...stands }
-  // What the bars read too: a test waits for it, and then moves what they are drawn by.
-  const read = useOwn(id) !== undefined
   return (
     <SyncFixture value={sync}>
-      <HouseholdBars household={id} />
+      <HouseholdBars household={household} />
       <Text testID="under">{households.own.name}</Text>
-      {read ? <Text testID="read">{households.own.name}</Text> : null}
     </SyncFixture>
   )
 }
@@ -73,10 +74,6 @@ function Drawn({ stand, first }: { readonly stand: StandIn; readonly first: Stan
 interface BarsOptions extends Partial<Stands> {
   readonly writes?: boolean
   readonly at?: string
-  /** What the server answers for the household. Left out, the household. */
-  readonly answer?: () => Response
-  /** Who is signed in. Left out, the fixtures' member. */
-  readonly state?: SessionState
 }
 
 async function bars({
@@ -84,24 +81,11 @@ async function bars({
   receiving = true,
   writes = true,
   at = inHousehold.home(id),
-  answer,
-  state,
 }: BarsOptions = {}) {
   mockAt.path = at
   const stand = standIn({ registry })
-  const api = answering({ [`GET /households/${id}`]: answer ?? (() => json(200, home(writes))) })
-  await render(
-    <SessionFixture api={testClient(api.transport)} {...(state === undefined ? {} : { state })}>
-      <Drawn stand={stand} first={{ online, receiving }} />
-    </SessionFixture>,
-  )
-  // Whatever stands there from here on, the household had been read first, where it can be.
-  if (answer === undefined && state === undefined) {
-    await waitFor(() => {
-      expect(screen.getByTestId('read')).toBeOnTheScreen()
-    })
-  }
-  return { stand, api }
+  await render(<Drawn stand={stand} first={{ online, receiving }} household={home(writes)} />)
+  return { stand }
 }
 
 const bar = () => screen.queryByTestId('offline-bar')
@@ -184,50 +168,49 @@ describe('the bar above a household’s screens', () => {
     expect(bar()).toBeNull()
   })
 
-  it('has no bar of its own for a household that could not be read, or that is not the member’s', async () => {
-    const { api } = await bars({ online: false, answer: () => problem(404, 'not_found') })
-    await waitFor(() => {
-      expect(api.asked).toHaveLength(1)
-    })
-    expect(bar()).toBeNull()
-  })
-
-  it('has none for anybody who is not signed in, and asks the server nothing for them', async () => {
-    const { api, stand } = await bars({ online: false, state: { status: 'visitor' } })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20))
-    })
-    expect(bar()).toBeNull()
-    expect(api.asked).toEqual([])
-    expect(stand.asked).toEqual([])
-  })
-
-  it('reads a bar that was there before the household was first drawn in its place too', async () => {
-    const announce = jest.spyOn(announcer, 'announce').mockImplementation(() => undefined)
-    let answer: (response: Response) => void = () => undefined
+  // The household's own answer is one reading (household/data.ts): the replica's provider and
+  // the frame ask for it together, and the bars are handed what the frame read. And the
+  // device's word for its connection reaches them through the provider, from the one place
+  // that hears it (api/query.ts).
+  it('is drawn by the household’s frame from what it read, which was asked for once, and by the device’s own word', async () => {
     mockAt.path = inHousehold.home(id)
-    const stand = standIn({ registry })
+    const route = `GET /households/${id}`
     const api = answering({
-      [`GET /households/${id}`]: () =>
-        new Promise<Response>((resolve) => {
-          answer = resolve
-        }),
+      [route]: () => json(200, home(true)),
+      'GET /households': () => json(200, { items: [summaryOf(households.own)] }),
     })
+    const stand = standIn({ registry })
     await render(
       <SessionFixture api={testClient(api.transport)}>
-        <Drawn stand={stand} first={{ online: false, receiving: null }} />
+        <ReplicaProvider household={id} open={() => Promise.resolve(stand.opened)}>
+          <HouseholdFrame household={id}>
+            <Text testID="under">{households.own.name}</Text>
+          </HouseholdFrame>
+        </ReplicaProvider>
       </SessionFixture>,
     )
     await waitFor(() => {
-      expect(api.asked).toHaveLength(1)
+      expect(screen.getByTestId('under')).toBeOnTheScreen()
     })
+    // Long enough for a second request to have left, had one been made.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(api.sent(route)).toHaveLength(1)
     expect(bar()).toBeNull()
-    await act(() => {
-      answer(json(200, home(true)))
+    try {
+      await act(() => {
+        onlineManager.setOnline(false)
+      })
+      await says(en['ui.offline.bar'])
+    } finally {
+      await act(() => {
+        onlineManager.setOnline(true)
+      })
+    }
+    await waitFor(() => {
+      expect(bar()).toBeNull()
     })
-    await says(en['ui.offline.bar'])
-    // It came with the household, not after it: nothing arrived under the member.
-    expect(announce).not.toHaveBeenCalled()
   })
 })
 
