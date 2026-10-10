@@ -298,7 +298,7 @@ with its runs of spaces folded (D-182), a page drawing two in a row as one.
 | The banner's announcement held back until the members are read, so that the line naming the owners does not change under a region that was just said | The state is what is announced, and holding it for a second read delays it for a line that only a member reads. Whether a screen reader says the whole again was not heard, the suite running none |
 | The entitlement's banner inside the page's landmark; a notice put away in one tab followed in another; one *Sign out* on the lockout | The offline bar stands where the banner does, above the landmark, and both are read on the way to it. A dismissal is this browser's and is read as the shell opens (D-180). The lockout's own way out is its content, and the navigation's is every screen's |
 | A `404` to keeping a household told apart, by its code, from one that says its member is in the household no longer | Both are `not_found`. The household read again says which: the notice gone, or the household's place taken by *not available* or the lockout |
-| One download at a time, on the invoices as on the exports; the download begun from `mutate`'s own callback | Each row's download reads its own file, and one that is answered while another is on its way is a second file saved. A download leads to no other screen: begun wherever its member is by then, it saves the file they pressed for |
+| One download at a time, on the invoices as on the exports; the download begun from `mutate`'s own callback | Holding the other rows while a link is read leaves the wait that matters, the one for the file's own answer: a second download begun before the first file has answered takes its place in the browser, and nothing tells a page when a file began. A frame for each file is a wider policy, and a new tab is declined above. Two presses inside one file's first byte are rare, the browser's own list says what it saved, and a third press brings the other (Consequences). A download leads to no other screen: begun wherever its member is by then, it saves the file they pressed for |
 | A table or a list behind the storage trend's columns, a value a column | The plot draws no figure a sighted reader could take from it, no axis and no value, and what it shows, the first day, the last and the fullest, is said in words. Ninety rows of sizes would be a second screen |
 | *In sync* held back on this browser's row while its replica is still downloading | A replica holds four of the household's own entities today and is whole before the row is drawn. It is the first module of size's to settle (Consequences) |
 | The mismatch's sentence not promising that downloading again puts it right; the row of a replica already told to download again saying that it has | A type the server does not sync is listed for a client newer than its server, which the web, served with its API, is not; and the contract answers one word for a replica marked and one told (plan Q11). The row says that it says so until the report after |
@@ -349,6 +349,14 @@ with its runs of spaces folded (D-182), a page drawing two in a row as one.
   script does not support a cross-origin isolated page: whoever serves the app sends no
   `Cross-Origin-Embedder-Policy` that would make it one (the replica's SQLite does not ask for
   one).
+- A download is a navigation to a link, and a second one begun before the first file has
+  answered takes its place: two invoices, or two exports, pressed inside one file's first byte
+  save the second alone, each press having said that the browser is downloading. The browser's
+  own list shows what it saved.
+- The entitlement's banner formats its days in the zone its reader's screens use, above every
+  screen's boundary: a zone the server takes and a browser's `Intl` does not know, which every
+  screen that formats an instant has failed on in its own boundary since item 24, fails the
+  household's shell while a banner stands. No supported browser is known to lack a zone.
 - A client is listed among a household's once it has reported: the mobile replica's `fetch` must
   name the app in `Household-Client` (**item 28**), or its clients read with no type and no
   version.
