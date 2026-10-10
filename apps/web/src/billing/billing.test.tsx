@@ -215,7 +215,8 @@ describe('how the household stands', () => {
     [
       { state: 'grace', grace_ends_at: '2026-10-14T10:00:00Z' },
       'Uploads paused',
-      'The subscription has ended. Uploading files is paused, and everything else works until Oct 14, 2026, when the household becomes read-only. Subscribing brings everything back.',
+      // Of a trial that ran out as of a subscription that ended: the answer does not tell them apart.
+      'The trial or the subscription has ended. Uploading files is paused, and everything else works until Oct 14, 2026, when the household becomes read-only. Subscribing brings everything back.',
     ],
     [
       { state: 'read_only', data_retained_until: '2027-11-13T10:00:00Z' },
@@ -245,6 +246,69 @@ describe('how the household stands', () => {
     expect(within(standing).getByText(sentence)).toBeInTheDocument()
     // No date the server did not give: a failed payment has none.
     if (more.state === 'past_due') expect(standing).not.toHaveTextContent(/\d{4}/)
+  })
+
+  // The next charge of a subscription whose payment failed is the processor's retry, which no
+  // answer dates: the period's end is no day it is charged on, and is not said to be.
+  it('names no next charge while a payment is being retried', async () => {
+    const server = createServer()
+    server.subscription = subscription({ state: 'past_due' })
+    await read(server)
+    const standing = await section('Subscription')
+    expect(within(standing).getByText('Payment failed')).toBeInTheDocument()
+    expect(within(standing).queryByText('Next charge')).not.toBeInTheDocument()
+    expect(standing).not.toHaveTextContent('Mar 2, 2027')
+  })
+
+  // A lapse outranks a restriction, which stands under it all the same (D-114): subscribing
+  // again does not lift it, and that is said beside what subscribing brings back.
+  it('says under a lapse that a restriction stays until an owner lifts it, with the way there', async () => {
+    const server = createServer()
+    server.subscription = trial({ state: 'read_only', trial_ends_at: null })
+    takingNoWrites(server, 'read_only')
+    server.household = {
+      ...server.household,
+      entitlement: {
+        ...server.household.entitlement,
+        restriction: {
+          restricted_by: janaPays,
+          restricted_at: '2026-09-01T08:00:00Z',
+          reason: null,
+        },
+      },
+    }
+    await read(server)
+    const standing = await section('Subscription')
+    expect(
+      within(standing).getByText(
+        'An owner has restricted the household, so nothing can be changed until an owner lifts it. The subscription is not affected. Lifting it is under Data.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(standing).getByRole('link', { name: 'Data' })).toHaveAttribute(
+      'href',
+      inHousehold.data(home),
+    )
+  })
+
+  // The household's own deletion comes before the day a lapse keeps its data until, and a
+  // payment does not take it back: that day is not said, nor that subscribing clears it.
+  it('names no day its data is kept until where the household’s deletion is scheduled', async () => {
+    const server = createServer()
+    server.subscription = trial({
+      state: 'read_only',
+      trial_ends_at: null,
+      data_retained_until: '2027-11-13T10:00:00Z',
+    })
+    takingNoWrites(server, 'read_only')
+    server.household = { ...server.household, deletion_scheduled_at: '2026-10-09T08:00:00Z' }
+    await read(server)
+    const standing = await section('Subscription')
+    expect(
+      within(standing).getByText(
+        'Nothing can be added or changed. Everything can still be read and exported. Subscribing brings writing back.',
+      ),
+    ).toBeInTheDocument()
+    expect(standing).not.toHaveTextContent('Nov 13, 2027')
   })
 
   it('leads from a restriction to where it is lifted', async () => {
@@ -359,9 +423,14 @@ describe('changing how often the payer pays', () => {
     await user.click(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'Pay monthly instead' }),
     )
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The household has no subscription to change: it ended, or has not begun. Nothing was changed, and the page shows how it stands.',
-    )
+    // Said in a toast: what is read again takes the payer's controls away, or the whole screen,
+    // and a banner among them would go before it was read.
+    expect(
+      await screen.findByText(
+        'The household has no subscription to change: it ended, or has not begun. Nothing was changed, and the page shows how it stands.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     // The question's ground has moved: it closes.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await waitFor(() => {
@@ -369,17 +438,25 @@ describe('changing how often the payer pays', () => {
     })
   })
 
-  it('says the processor cannot be asked in the question, which stays open', async () => {
+  // A `503` is also what the server answers once the processor has taken the change and could
+  // not then be read: nothing is said of what was charged or changed, and billing is read again.
+  it('says the processor cannot be asked in the question, which stays open, and reads how billing stands', async () => {
     const server = createServer()
     server.on(changing, () => problem(503, 'billing_unavailable'))
     const { user } = await read(server)
     await user.click(await screen.findByRole('button', { name: 'Pay monthly instead' }))
     const dialog = screen.getByRole('dialog')
+    const before = server.to(reading).length
     await user.click(within(dialog).getByRole('button', { name: 'Pay monthly instead' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'The payment processor can’t be asked right now. Nothing was charged and nothing was changed. Try again in a little while.',
+    const said = await within(dialog).findByRole('alert')
+    expect(said).toHaveTextContent(
+      /^The payment processor can’t be asked right now\. The page shows how billing stands\. Try again in a little while\.$/,
     )
+    expect(said).not.toHaveTextContent(/charged|nothing was changed/i)
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(server.to(reading).length).toBeGreaterThan(before)
+    })
   })
 })
 
@@ -470,9 +547,9 @@ describe('cancelling, and taking a cancellation back', () => {
     const { user } = await read(server)
     const before = server.to(reading).length
     await user.click(await screen.findByRole('button', { name: 'Resume the subscription' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      /^The household has no subscription to change/,
-    )
+    expect(
+      await screen.findByText(/^The household has no subscription to change/),
+    ).toBeInTheDocument()
     await waitFor(() => {
       expect(server.to(reading).length).toBeGreaterThan(before)
     })
@@ -488,9 +565,11 @@ describe('cancelling, and taking a cancellation back', () => {
         name: 'Cancel the subscription for Tilcerovi',
       }),
     )
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Only whoever pays for the household can do that, and that is not you now. Nothing was changed. The page shows who pays.',
-    )
+    expect(
+      await screen.findByText(
+        'Only whoever pays for the household can do that, and that is not you now. Nothing was changed. The page shows who pays.',
+      ),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
@@ -981,9 +1060,9 @@ describe('handing billing over', () => {
     const sheet = screen.getByRole('dialog')
     await user.selectOptions(within(sheet).getByRole('combobox', { name: 'To' }), milos)
     await user.click(within(sheet).getByRole('button', { name: 'Offer billing to Miloš Tilcer' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      /^Only whoever pays for the household can do that/,
-    )
+    expect(
+      await screen.findByText(/^Only whoever pays for the household can do that/),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
@@ -1031,6 +1110,37 @@ describe('handing billing over', () => {
     await waitFor(() => {
       expect(placeOf(handover)).toHaveFocus()
     })
+  })
+
+  // The server answers the same where no offer was open any more, one the other owner accepted
+  // meanwhile among them: who pays is read, and nothing is said that the read does not say.
+  it('does not say its member goes on paying where the offer was accepted before it was taken back', async () => {
+    const server = withAnotherOwner()
+    server.subscription = subscription({ transfer: offer })
+    server.on(withdrawing, () => {
+      // Accepted a moment before: billing has moved, and there was no offer to take back.
+      server.subscription = subscription({ payer: milosRef, payment_method: null })
+      return noContent()
+    })
+    const { user } = await read(server)
+    const handover = await section('Hand billing over')
+    await user.click(within(handover).getByRole('button', { name: 'Take the offer back' }))
+    expect(
+      await screen.findByText('No offer of billing is open now. The page shows who pays.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/You go on paying/)).not.toBeInTheDocument()
+    expect(await screen.findByText(/^Miloš Tilcer pays for the household\./)).toBeInTheDocument()
+  })
+
+  // No frame draws this part's read: it is said as it arrives, to whoever cannot see it.
+  it('says, as it arrives, that who else owns the household could not be read', async () => {
+    const server = createServer()
+    server.on(`GET /households/${home}/members`, () => Promise.reject(new TypeError('offline')))
+    await read(server)
+    const handover = await section('Hand billing over')
+    expect(await within(handover).findByRole('alert')).toHaveTextContent(
+      'Who else owns the household could not be read, so billing can’t be offered just now. Try again.',
+    )
   })
 
   // What changes under a member who is reading moves nothing: the focus is theirs.

@@ -34,6 +34,7 @@ import { MoneyValue } from '../ui/MoneyValue.tsx'
 import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
+import { useToast } from '../ui/Toast.tsx'
 import styles from './Billing.module.css'
 import { useInvoices, type Invoice } from './data.ts'
 import { Refused, useRefusals } from './parts.tsx'
@@ -164,6 +165,7 @@ export function Invoices({ payer }: InvoicesProps) {
   const t = useTranslate()
   const api = useApi()
   const online = useOnline()
+  const toast = useToast()
   const household = useHousehold()
   const refusals = useRefusals(household.id)
   const read = useInvoices(household.id)
@@ -186,7 +188,10 @@ export function Invoices({ payer }: InvoicesProps) {
       // The processor could not be asked for the link, or gave one that is no address to follow.
       if (answer.pdf_url === null || !leaveFor(answer.pdf_url)) {
         refusals.say(t('billing.invoices.download.unavailable'))
+        return
       }
+      // The file is the browser's to save from here: said, since nothing on the page changes.
+      toast({ message: t('billing.invoices.download.started') })
     },
     onError: (error) => {
       refusals.refuse(error)

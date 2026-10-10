@@ -7,18 +7,24 @@
 // in the processor's form, and billing moves once the processor has confirmed it. Until then
 // the payer goes on paying, and a method that is not accepted changes nothing. Their own
 // subscription then starts when the period already paid for ends, which is the day this screen
-// names, so that nobody pays for the same days twice. Where the household has no subscription
-// there is no card to confirm: they pay from the moment they accept, and the screen says so
-// before they press.
+// names, so that nobody pays for the same days twice: but only where the household's state says
+// the period is paid for. Where a payment for it is owed, the server starts the new payer's
+// subscription at once and charges their method for the period (D-133), and under a restriction
+// the answer does not say which holds; so anywhere but in a household that is active the screen
+// names no day and says that their method may be charged as soon as it is confirmed. Where the
+// household has no subscription there is no card to confirm: they pay from the moment they
+// accept, and the screen says so before they press.
 //
 // The processor's word is waited for as the billing screen waits for it: the subscription is
 // read again for a bounded while, and the screen says billing has moved when the subscription
 // names its reader as the payer, and not before; where the reads run out it says that the
-// processor has not said yet, and who pays meanwhile.
+// processor has not said yet, and who pays meanwhile. An offer that was taken back or lapsed
+// while the form stood open moves nothing, whatever the processor confirmed, and is said so.
 //
-// Declining is told to the payer, and leaves the subscription as it is. Only an owner whose
+// Declining leaves the subscription as it is, and the payer is told of it. Only an owner whose
 // address is verified takes billing over: an unverified one is refused where they press, with
-// the link offered again in the control's place (A-4).
+// the link offered again in that press's place (A-4), and declining, which asks for no verified
+// address, stays beside it.
 //
 // Everybody else who opens the address is told how it stands and nothing is offered: the payer,
 // that there is nothing to take over from themself; another owner, that no offer is waiting for
@@ -43,7 +49,13 @@ import { problemIn, unwrap } from '../api/problem.ts'
 import { askedNow } from '../api/query.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
-import { useReread, useSubscription, type Subscription } from '../household/data.ts'
+import {
+  notTheirs,
+  useReread,
+  useRereadWhereRefused,
+  useSubscription,
+  type Subscription,
+} from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { subscriptionKey } from '../household/households.ts'
 import { HouseholdSettingsPage, Section } from '../household/settings/Page.tsx'
@@ -100,9 +112,14 @@ function Offered({
   const [blocked, setBlocked] = useState(0)
   const day = (at: string) => format.dayOf(at, zone)
 
-  /** The offer is open no longer: taken back, lapsed, or made to somebody else since. */
+  /**
+   * The offer is open no longer: taken back, lapsed, or made to somebody else since. Said in a
+   * toast: the household read again draws no offer, and a banner beside these presses would
+   * leave with them.
+   */
   const gone = () => {
-    refusals.say(t('billing.takeover.gone'))
+    refusals.clear()
+    toast({ message: t('billing.takeover.gone') })
     void reread()
   }
   const accept = useMutation({
@@ -153,6 +170,23 @@ function Offered({
 
   const { interval } = subscription
   const price = interval === null ? undefined : (subscription.base_price ?? undefined)
+  // Whether the period the household is in is known to be paid for: only then does a new
+  // payer's subscription wait for its end. With a payment owed it starts, and is charged, at
+  // once, and a restriction's state does not say which of the two is under it.
+  const paidUp = subscription.state === 'active'
+  const declines = (
+    <Button
+      loading={decline.isPending}
+      // The other press's write is on its way: it is answered first.
+      aria-disabled={accept.isPending}
+      onClick={() => {
+        refusals.clear()
+        decline.mutate()
+      }}
+    >
+      {t('billing.takeover.decline')}
+    </Button>
+  )
   const pairs: Pair[] = [
     { key: t('billing.takeover.from'), value: from },
     { key: t('billing.takeover.offered'), value: day(offer.offered_at) },
@@ -162,7 +196,7 @@ function Offered({
       value:
         interval === null || price === undefined ? t('billing.plan.none') : prices(interval, price),
     },
-    ...(interval === null || subscription.current_period_end === null
+    ...(interval === null || !paidUp || subscription.current_period_end === null
       ? []
       : [{ key: t('billing.takeover.starts'), value: day(subscription.current_period_end) }]),
   ]
@@ -173,7 +207,9 @@ function Offered({
         <p className={account.text}>
           {interval === null
             ? t('billing.takeover.no_card', { household: name })
-            : t('billing.takeover.with_card', { name: from })}
+            : paidUp
+              ? t('billing.takeover.with_card', { name: from })
+              : t('billing.takeover.with_card_owed', { name: from })}
         </p>
         {interval === null ? null : <StorageTerms subscription={subscription} />}
         <p className={account.text}>{t('billing.takeover.declining', { name: from })}</p>
@@ -196,7 +232,11 @@ function Offered({
               }}
             />
           ) : blocked > 0 && !me.email_verified ? (
-            <Unverified key={blocked} why={t('billing.takeover.unverified')} announce />
+            <>
+              <Unverified key={blocked} why={t('billing.takeover.unverified')} announce />
+              {/* Declining asks for no verified address, and stays theirs to do. */}
+              <div className={account.actions}>{declines}</div>
+            </>
           ) : (
             <div className={account.actions}>
               <Button
@@ -216,16 +256,7 @@ function Offered({
               >
                 {t('billing.takeover.title')}
               </Button>
-              <Button
-                loading={decline.isPending}
-                aria-disabled={accept.isPending}
-                onClick={() => {
-                  refusals.clear()
-                  decline.mutate()
-                }}
-              >
-                {t('billing.takeover.decline')}
-              </Button>
+              {declines}
             </div>
           )}
           <Refused said={refusals.refused} />
@@ -246,6 +277,8 @@ function Read() {
   const reread = useReread(household.id)
   const read = useSubscription(household.id)
   const subscription = read.data
+  // Its own refusal says its reader owns the household no longer: the household is read again.
+  useRereadWhereRefused(household.id, notTheirs(read))
   const payerName = usePayerName(subscription ?? { payer: null })
   const wait = useProcessorsWord(household.id)
   // Whether the processor has taken this reader's payment method: billing moves once it says so.
@@ -313,16 +346,21 @@ function Read() {
         >
           {() => {
             if (subscription === undefined) return null
+            const theirs = offer !== null && sameId(offer.offered_to.user_id, me.id)
             if (confirmed) {
               return (
                 <Section title={t('billing.takeover.confirmed.title')}>
                   {/* A status from the press on: one element, whose words change in place. */}
                   <p role="status" className={account.text}>
-                    {wait.state === 'unsaid' && !pays
-                      ? payerName === null
-                        ? t('billing.takeover.unsaid')
-                        : t('billing.takeover.unsaid_pays', { name: payerName })
-                      : t('billing.takeover.confirming')}
+                    {!pays && !theirs
+                      ? // Taken back, or lapsed, while the form stood open: the processor has
+                        // their method, and billing moves on no offer.
+                        t('billing.takeover.gone')
+                      : wait.state === 'unsaid' && !pays
+                        ? payerName === null
+                          ? t('billing.takeover.unsaid')
+                          : t('billing.takeover.unsaid_pays', { name: payerName })
+                        : t('billing.takeover.confirming')}
                   </p>
                   {billing}
                 </Section>
@@ -343,7 +381,7 @@ function Read() {
                 </Section>
               )
             }
-            if (offer !== null && sameId(offer.offered_to.user_id, me.id)) {
+            if (offer !== null && theirs) {
               return (
                 <Offered
                   subscription={subscription}

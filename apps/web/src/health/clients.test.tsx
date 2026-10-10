@@ -28,7 +28,7 @@ import {
   type HouseholdServer,
   type OpenOptions,
 } from './testing.tsx'
-import { ownVersion } from './versions.ts'
+import { numbersOf, ownVersion } from './versions.ts'
 
 afterEach(() => {
   focusManager.setFocused(undefined)
@@ -187,6 +187,27 @@ describe('clients and versions', () => {
     ).toBeInTheDocument()
   })
 
+  // This browser's own row is held to the version of the page that draws it: what it last
+  // reported under is from before the page was loaded, and it syncs as what it is now.
+  it('holds this browser’s own row to the page’s version, and not to the one it last reported under', async () => {
+    // The page meets the minimum, which is its own version; what its replica, and Petr's
+    // browser, last reported is under it.
+    const least = (numbersOf(own) ?? []).join('.')
+    const before = '0.0.0'
+    await clients(
+      listing([client({ version: `${before}+aaaa` }), { ...petrs, version: `${before}+bbbb` }], {
+        web: least,
+        mobile: null,
+      }),
+    )
+    const mine = await rowOf('Jana Tilcerová')
+    await within(mine).findByText('This browser')
+    expect(within(mine).queryByText('Must update before it syncs again')).not.toBeInTheDocument()
+    expect(
+      within(await rowOf('Petr Tilcer')).getByText('Must update before it syncs again'),
+    ).toBeInTheDocument()
+  })
+
   it('says nothing of a minimum where the deployment sets none', async () => {
     await clients(listing([client({ version: '0.0.1' }), phones]))
     await rowOf('Klára Nováková')
@@ -314,7 +335,12 @@ describe('clients and versions, where the list cannot be read or nothing reports
     expect(screen.getByText('Nothing on any browser or device was changed.')).toBeInTheDocument()
     listing([client()], undefined, server)
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await rowOf('Jana Tilcerová')).toBeInTheDocument()
+    const row = await rowOf('Jana Tilcerová')
+    // *Try again* left with the sentence it stood in: the focus it held is on the list's own
+    // place, and not dropped to the page.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(row.closest('[tabindex="-1"]'))
+    })
   })
 
   // A read that waits for a connection is no read under way: nothing is kept, and it is said.

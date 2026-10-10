@@ -15,6 +15,7 @@
 // Every test makes its own people and its own household (screens.ts), and whoever is at the
 // screen changes as it does for a member: by the account's own way out.
 import type { Page } from '@playwright/test'
+import { stripeStandInOrigin } from '../build/preview.ts'
 import { inHousehold } from '../src/app/paths.ts'
 import { buildFile } from '../src/update/build.ts'
 import { expect, expectAccessible, open, test } from './fixtures.ts'
@@ -185,7 +186,7 @@ test('an owner subscribes, the subscription lapses, and the read-only household 
   expect(lapsed.state).toBe('read_only')
   await expect(above(page)).toContainText(`${home} is read-only`)
   await expect(above(page)).toContainText(
-    'Everything can still be read. Nothing can be added or changed until the subscription is paid.',
+    'Everything can still be read. Nothing can be added or changed until a subscription is paid for.',
   )
   await expect(above(page)).toContainText(
     `Its data is kept until ${dayOf(lapsed.data_retained_until ?? '')}, then deleted.`,
@@ -222,7 +223,9 @@ test('an owner subscribes, the subscription lapses, and the read-only household 
   await expect(title(page, 'Export the household')).toBeVisible()
   await expect(page).toHaveURL(inHousehold.exports(household))
   await expect(
-    page.getByText('The household is read-only. An export is made and downloaded all the same.'),
+    page.getByText(
+      'The household can’t be changed right now. An export is made and downloaded all the same.',
+    ),
   ).toBeVisible()
   await expect(page.getByText('No export yet.', { exact: false })).toBeVisible()
   await expectAccessible(page)
@@ -306,6 +309,68 @@ test('a declined card changes nothing and says so, with the form still there to 
   await expectSaid(page, `${home} is subscribed. The payment went through.`)
   await expect(section(page, 'Subscription')).toContainText('Active')
   await expect(valueOf(page, 'Plan')).toHaveText(`${monthly} a month`)
+})
+
+// The processor took the payment and its answer never reached the page: a connection that went
+// as the press was made. Nobody has then said that nothing was charged, and the page said so
+// all the same, to a payer who had been charged, and said it again at each press, the processor
+// refusing a payment it had taken already. It says that it cannot tell, and reads what the
+// server knows, which the processor has told by then.
+test('a payment the processor took, whose answer never came, is not said to have charged nothing, and the page says what is so', async ({
+  page,
+  faults,
+}) => {
+  const { household } = await owner(page)
+  const plan = await subscriptionOf(page, household)
+  const monthly = money(priceOf(plan, 'month'))
+  await open(page, inHousehold.subscribe(household))
+  await page.getByRole('radio', { name: `${monthly} a month` }).check()
+  await page.getByRole('button', { name: 'Continue to payment' }).click()
+  const form = paymentForm(page)
+  const pay = form.getByRole('button', { name: `Pay ${monthly} for a month` })
+  await payBy(page, 'card')
+  // The confirmation reaches the stand-in for Stripe's server, which takes the payment and tells
+  // the API of it, and the browser is handed no answer.
+  const claims: string[] = []
+  await page.exposeFunction('noteClaim', (text: string) => {
+    claims.push(text)
+  })
+  await page.evaluate(() => {
+    new MutationObserver(() => {
+      const said = document.body.innerText
+      if (/nothing was charged|is as it was/i.test(said)) {
+        void (window as unknown as { noteClaim: (text: string) => Promise<void> }).noteClaim(said)
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true })
+  })
+  await page.route('https://api.stripe.com/**', async (route) => {
+    const sent = new URLSearchParams(route.request().postData() ?? '')
+    await fetch(`${stripeStandInOrigin}/_standin/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_secret: sent.get('client_secret'), with: sent.get('with') }),
+    })
+    await route.abort('connectionfailed')
+  })
+  await pay.click()
+
+  // The household is read again, the server says it is subscribed, and the form gives way to
+  // that, the focus it held on the screen's own place.
+  const already = section(page, 'Already subscribed')
+  await expect(already).toBeVisible()
+  await expect(paymentForm(page)).toHaveCount(0)
+  await expect(page.locator('div[tabindex="-1"]:focus')).toContainText('Already subscribed')
+  // At no moment was it said that nothing was charged, or that the household is as it was.
+  expect(claims).toEqual([])
+  const now = await subscriptionOf(page, household)
+  expect([now.state, now.interval]).toEqual(['active', 'month'])
+  await expectAccessible(page)
+  await already.getByRole('link', { name: 'Billing' }).click()
+  await expect(section(page, 'Subscription')).toContainText('Active')
+  await expect(valueOf(page, 'Plan')).toHaveText(`${monthly} a month`)
+  // The answer that never came is the fault this test makes on purpose, which the browser logs.
+  expect(faults.every((fault) => fault.includes('ERR_CONNECTION_FAILED'))).toBe(true)
+  faults.length = 0
 })
 
 test('a bank debit leaves the household as it was with a payment on its way, and clears to active', async ({
@@ -741,7 +806,7 @@ test('an offer of billing is taken back by the payer, and one that is declined l
     ),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Decline' }).click()
-  await expectSaid(page, `You declined. ${who.name} goes on paying, and is told.`)
+  await expectSaid(page, `You declined. ${who.name} goes on paying.`)
   const none = section(page, 'No offer is waiting for you')
   await expect(none).toContainText(`${who.name} pays for the household.`)
   await expect(page.getByRole('button', { name: 'Take over billing' })).toHaveCount(0)

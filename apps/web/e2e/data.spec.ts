@@ -16,6 +16,7 @@ import type { Page } from '@playwright/test'
 import { previewOrigin } from '../build/preview.ts'
 import { apiPath } from '../src/api/names.ts'
 import { inHousehold, paths } from '../src/app/paths.ts'
+import { buildFile } from '../src/update/build.ts'
 import { expect, expectAccessible, frames, kept, open, test } from './fixtures.ts'
 import {
   above,
@@ -43,6 +44,7 @@ import {
 } from './screens.ts'
 import {
   call,
+  createChild,
   createHousehold,
   join,
   lapse,
@@ -104,7 +106,7 @@ test('an owner stops all changes with a reason, every member reads who, when and
     'Nobody can add, change or upload anything, an owner included.',
   )
   await expect(question).toContainText(
-    'The subscription keeps running and keeps being charged: this does not cancel it.',
+    'A subscription keeps running and keeps being charged: this does not cancel it.',
   )
   await question.getByLabel('Why, for the other members').fill(reason)
   await expectAccessible(page)
@@ -210,7 +212,7 @@ test('a household is deleted by its name typed, the day is said to every member,
   await confirm.click()
   await expect(name).toBeFocused()
   await expect(name).toHaveAccessibleDescription(
-    new RegExp(`That is not the household’s name\\. Type ${home.replaceAll('.', '\\.')}\\.$`),
+    new RegExp(`That is not the household’s name\\. Type: ${home.replaceAll('.', '\\.')}$`),
   )
   await expect(confirm).not.toHaveAttribute('aria-busy', 'true')
   await expectAccessible(page)
@@ -630,6 +632,38 @@ test('this browser is listed once it has reported, is asked to download the hous
   await expectAccessible(page)
 })
 
+// The report this browser sends as the screen opens waits for the first checkpoint of the visit.
+// Sent as the replica's stream came up, it was of the copy as the visit before left it, which the
+// server read as a copy that does not match: a false alarm, with *Download again* beside it, for
+// whoever opened the screen at its address after anything in the household had changed.
+test('sync health opened at its address after the household changed elsewhere says this browser is in sync', async ({
+  page,
+}) => {
+  test.slow()
+  const { household } = await owner(page)
+  await open(page, inHousehold.syncHealth(household))
+  const list = page.getByRole('list', { name: 'Your browsers and devices' })
+  const own = list.getByRole('listitem').filter({ hasText: 'This browser' })
+  const checkpoint = async () => {
+    await expect(own).toContainText(/Last checkpoint: \S+\./)
+    return /Last checkpoint: (\S+)\./.exec(await own.innerText())?.[1]
+  }
+  let before = await checkpoint()
+  await expect(own).toContainText('In sync')
+  for (const child of ['Ádík', 'Bětka']) {
+    // The app is left, its replica closed with it, and the household changes meanwhile.
+    await page.goto(buildFile)
+    await createChild(page, household, child)
+    await open(page, inHousehold.syncHealth(household))
+    // This visit's report is in: it names a later checkpoint than the visit before did.
+    await expect.poll(checkpoint).not.toBe(before)
+    before = await checkpoint()
+    await expect(own).toContainText('In sync')
+    await expect(own).not.toContainText('Doesn’t match the server')
+    await expect(own.getByRole('button', { name: /^Download again on / })).toBeVisible()
+  }
+})
+
 test('in a read-only household no browser is asked to download again, and the list says why', async ({
   page,
 }) => {
@@ -708,9 +742,11 @@ test('the diagnostic bundle is drawn whole, a part taken out is gone from what i
   const drawn = JSON.parse(await exact.innerText()) as { readonly id: string }
   await page.getByRole('button', { name: 'Send diagnostics' }).click()
 
-  // Sent, which is said as it arrives, with the reference to quote; and what left is what the
-  // page drew, the part that was taken out absent from it.
-  const said = page.getByRole('status').filter({ hasText: 'Sent' })
+  // Sent, which is said as it arrives, in a toast, with the reference to quote, wherever its
+  // member is by then; the screen reads it in its place. And what left is what the page drew,
+  // the part that was taken out absent from it.
+  await expectSaid(page, `The bundle was sent. Its reference is ${drawn.id}.`)
+  const said = page.getByRole('main')
   await expect(said).toContainText(
     `Its reference is ${drawn.id}. Quote it when you report the problem.`,
   )

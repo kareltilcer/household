@@ -26,8 +26,17 @@ export type Shown =
     }
   | { readonly kind: 'restricted'; readonly restriction: Restriction | null }
 
-/** The banner `entitlement` asks for, to a reader who is an owner or is not: one, or none. */
-export function bannerOf(entitlement: Entitlement | undefined, owner: boolean): Shown | null {
+/**
+ * The banner `entitlement` asks for, to a reader who is an owner or is not: one, or none.
+ * `deleting` is whether the household's deletion is scheduled: it then goes on that day, which is
+ * sooner than the day a lapse keeps its data until, so that day is not said (the erasure takes
+ * whichever comes first, and the deletion's own notice says its day).
+ */
+export function bannerOf(
+  entitlement: Entitlement | undefined,
+  owner: boolean,
+  deleting = false,
+): Shown | null {
   const restriction = entitlement?.restriction ?? null
   switch (entitlement?.state) {
     case 'trialing': {
@@ -45,7 +54,7 @@ export function bannerOf(entitlement: Entitlement | undefined, owner: boolean): 
     case 'canceled':
       return {
         kind: entitlement.state,
-        retainedUntil: entitlement.data_retained_until ?? null,
+        retainedUntil: deleting ? null : (entitlement.data_retained_until ?? null),
         restriction,
       }
     case 'restricted':

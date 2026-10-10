@@ -567,11 +567,21 @@ describe('sync health, where something cannot be read or changed', () => {
       await within(row).findByText('2 changes are waiting to be sent from this browser.'),
     ).toBeInTheDocument()
     expect(within(row).queryByRole('button')).not.toBeInTheDocument()
+    // Whether it has reported is the server's to say, which could not be asked: the row does
+    // not say that it has not.
+    expect(within(row).queryByText(/hasn’t reported to the server yet/)).not.toBeInTheDocument()
     // Read again, the rest is there.
     listing([report(), other], server)
     await user.click(within(alert).getByRole('button', { name: 'Try again' }))
     expect(await rowOf('Firefox on Linux')).toBeInTheDocument()
     expect(screen.queryByText('The rest could not be read')).not.toBeInTheDocument()
+    // *Try again* left with the sentence it stood in, and the focus it held is on the list's
+    // own place, not dropped to the page.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole('list', { name: 'Your browsers and devices' }).closest('[tabindex="-1"]'),
+      )
+    })
   })
 
   it('says the list could not be read in a tab with no replica to speak for itself, and reads it again', async () => {
@@ -585,6 +595,12 @@ describe('sync health, where something cannot be read or changed', () => {
     listing([other], server)
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await rowOf('Firefox on Linux')).toBeInTheDocument()
+    // The focus that *Try again* held is put on the list's own place.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole('list', { name: 'Your browsers and devices' }).closest('[tabindex="-1"]'),
+      )
+    })
   })
 
   // A read that waits for a connection is no read under way: nothing is kept, and it is said.
@@ -696,6 +712,18 @@ describe('sync health, where something cannot be read or changed', () => {
     expect(screen.queryByRole('button', { name: /^Download again/ })).not.toBeInTheDocument()
     // The way to the bundle is no write of the household's, and stays.
     expect(screen.getByRole('link', { name: 'Send diagnostics' })).toBeInTheDocument()
+  })
+
+  // Nothing is saved and sent in a household that takes no writes: the row says what the bar does.
+  it('promises nothing of a change where this browser is not receiving in a household that takes no writes', async () => {
+    const server = listing([report()])
+    server.household = readOnly
+    await health(server, { sync: syncOver(standIn(), { receiving: false }) })
+    const row = await rowOf('Chrome on Windows')
+    expect(
+      within(row).getByText('Not receiving changes from other members right now.'),
+    ).toBeInTheDocument()
+    expect(within(row).queryByText(/still saved and sent/)).not.toBeInTheDocument()
   })
 
   it('names a browser by what its header tells, and as a browser where it tells nothing', async () => {

@@ -1521,8 +1521,8 @@ paths:
       summary: Delete the household
       description: |
         Owner only, name confirmation required, all members notified, reversible for 30 days.
-        `confirm_name` is the household's name, whatever its case and the space around it, and
-        anything else is refused `422`. Every member is emailed, and the members other than the
+        `confirm_name` is the household's name, whatever its case, the space around it and the
+        number of spaces between its words, and anything else is refused `422`. Every member is emailed, and the members other than the
         caller are sent a push. Until the 30 days are over the household works as it did, so that
         its members can take what is theirs, and its `deletion_scheduled_at` says when it goes; any
         owner cancels it. A household whose deletion is scheduled already is answered with that

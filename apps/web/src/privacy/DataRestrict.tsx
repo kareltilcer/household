@@ -216,7 +216,10 @@ export function Lift({ onBegin, onDone, onEnded }: LiftProps) {
     if (typeof entitlement?.grace_ends_at === 'string') return t('data.lift.after.grace')
     return t('data.lift.after.writes')
   }
-  const until = lapsed ? entitlement.data_retained_until : undefined
+  // The day a lapse keeps the household's data until is not said where its own deletion is
+  // scheduled: that day comes first.
+  const deleting = (household.deletion_scheduled_at ?? null) !== null
+  const until = lapsed && !deleting ? entitlement.data_retained_until : undefined
 
   return (
     <>

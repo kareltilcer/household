@@ -690,7 +690,7 @@ func TestTheBillingSettings(t *testing.T) {
 }
 
 // Where Stripe's API is asked is development's alone to say, for the stand-in the web's end-to-end
-// suite pays against: on this machine when over http, and with test-mode keys. Anywhere else the
+// suite pays against: over http on this machine, and with test-mode keys. Anywhere else the
 // setting stops the server from starting, since a deployment that could be pointed at another
 // "Stripe" is one whose payments could be.
 func TestOnlyDevelopmentSaysWhereStripeIs(t *testing.T) {
@@ -713,10 +713,9 @@ func TestOnlyDevelopmentSaysWhereStripeIs(t *testing.T) {
 		t.Fatalf("development with nothing set asks Stripe at %q (%v), want Stripe's own", c.StripeAPIURL, err)
 	}
 	for raw, want := range map[string]string{
-		"http://127.0.0.1:12112":        "http://127.0.0.1:12112",
-		"http://localhost:12112/":       "http://localhost:12112",
-		"http://[::1]:12112":            "http://[::1]:12112",
-		"https://stripe.household.test": "https://stripe.household.test",
+		"http://127.0.0.1:12112":  "http://127.0.0.1:12112",
+		"http://localhost:12112/": "http://localhost:12112",
+		"http://[::1]:12112":      "http://[::1]:12112",
 	} {
 		c, err := config.Load(config.Serve, env(standIn(map[string]string{config.StripeAPIURLVar: raw})))
 		if err != nil {
@@ -745,6 +744,9 @@ func TestOnlyDevelopmentSaysWhereStripeIs(t *testing.T) {
 		want string
 	}{
 		{"over http to another machine", map[string]string{config.StripeAPIURLVar: "http://stripe.household.test:12112"}, "this machine"},
+		// Over TLS to another machine is another machine all the same: the keys and the customers would go to it.
+		{"over https", map[string]string{config.StripeAPIURLVar: "https://stripe.household.test"}, "scheme and host"},
+		{"over https to this machine", map[string]string{config.StripeAPIURLVar: "https://127.0.0.1:12112"}, "scheme and host"},
 		{"over http to an address that is not the loopback's", map[string]string{config.StripeAPIURLVar: "http://10.0.0.5:12112"}, "this machine"},
 		{"with no scheme", map[string]string{config.StripeAPIURLVar: "127.0.0.1:12112"}, "scheme and host"},
 		{"with a path", map[string]string{config.StripeAPIURLVar: "http://127.0.0.1:12112/v1"}, "scheme and host"},

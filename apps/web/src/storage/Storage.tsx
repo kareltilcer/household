@@ -35,16 +35,13 @@
 // picture under the sentence of what the state means for storage. *Pending*, *syncing*,
 // *conflicted* and *rejected* have nothing to be: usage is measured on the server from daily
 // samples, and nothing is written from here.
-import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { readState, together, useFocusKept } from '../account/common.ts'
 import account from '../account/Settings.module.css'
-import { problemIn } from '../api/problem.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
-import { useSubscription, useUsage } from '../household/data.ts'
+import { notTheirs, useRereadWhereRefused, useSubscription, useUsage } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
-import { householdKey } from '../household/households.ts'
 import { HouseholdSettingsPage, useEverHeld, useStanding } from '../household/settings/Page.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -58,11 +55,6 @@ import { usePicture } from './data.ts'
 import { Counted, Picture, ThisMonth, type Month } from './Picture.tsx'
 import { named, storesNothing } from './picture.ts'
 import styles from './Storage.module.css'
-
-/** Whether a read was answered `404`: what it asked for is not its reader's, or not any longer. */
-function refused(read: { readonly error: unknown }): boolean {
-  return problemIn(read.error)?.status === 404
-}
 
 /**
  * What the household's state means for storage, in one sentence, or undefined for a household
@@ -81,7 +73,6 @@ function useStateSentence(): string | undefined {
 
 function Stored() {
   const t = useTranslate()
-  const queries = useQueryClient()
   const household = useHousehold()
   const standing = useStanding()
   const online = useOnline()
@@ -95,13 +86,9 @@ function Stored() {
   // was read: the picture's, that their level on household settings was lowered, and an owner's
   // two, that they are an owner no longer. The household alone is read again, which is what
   // tells the rest of the app; read again with it, each would only be refused again.
-  const lowered = standing.storage && refused(picture)
-  const demoted = standing.owner && (refused(usage) || refused(plan))
-  const moved = lowered || demoted
-  useEffect(() => {
-    if (!moved) return
-    void queries.invalidateQueries({ queryKey: householdKey(household.id), exact: true })
-  }, [moved, queries, household.id])
+  const lowered = standing.storage && notTheirs(picture)
+  const demoted = standing.owner && (notTheirs(usage) || notTheirs(plan))
+  useRereadWhereRefused(household.id, lowered || demoted)
   const withdrawn = !standing.storage || lowered
   // Somebody the server no longer answers as an owner reads the picture as a member does.
   const owner = standing.owner && !demoted

@@ -12,7 +12,6 @@ import { BaseIcon } from '@household/icons/web'
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { refocus, useSaid, type Said } from '../account/common.ts'
 import account from '../account/Settings.module.css'
-import { problemIn } from '../api/problem.ts'
 import { useReread, type Subscription } from '../household/data.ts'
 import type { EntitlementState } from '../household/households.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
@@ -163,8 +162,9 @@ function brandWord(t: ReturnType<typeof useTranslate>, brand: string): string | 
 
 /**
  * A payment method's summary in a sentence: a card by its brand, its last four digits and when
- * it expires; a bank debit by its account's last four, where it has them; and a kind this build
- * has no word for by what it is known by. The processor's own word for a brand is not drawn.
+ * it expires; a bank debit by its account's last four, where it has them; a card whose brand
+ * this build has no word for as a card; and a kind it has no word for that has no expiry, which
+ * is no card, as another method. The processor's own word for a brand or a kind is not drawn.
  */
 export function useMethodWords(): (method: Method) => string {
   const t = useTranslate()
@@ -174,7 +174,10 @@ export function useMethodWords(): (method: Method) => string {
     if (method.brand === 'sepa_debit') {
       return last4 === '' ? t('billing.method.debit') : t('billing.method.debit_ending', { last4 })
     }
-    const brand = brandWord(t, method.brand) ?? t('billing.method.brand.other')
+    const known = brandWord(t, method.brand)
+    const expires = method.exp_month !== null && method.exp_year !== null
+    if (known === undefined && !expires) return t('billing.method.other')
+    const brand = known ?? t('billing.method.brand.other')
     if (last4 === '') return brand
     if (method.exp_month === null || method.exp_year === null) {
       return t('billing.method.card_ending', { brand, last4 })
@@ -235,8 +238,10 @@ export interface Refusals {
   /**
    * Says what `error` refused a write with, and reads the household again where the refusal says
    * the page is no longer how billing stands. It answers whether it is: its caller then closes
-   * what the write was asked from. A reader who owns the household no longer is told in a toast:
-   * the screen is about to be the neutral *not available*, and a banner would go with it.
+   * what the write was asked from. Such a refusal is said in a toast: what is read again takes
+   * away the part it was pressed in, the payer's own controls from somebody who pays no longer,
+   * or the whole screen from somebody who owns no longer, and a banner there would go with it
+   * before it was read.
    */
   readonly refuse: (error: unknown) => boolean
   /** Says `text` as a refusal: what a write came to that no problem of the server's says. */
@@ -252,12 +257,12 @@ export function useRefusals(household: string): Refusals {
   const toast = useToast()
   const refuse = useCallback(
     (error: unknown) => {
-      if (problemIn(error)?.code === 'not_found') {
+      const moved = isMoved(error)
+      if (moved) {
         say(null)
         toast({ message: refusal(error) })
+        void reread()
       } else say(refusal(error))
-      const moved = isMoved(error)
-      if (moved) void reread()
       return moved
     },
     [say, refusal, reread, toast],

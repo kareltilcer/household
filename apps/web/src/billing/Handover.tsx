@@ -16,7 +16,7 @@
 //
 // The payer's refusal on the screen that leaves a household, and on their own page among the
 // members, leads here (FR-HH4).
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useId, useState } from 'react'
 import { Link } from 'react-router'
 import { sameId } from '../account/common.ts'
@@ -27,6 +27,7 @@ import { askedNow } from '../api/query.ts'
 import { inHousehold } from '../app/paths.ts'
 import { fieldCodes, useRefusedField } from '../auth/fields.tsx'
 import {
+  subscriptionQuery,
   useMembers,
   useReread,
   writes,
@@ -187,6 +188,7 @@ export function Handover({ subscription }: HandoverProps) {
   const t = useTranslate()
   const format = useFormat()
   const api = useApi()
+  const queries = useQueryClient()
   const toast = useToast()
   const me = useMe()
   const household = useHousehold()
@@ -206,17 +208,31 @@ export function Handover({ subscription }: HandoverProps) {
 
   const withdraw = useMutation({
     ...askedNow,
-    // Asked with the name of whom the offer was made to, which its success says.
+    // Asked with the name of whom the offer was made to, which its success says. The server
+    // answers the same where no offer was open any more, one that was accepted meanwhile among
+    // them, so who pays is read, and what is said is what that reads: that the offer was taken
+    // back and its member goes on paying only where the subscription still names them.
     mutationFn: async (name: string) => {
       unwrap(
         await api.DELETE('/households/{household_id}/billing/transfer', {
           params: { path: { household_id: household.id } },
         }),
       )
-      return name
+      try {
+        const stands = await queries.query({
+          ...subscriptionQuery(api, household.id),
+          staleTime: 0,
+        })
+        return { name, pays: isPayer(stands, me.id) }
+      } catch {
+        // Unread: nothing is said of who pays.
+        return { name, pays: false }
+      }
     },
-    onSuccess: (name) => {
-      toast({ message: t('billing.offer.withdrawn', { name }) })
+    onSuccess: ({ name, pays }) => {
+      toast({
+        message: pays ? t('billing.offer.withdrawn', { name }) : t('billing.offer.closed'),
+      })
       void reread()
     },
     onError: (error) => {
@@ -283,8 +299,12 @@ export function Handover({ subscription }: HandoverProps) {
           </>
         ) : owners === undefined ? (
           members.isError || members.fetchStatus === 'paused' ? (
+            // No frame draws this part's read: said as it arrives, and again for each read that
+            // fails.
             <Banner
+              key={members.errorUpdateCount}
               tone="danger"
+              announce
               actions={
                 <Button
                   onClick={() => {

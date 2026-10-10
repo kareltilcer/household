@@ -133,7 +133,11 @@ describe('a household’s exports', () => {
 
     const made = await rowOf()
     expect(within(made).getByText('Ready')).toBeInTheDocument()
-    expect(within(made).getByText('Download it until Sep 16, 2026.')).toBeInTheDocument()
+    // The moment it is gone at, and not its day alone: on the day itself the day would be read
+    // as the whole of it.
+    expect(
+      within(made).getByText(/^Download it until Sep 16, 2026, \d{1,2}:\d{2}\s[AP]M\.$/),
+    ).toBeInTheDocument()
     expect(within(made).getByText('One ZIP of 1.6 GB')).toBeInTheDocument()
 
     const failed = await rowOf('Sep 2, 2026, 10:00 AM')
@@ -145,7 +149,7 @@ describe('a household’s exports', () => {
     const expired = await rowOf('Aug 1, 2026, 10:00 AM')
     expect(within(expired).getByText('Expired')).toBeInTheDocument()
     expect(
-      within(expired).getByText('It could be downloaded until Aug 8, 2026.'),
+      within(expired).getByText(/^It could be downloaded until Aug 8, 2026, 11:30\sPM\.$/),
     ).toBeInTheDocument()
     expect(within(expired).getByText('One ZIP of 412 MB')).toBeInTheDocument()
 
@@ -269,7 +273,8 @@ describe('who a household’s exports are for', () => {
     const { user } = await screenOf(server)
     expect(
       await screen.findByText(
-        'The household is read-only. An export is made and downloaded all the same.',
+        // Of a household an owner restricted as of one that lapsed: neither takes a change.
+        'The household can’t be changed right now. An export is made and downloaded all the same.',
       ),
     ).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Make an export' }))
@@ -463,6 +468,37 @@ describe('an export on its way', () => {
     })
     pass(askAgainEvery * 3)
     expect(server.to(`GET ${exports}`)).toHaveLength(1)
+  })
+
+  // A requester made a member since is handed no link: their row says so, and nothing says the
+  // export is ready to download.
+  it('does not say an export is ready to download to somebody who is handed no link to it', async () => {
+    holdTheClock()
+    const server = serving([job({ status: 'running' })])
+    await screenOf(server)
+    await rowOf()
+    server.on(`GET ${exports}`, () => Response.json({ items: [ready({ download_url: null })] }))
+    pass(askAgainEvery)
+    expect(await within(await rowOf()).findByText('Ready')).toBeInTheDocument()
+    expect(screen.queryByText('The export is ready to download.')).not.toBeInTheDocument()
+  })
+
+  // Taken out of the household while an export was on its way, the list is its reader's no
+  // longer: what this browser kept of it does not have it asked for every few seconds.
+  it('is asked after no more once the list is answered as not its reader’s', async () => {
+    holdTheClock()
+    const server = serving([job({ status: 'running' })])
+    await screenOf(server)
+    await rowOf()
+    server.on(`GET ${exports}`, () => problem(404, 'not_found'))
+    // The refusal draws nothing anew, and the clock is held: its answer is waited for by hand.
+    const settle = () => act(() => vi.advanceTimersByTimeAsync(askAgainEvery - 1))
+    pass(1)
+    await settle()
+    const asked = server.to(`GET ${exports}`).length
+    expect(asked).toBeGreaterThan(1)
+    for (let turn = 0; turn < 4; turn += 1) await settle()
+    expect(server.to(`GET ${exports}`)).toHaveLength(asked)
   })
 
   it('says nothing of an export that had ended before the screen opened', async () => {

@@ -307,7 +307,12 @@ describe('the diagnostic bundle', () => {
     const { id } = await drawn()
     await user.click(await sendButton())
     const said = await screen.findByText('Sent')
-    expect(said.closest('[role="status"]')).not.toBeNull()
+    // Said in a toast, with the reference, which cannot be read back: wherever its member is by
+    // the time it is answered, and not by this screen alone. The screen reads it in its place.
+    expect(
+      await screen.findByText(`The bundle was sent. Its reference is ${String(id)}.`),
+    ).toBeInTheDocument()
+    expect(said.closest('[role="status"], [role="alert"]')).toBeNull()
     expect(
       screen.getByText(`Its reference is ${String(id)}. Quote it when you report the problem.`),
     ).toBeInTheDocument()

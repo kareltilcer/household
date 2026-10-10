@@ -120,6 +120,26 @@ describe('an offer of billing, as the owner it was made to reads it', () => {
     ).toBeInTheDocument()
     expect(within(said).queryByText(with_card)).not.toBeInTheDocument()
   })
+
+  // Where the period's own payment is owed the server starts the new payer's subscription at
+  // once and charges their method for it (D-133), and a restriction's state does not say whether
+  // one is: only in a household that is active is a day named, and nobody said to pay twice.
+  it.each(['past_due', 'restricted'] as const)(
+    'names no day their subscription starts in a household that is %s, and says their method may be charged at once',
+    async (state) => {
+      const server = offered()
+      server.subscription = subscription({ state, payment_method: null, transfer: offer })
+      await read(server)
+      const said = await section('Jana Tilcerová has offered you billing')
+      expect(within(said).queryByText('Your subscription starts')).not.toBeInTheDocument()
+      expect(within(said).queryByText(with_card)).not.toBeInTheDocument()
+      expect(
+        within(said).getByText(
+          'Your payment method may be charged as soon as it is confirmed: where a payment for the current period is still owed, your own subscription starts at once and pays for it. Where nothing is owed, it starts when the period already paid for ends. Until your payment method is confirmed, Jana Tilcerová goes on paying.',
+        ),
+      ).toBeInTheDocument()
+    },
+  )
 })
 
 describe('accepting an offer', () => {
@@ -200,6 +220,39 @@ describe('accepting an offer', () => {
     expect(screen.queryByText(/^You pay for Tilcerovi now/)).not.toBeInTheDocument()
   })
 
+  // The payer took the offer back, or it lapsed, while the form stood open: the processor has
+  // their method, and billing moves on no offer. The screen says so, and waits for nothing.
+  it('says the offer is open no longer where it went while their method was being confirmed', async () => {
+    const server = offered()
+    const { user, confirm } = await accepted(server)
+    server.subscription = subscription({ payment_method: null })
+    await user.click(confirm)
+    const waiting = await section('Waiting for the payment processor')
+    await waitFor(() => {
+      expect(within(waiting).getByRole('status')).toHaveTextContent(
+        'The offer is no longer open: it was taken back, or it lapsed. Nothing has changed, and the page shows how billing stands.',
+      )
+    })
+    expect(screen.queryByText(/^You pay for Tilcerovi now/)).not.toBeInTheDocument()
+  })
+
+  // Neither the form's fault nor the method's: the processor may have taken it all the same.
+  it('does not say billing has not moved where the processor’s answer was lost, and reads how it stands', async () => {
+    const server = offered()
+    const { user, confirm } = await accepted(server)
+    standIn.answer = () => Promise.resolve({ error: { type: 'api_connection_error' } })
+    const before = server.to(reading).length
+    await user.click(confirm)
+    const said = await screen.findByRole('alert')
+    expect(said).toHaveTextContent(
+      /^That could not be confirmed with the payment processor, and this page cannot tell yet whether it went through\./,
+    )
+    expect(said).not.toHaveTextContent(/Billing has not moved/)
+    await waitFor(() => {
+      expect(server.to(reading).length).toBeGreaterThan(before)
+    })
+  })
+
   it('says a method that was not accepted moved nothing, and who still pays', async () => {
     const { user, confirm } = await accepted()
     standIn.answer = () => Promise.resolve({ error: { type: 'card_error' } })
@@ -252,23 +305,41 @@ describe('accepting an offer', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Taking billing over waits for a verified address: it is where the invoices are sent.',
     )
-    // In the controls' place: no press that could only be refused again.
+    // In that press's place: no press that could only be refused again. Declining asks for no
+    // verified address, and stays theirs to do.
     expect(screen.queryByRole('button', { name: 'Take over billing' })).not.toBeInTheDocument()
     expect(server.to(accepting)).toHaveLength(1)
+    server.on(declining, () => {
+      server.subscription = subscription({ payment_method: null })
+      return noContent()
+    })
+    await user.click(screen.getByRole('button', { name: 'Decline' }))
+    expect(await screen.findByText('You declined. Jana Tilcerová goes on paying.')).toBeVisible()
+    expect(server.to(declining)).toHaveLength(1)
   })
 
+  // The offer is gone as the server refuses, and so are the presses once that is read: it is
+  // said in a toast, which stays where a banner beside them would have left with them.
   it('says an offer that is open no longer is not, and reads how billing stands', async () => {
     const server = offered()
-    server.on(accepting, () => problem(404, 'not_found'))
+    server.on(accepting, () => {
+      server.subscription = subscription({ payment_method: null })
+      return problem(404, 'not_found')
+    })
     const { user } = await read(server)
     const before = server.to(reading).length
     await user.click(await screen.findByRole('button', { name: 'Take over billing' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The offer is no longer open: it was taken back, or it lapsed. Nothing has changed, and the page shows how billing stands.',
-    )
+    expect(
+      await screen.findByText(
+        'The offer is no longer open: it was taken back, or it lapsed. Nothing has changed, and the page shows how billing stands.',
+      ),
+    ).toBeInTheDocument()
     await waitFor(() => {
       expect(server.to(reading).length).toBeGreaterThan(before)
     })
+    // What is read again draws no offer, and the sentence is still there to be read.
+    expect(await section('No offer is waiting for you')).toBeInTheDocument()
+    expect(screen.getByText(/^The offer is no longer open/)).toBeInTheDocument()
   })
 
   it('says the processor cannot be asked, and keeps the press', async () => {
@@ -322,9 +393,9 @@ describe('declining an offer', () => {
     })
     const { user, router } = await read(server)
     await user.click(await screen.findByRole('button', { name: 'Decline' }))
-    expect(
-      await screen.findByText('You declined. Jana Tilcerová goes on paying, and is told.'),
-    ).toBeInTheDocument()
+    // No more than the answer says: it is the same where the payer took the offer back first,
+    // when nobody is told anything.
+    expect(await screen.findByText('You declined. Jana Tilcerová goes on paying.')).toBeVisible()
     expect(server.to(declining)).toHaveLength(1)
     // The offer is gone, and the screen says how it stands now.
     const none = await section('No offer is waiting for you')
@@ -342,7 +413,7 @@ describe('declining an offer', () => {
     server.on(declining, () => problem(403, 'forbidden'))
     const { user } = await read(server)
     await user.click(await screen.findByRole('button', { name: 'Decline' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(/^The offer is no longer open/)
+    expect(await screen.findByText(/^The offer is no longer open/)).toBeInTheDocument()
   })
 
   it('says a decline could not reach the server, and keeps the offer', async () => {

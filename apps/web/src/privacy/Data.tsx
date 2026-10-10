@@ -56,8 +56,12 @@ function RestrictionNotice() {
   const t = useTranslate()
   const format = useFormat()
   const zone = useTimeZone()
-  const restriction = useHousehold().entitlement?.restriction ?? null
+  const entitlement = useHousehold().entitlement
+  const restriction = entitlement?.restriction ?? null
   if (restriction === null) return null
+  // Under a lapse, lifting it gives nobody a change back (D-114): what it holds back is not said
+  // to end with it, and an owner reads what lifting comes to beside the control.
+  const lapsed = entitlement?.state === 'read_only' || entitlement?.state === 'canceled'
   const when = format.instant(restriction.restricted_at, zone)
   // The owner's name as it was when they restricted, which an erased account leaves empty.
   const name = restriction.restricted_by.label ?? ''
@@ -74,8 +78,10 @@ function RestrictionNotice() {
               ? t('data.restricted.by_former', { name, when })
               : t('data.restricted.by', { name, when })}
         </p>
-        {reason === '' ? null : <p>{t('data.restricted.reason', { reason })}</p>}
-        <p>{t('data.restricted.rest')}</p>
+        {reason === '' ? null : (
+          <p className={styles.written}>{t('data.restricted.reason', { reason })}</p>
+        )}
+        {lapsed ? null : <p>{t('data.restricted.rest')}</p>}
       </div>
     </Banner>
   )

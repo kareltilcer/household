@@ -37,6 +37,7 @@ import { inHousehold, paths } from '../app/paths.ts'
 import { useHouseholds } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
+import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
 import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
@@ -53,10 +54,10 @@ function Owned() {
   const online = useOnline()
   const withdrawn = useNoWithdrawal()
   const households = useHouseholds()
-  // A suspended household opens nothing (D-115), its data among it: it is passed over.
-  const owned = (households.data ?? []).filter(
-    (household) => household.my_role === 'owner' && household.entitlement?.state !== 'suspended',
-  )
+  // A suspended household opens nothing (D-115), its data among it: it is passed over, and the
+  // page says once, above, that it is. Its owner is not told that they own none.
+  const mine = (households.data ?? []).filter((household) => household.my_role === 'owner')
+  const owned = mine.filter((household) => household.entitlement?.state !== 'suspended')
   return (
     <StateFrame
       state={readState(households, online)}
@@ -82,7 +83,9 @@ function Owned() {
     >
       {() =>
         owned.length === 0 ? (
-          <p className={account.text}>{t('privacy.restrict.none')}</p>
+          mine.length === 0 ? (
+            <p className={account.text}>{t('privacy.restrict.none')}</p>
+          ) : null
         ) : (
           <ul className={styles.lines} role="list">
             {owned.map((household) => (
@@ -105,9 +108,17 @@ export function Privacy() {
   const zone = useOwnZone()
   const exports = useOwnExports()
   const atOnce = <p className={account.note}>{t('privacy.at_once')}</p>
+  // A household the platform suspended answers nothing (D-115): every part of this page passes
+  // it over, the archive among them, and the page says so once rather than say of its member
+  // that they are in no household, or own none.
+  const suspended = (useHouseholds().data ?? []).some(
+    (household) => household.entitlement?.state === 'suspended',
+  )
 
   return (
     <SettingsPage title={t('privacy.title')} lead={t('privacy.lead')}>
+      {/* So when the page opened: read in its place. */}
+      {suspended ? <Banner tone="neutral">{t('privacy.suspended')}</Banner> : null}
       <Section title={t('privacy.copy.title')} note={t('privacy.copy.term')}>
         <p className={account.text}>{t('privacy.copy.body')}</p>
         <ExportList

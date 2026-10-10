@@ -8,9 +8,10 @@
 // nothing in it: the prototype's "38 documents, three seasons of garden history" has no
 // operation behind it, and no number is shown that nothing gave.
 //
-// The name is typed to confirm. The server compares it whatever its case and the space around
-// it, and its word on it is the one that holds: a name of nothing is not sent, and any other is,
-// to be said beside the field where the server refuses it. Scheduling is any owner's, in every
+// The name is typed to confirm. The server compares it whatever its case, the space around it
+// and the spaces between its words, a page drawing a run of them as one, and its word on it is
+// the one that holds: a name of nothing is not sent, and any other is, to be said beside the
+// field where the server refuses it, with the household read again for the name it has by then. Scheduling is any owner's, in every
 // state the household can be opened in (FR-BI1), five times a day and no more, since each one
 // writes to every member.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -115,6 +116,9 @@ export function DeleteHousehold({ onClose, onDone, onEnded }: DeleteHouseholdPro
             onError: (error) => {
               const ended = standing(error)
               if (ended !== undefined) onEnded(ended)
+              // The name may be another by now, another owner having changed it: the household
+              // is read again, and the field then asks for the name it has.
+              else if (fieldCodes(error).has('/confirm_name')) void reread()
             },
           })
         }}

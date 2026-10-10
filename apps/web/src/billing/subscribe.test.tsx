@@ -321,6 +321,50 @@ describe('subscribing', () => {
       ),
     ).toBeInTheDocument()
   })
+
+  // A payment lifts no restriction and takes no scheduled deletion back: neither is promised.
+  it('does not say a lapsed household takes changes again where an owner restricted it, and says that stays', async () => {
+    const server = inTrial()
+    server.subscription = trial({ state: 'read_only', trial_ends_at: null })
+    server.household = {
+      ...server.household,
+      entitlement: {
+        ...server.household.entitlement,
+        state: 'read_only',
+        can_write: false,
+        restriction: {
+          restricted_by: { user_id: jana.id, label: jana.display_name, is_former_member: false },
+          restricted_at: '2026-09-01T08:00:00Z',
+          reason: null,
+        },
+      },
+    }
+    await read(server)
+    expect(
+      await screen.findByText('The paid period starts when the payment goes through.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/takes changes again/)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'An owner has restricted the household, so nothing can be changed until an owner lifts it. The subscription is not affected. Lifting it is under Data.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('does not say the day of deletion is cleared where the household’s own deletion is scheduled', async () => {
+    const server = inTrial()
+    server.subscription = trial({
+      state: 'read_only',
+      trial_ends_at: null,
+      data_retained_until: '2027-10-09T10:00:00Z',
+    })
+    server.household = { ...server.household, deletion_scheduled_at: '2026-10-09T08:00:00Z' }
+    await read(server)
+    expect(
+      await screen.findByText('The paid period starts when the payment goes through.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/is cleared/)).not.toBeInTheDocument()
+  })
 })
 
 describe('a press that the server refuses', () => {
@@ -347,20 +391,23 @@ describe('a press that the server refuses', () => {
     await user.click(await screen.findByRole('radio', { name: money('EUR 59.88 a year') }))
     const before = server.to(reading).length
     await user.click(screen.getByRole('button', { name: 'Continue to payment' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Only whoever pays for the household can do that, and that is not you now. Nothing was changed. The page shows who pays.',
-    )
+    // In a toast: the press it was made on leaves with the household read again.
+    expect(
+      await screen.findByText(
+        'Only whoever pays for the household can do that, and that is not you now. Nothing was changed. The page shows who pays.',
+      ),
+    ).toBeInTheDocument()
     await waitFor(() => {
       expect(server.to(reading).length).toBeGreaterThan(before)
     })
   })
 
-  it('says the processor cannot be asked, that nothing was charged, and keeps the press', async () => {
+  it('says the processor cannot be asked, and keeps the press', async () => {
     const server = inTrial()
     server.on(subscribing, () => problem(503, 'billing_unavailable'))
     await toPayment(server)
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The payment processor can’t be asked right now. Nothing was charged and nothing was changed. Try again in a little while.',
+      'The payment processor can’t be asked right now. The page shows how billing stands. Try again in a little while.',
     )
     const press = screen.getByRole('button', { name: 'Continue to payment' })
     expect(press).not.toHaveAttribute('aria-busy')
@@ -436,20 +483,45 @@ describe('the payment form', () => {
     )
   })
 
-  it('says of any other refusal, and of the script’s own failure, that nothing was charged', async () => {
-    const { user, pay } = await drawn('api_connection_error')
+  // An answer that was lost on its way back, the processor's own failure and the script's: none
+  // says whether the processor took the payment, so the page says neither that it did nor that
+  // nothing was charged, and reads what the server knows of it.
+  const untold =
+    /^That could not be confirmed with the payment processor, and this page cannot tell yet whether it went through\. Try again in a moment\.$/
+
+  it('says of any other refusal, and of the script’s own failure, that it cannot tell, and reads how the household stands', async () => {
+    const { user, pay, server } = await drawn('api_connection_error')
+    const before = server.to(reading).length
     await user.click(pay)
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'That could not be confirmed with the payment processor, and nothing was charged. Try again.',
-    )
+    const said = await screen.findByRole('alert')
+    expect(said).toHaveTextContent(untold)
+    expect(said).not.toHaveTextContent(/charged|as it was/)
+    await waitFor(() => {
+      expect(server.to(reading).length).toBeGreaterThan(before)
+    })
     standIn.answer = () => Promise.reject(new Error('the script threw'))
     await user.click(pay)
     await waitFor(() => {
       expect(standIn.frames[0]?.returnsTo).toHaveLength(2)
     })
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'That could not be confirmed with the payment processor, and nothing was charged. Try again.',
-    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(untold)
+  })
+
+  // The processor took the payment and its answer never came: pressed again it refuses what it
+  // has taken already, in the same kind. Once it has told the server, the read says so, the form
+  // gives way to what is so, and the focus it held is on the screen's own place.
+  it('gives way to what the server says once a payment whose answer was lost is read as taken', async () => {
+    const { user, pay, server } = await drawn('api_connection_error')
+    server.subscription = subscription()
+    await user.click(pay)
+    expect(await screen.findByRole('region', { name: 'Already subscribed' })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Payment details' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/nothing was charged/i)).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole('region', { name: 'Already subscribed' }).closest('[tabindex="-1"]'),
+      )
+    })
   })
 
   it('is asked at once with no connection, and is confirmed by nothing later', async () => {
@@ -457,11 +529,34 @@ describe('the payment form', () => {
     onlineManager.setOnline(false)
     try {
       await user.click(pay)
-      expect(await screen.findByRole('alert')).toHaveTextContent(/nothing was charged/)
+      expect(await screen.findByRole('alert')).toHaveTextContent(untold)
     } finally {
       onlineManager.setOnline(true)
     }
     expect(standIn.frames[0]?.returnsTo).toHaveLength(1)
+  })
+
+  // Changed under a confirmation, the way of paying would put the form away with the processor
+  // still answering for the payment it was pressed for.
+  it('holds the choice of how often to pay while a confirmation is on its way, and gives it back once it is refused', async () => {
+    const { user, pay } = await drawn('card_error')
+    let answer: (confirmation: { error: { type: string } }) => void = () => undefined
+    standIn.answer = () =>
+      new Promise((resolve) => {
+        answer = resolve
+      })
+    await user.click(pay)
+    const month = screen.getByRole('radio', { name: money('EUR 5.99 a month') })
+    await waitFor(() => {
+      expect(month).toBeDisabled()
+    })
+    expect(screen.getByRole('radio', { name: money('EUR 59.88 a year') })).toBeChecked()
+    expect(screen.getByRole('group', { name: 'Payment details' })).toBeInTheDocument()
+    act(() => {
+      answer({ error: { type: 'card_error' } })
+    })
+    await screen.findByRole('alert')
+    expect(month).toBeEnabled()
   })
 
   it('says the form could not be loaded where the script did not come, and loads it again', async () => {

@@ -296,7 +296,8 @@ describe('stopping all changes', () => {
     )
     expect(
       within(dialog).getByText(
-        'Reading, downloading and exporting work as before. The subscription keeps running and keeps being charged: this does not cancel it. Any owner lifts the restriction at any time, and it lifts at once.',
+        // Of a subscription, should there be one: the question is read in a trial too.
+        'Reading, downloading and exporting work as before. A subscription keeps running and keeps being charged: this does not cancel it. Any owner lifts the restriction at any time, and it lifts at once.',
       ),
     ).toBeInTheDocument()
     const reason = within(dialog).getByRole('textbox', { name: 'Why, for the other members' })
@@ -478,7 +479,23 @@ describe('lifting a restriction', () => {
     )
     // Both are so, and both are said: that changes are stopped, and by whom.
     expect(screen.getByText('All changes are stopped')).toBeInTheDocument()
+    // But not that nobody can change anything *until an owner lifts it*: under a lapse lifting
+    // gives nobody a change back, as the control's own sentence says.
+    expect(screen.queryByText(/until an owner lifts it/)).not.toBeInTheDocument()
     lapsed.unmount()
+
+    // Nor the day a lapse keeps its data until, where the household's own deletion comes first.
+    const server = lifting({
+      ...stopped,
+      state: 'read_only',
+      data_retained_until: '2027-10-09T00:00:00Z',
+    })
+    server.household = { ...server.household, deletion_scheduled_at: '2026-10-09T08:00:00Z' }
+    const deleting = await data(server)
+    expect(screen.getByRole('button', { name: lift })).not.toHaveAccessibleDescription(
+      expect.stringContaining('Its data is kept until'),
+    )
+    deleting.unmount()
 
     await data(
       lifting({ ...stopped, state: 'canceled', data_retained_until: '2027-10-09T00:00:00Z' }),
@@ -652,9 +669,10 @@ describe('deleting the household', () => {
     const name = within(panel).getByRole('textbox', { name: named })
     await user.type(name, 'Tilcerovci')
     await user.click(within(panel).getByRole('button', { name: confirmed }))
+    // The name stands last, after a colon: no full stop of the sentence's is read as part of it.
     await waitFor(() => {
       expect(name).toHaveAccessibleDescription(
-        expect.stringContaining('That is not the household’s name. Type Tilcerovi.'),
+        expect.stringMatching(/That is not the household’s name\. Type: Tilcerovi$/),
       )
     })
     expect(await server.body(`POST ${deletion}`)).toEqual({ confirm_name: 'Tilcerovci' })
@@ -662,6 +680,23 @@ describe('deleting the household', () => {
       expect(document.activeElement).toBe(name)
     })
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  // Another owner may have renamed the household while the panel stood open: the name it is
+  // refused for is then one this page never read, and the household is read again for it.
+  it('reads the household again where the name is refused, and asks for the name it has now', async () => {
+    const server = createServer()
+    server.on(`POST ${deletion}`, () => invalid('/confirm_name'))
+    const { user, panel } = await asked(server)
+    server.household = { ...server.household, name: 'Tilcerovi doma' }
+    const name = within(panel).getByRole('textbox', { name: named })
+    await user.type(name, 'Tilcerovi')
+    await user.click(within(panel).getByRole('button', { name: confirmed }))
+    await waitFor(() => {
+      expect(name).toHaveAccessibleDescription(
+        expect.stringMatching(/That is not the household’s name\. Type: Tilcerovi doma$/),
+      )
+    })
   })
 
   it('schedules it with the name as typed, says so, and draws the day with the way to keep the household', async () => {

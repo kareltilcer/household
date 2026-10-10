@@ -46,14 +46,21 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import account from '../account/Settings.module.css'
-import { refocus, sameId, useData, useNoWithdrawal, useSaid } from '../account/common.ts'
+import {
+  refocus,
+  sameId,
+  useData,
+  useFocusKept,
+  useNoWithdrawal,
+  useSaid,
+} from '../account/common.ts'
 import { useClientNames } from '../account/userAgent.ts'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
 import { inHousehold } from '../app/paths.ts'
-import { useReread, writes } from '../household/data.ts'
+import { notTheirs, useReread, useRereadWhereRefused, writes } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { useRefusal } from '../household/settings/invitations.ts'
 import { HouseholdSettingsPage, Section } from '../household/settings/Page.tsx'
@@ -153,11 +160,17 @@ interface Target {
 function Row({
   row,
   connection,
+  listed,
   inbox,
   onAgain,
 }: {
   readonly row: Listed
   readonly connection: Connection
+  /**
+   * Whether the server's list was read: with it unread, a row with no report is not said to have
+   * reported nothing, which nobody has said.
+   */
+  readonly listed: boolean
   /** Where what waits for the member is answered: this browser's own inbox. */
   readonly inbox: string
   /** Asks to download it again, where that is offered: absent, not disabled. */
@@ -171,6 +184,7 @@ function Row({
   const stands = standsOf(row, connection)
   const kinds = report?.digest_mismatch_entity_types?.length ?? 0
   const failures = report?.checksum_failures ?? 0
+  const takesWrites = writes(useHousehold())
 
   // How it stands, in the screen's own words: the contract's name for none of it is drawn.
   const words = (): string => {
@@ -191,8 +205,8 @@ function Row({
         return t('health.sync.status.synced')
     }
   }
-  const reported = (): string => {
-    if (report === undefined) return t('health.sync.row.unreported')
+  const reported = (): string | undefined => {
+    if (report === undefined) return listed ? t('health.sync.row.unreported') : undefined
     const at = report.last_report_at ?? undefined
     if (at === undefined) return t('health.sync.row.reported_unknown')
     const when = format.instant(at, zone)
@@ -200,6 +214,7 @@ function Row({
       ? t('health.sync.row.reported_bare', { when })
       : t('health.sync.row.reported', { when, checkpoint: data(report.checkpoint) })
   }
+  const lastReport = reported()
 
   return (
     <li className={styles.row}>
@@ -218,7 +233,10 @@ function Row({
         {row.own && !connection.online ? (
           <p className={styles.detail}>{t('health.sync.row.offline')}</p>
         ) : row.own && connection.receiving === false ? (
-          <p className={styles.detail}>{t('health.sync.row.not_receiving')}</p>
+          <p className={styles.detail}>
+            {/* Nothing is saved and sent in a household that takes no writes: as the bar says. */}
+            {takesWrites ? t('health.sync.row.not_receiving') : t('shell.not_receiving.reading')}
+          </p>
         ) : null}
         {row.waiting === 0 ? null : (
           <p className={styles.detail}>
@@ -243,7 +261,7 @@ function Row({
         {failures === 0 ? null : (
           <p className={styles.detail}>{t('health.sync.row.checksums', { count: failures })}</p>
         )}
-        <p className={styles.detail}>{reported()}</p>
+        {lastReport === undefined ? null : <p className={styles.detail}>{lastReport}</p>}
       </div>
       {onAgain === undefined ? null : (
         <div className={styles.actions}>
@@ -274,12 +292,14 @@ export function SyncHealth() {
   const { pathname } = useLocation()
   const { receiving } = useSync()
   const own = useOwn()
-  const waiting = useWaiting()
   const inbox = useInbox()
+  const waiting = useWaiting(inbox)
   const takesWrites = writes(household)
 
   const read = useSyncState(household.id)
   const reports = read.data
+  // The list's own refusal says its reader is in the household no longer: it is read again.
+  useRereadWhereRefused(household.id, notTheirs(read))
   // A report says a device's label and not what kind of device it is: the account's own list
   // does, and is asked only where a replica names a device.
   const devices = useOwnDevices({
@@ -353,11 +373,16 @@ export function SyncHealth() {
   // A refusal that is no dialog's to say: each is said as it arrives.
   const [refused, refuse] = useSaid()
 
-  // The control that was pressed is gone once the list is read again: a replica marked to
-  // download itself again offers nothing, one that is listed no longer has no row, and a
-  // household that stopped taking writes draws no control at all. The focus it held went with
-  // it, and is put on the list's own place.
-  const view = useRef<HTMLDivElement>(null)
+  // *Try again* and *Check again* leave with the sentence they stand in once the list is read,
+  // and the focus each held would drop to the page: it is put on the list's own place, whenever
+  // what is drawn changes and what held the focus is on the page no longer.
+  const view = useFocusKept(
+    false,
+    `${state} ${String(reports === undefined)} ${String(rows.length)}`,
+  )
+  // So is the control that was pressed, which is gone once the list is read again: a replica
+  // marked to download itself again offers nothing, one that is listed no longer has no row, and
+  // a household that stopped taking writes draws no control at all.
   const asked = useRef<string | null>(null)
   useEffect(() => {
     const id = asked.current
@@ -499,6 +524,7 @@ export function SyncHealth() {
                       key={row.key}
                       row={row}
                       connection={connection}
+                      listed={reports !== undefined}
                       inbox={inHousehold.sync(household.id)}
                       onAgain={
                         drawn && offersAgain(report)

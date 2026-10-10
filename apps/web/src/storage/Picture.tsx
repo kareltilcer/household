@@ -10,6 +10,7 @@
 // A share is drawn beside the figure that says it and is never the only carrier of it: the
 // drawing is hidden from assistive technology, and at 200 % text the words take the room.
 import { ModuleIcon } from '@household/icons/web'
+import { useData } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import type { Subscription, UsageSummary } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
@@ -298,6 +299,8 @@ function ByMember({ report }: { readonly report: StorageReport }) {
 function Largest({ report }: { readonly report: StorageReport }) {
   const t = useTranslate()
   const format = useFormat()
+  // An item's own name, a file's among them, is data and no word of the catalog's.
+  const asWritten = useData()
   return (
     <Section title={t('storage.largest.title')} note={t('storage.largest.note')}>
       {report.largest.length === 0 ? (
@@ -309,7 +312,7 @@ function Largest({ report }: { readonly report: StorageReport }) {
             <li key={`${item.module}/${item.entity_id}`} className={styles.row}>
               <div className={styles.about}>
                 <span className={styles.name}>
-                  {item.label === '' ? t('storage.largest.unnamed') : item.label}
+                  {item.label === '' ? t('storage.largest.unnamed') : asWritten(item.label)}
                 </span>
                 <span>
                   {t('storage.largest.frees', { size: format.bytes(item.recoverable_bytes) })}

@@ -15,13 +15,13 @@
 // *Hand billing over* leads to the billing screen, where whoever pays offers billing to another
 // owner and it moves once they accept (billing/Handover.tsx; FR-BI6). The server refuses a payer
 // of record whatever the subscription's state, a trial that never subscribed among them, so
-// cancelling the subscription is no way out and is said not to be. What the prototype drew and
-// this does not:
-// deleting the household, the last owner's other way out, is not built, so only making somebody
-// else an owner is offered. A member who is the only one in the household is told that leaving
-// would leave it with nobody in it, and one whose only company is child profiles, which are
-// never made owners, is led to where somebody is invited and not to a list that can give no
-// owner. A child profile does not leave: an owner removes it (D-104).
+// cancelling the subscription is no way out and is said not to be. The last owner's other way
+// out is deleting the household (FR-HH4), which is done on the screen of its data, in every
+// state it can be opened in (FR-BI1), and is led to from here beside making somebody else an
+// owner. A member who is the only one in the household is told that leaving would leave it with
+// nobody in it, and one whose only company is child profiles, which are never made owners, is
+// led to where somebody is invited and not to a list that can give no owner. A child profile
+// does not leave: an owner removes it (D-104).
 //
 // What leaving does to what the member wrote is said in a section of its own, always, and again
 // in the confirmation: what they added stays with the household, and their private notes and
@@ -37,7 +37,8 @@
 // Nothing is *absent* or *withdrawn*, no grant standing over leaving. *Read-only* changes one
 // thing: leaving is taken by a household that takes no other write (FR-BI1), so a household
 // whose subscription lapsed is left like any other, but its last owner can make nobody an owner
-// there and invite nobody, and is told that in the place of a way that would lead to neither.
+// there and invite nobody, and is told that in the place of a way that would lead to neither:
+// what is left them there is deleting it, which the gate lets through.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
@@ -246,6 +247,9 @@ function Leaving({ me }: { readonly me: Me }) {
                   <p className={styles.text}>
                     {t('household.leave.alone.body', { household: name })}
                   </p>
+                  <Link className={styles.link} to={inHousehold.data(id)}>
+                    {t('household.leave.delete')}
+                  </Link>
                 </Section>
               ) : null}
               {lastOwner && !alone ? (
@@ -274,6 +278,10 @@ function Leaving({ me }: { readonly me: Me }) {
                       {t('household.leave.last_owner.action')}
                     </Link>
                   )}
+                  {/* The other way out, which a household that takes no other write takes too. */}
+                  <Link className={styles.link} to={inHousehold.data(id)}>
+                    {t('household.leave.delete')}
+                  </Link>
                 </Section>
               ) : null}
               {payer ? (

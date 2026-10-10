@@ -22,7 +22,9 @@
 // - No *you cancelled on*: nothing a member reads says who cancelled, or when.
 // - No one-press *resume*: a household that lapsed subscribes again, in the payment form.
 // - A day of deletion on a lapse alone (`data_retained_until`, as given): on any other state it
-//   would tell a household it is about to lose data that is in no danger.
+//   would tell a household it is about to lose data that is in no danger. And none where the
+//   household's own deletion is scheduled, which comes first: the day a lapse would keep its data
+//   until is then a day it does not reach.
 // - No *everybody can export*: the household's export is an owner's, and a member's is of
 //   their own data.
 //
@@ -109,7 +111,8 @@ export function EntitlementBannerView({
     const name = restriction.restricted_by.label ?? ''
     const reason = restriction.reason ?? ''
     return [
-      name === ''
+      // Nor is somebody who has left since named as an owner: the data screen says who it was.
+      name === '' || restriction.restricted_by.is_former_member === true
         ? t('entitlement.restricted.on', { when })
         : t('entitlement.restricted.by', { when, name }),
       ...(reason.trim() === '' ? [] : [t('entitlement.restricted.reason', { reason })]),
@@ -257,7 +260,11 @@ function Drawn({ shown, announce }: { readonly shown: Shown; readonly announce: 
 /** The banner of the household the shell is around, or nothing where its state asks for none. */
 export function EntitlementBanner() {
   const household = useHousehold()
-  const shown = bannerOf(household.entitlement, household.my_role === 'owner')
+  const shown = bannerOf(
+    household.entitlement,
+    household.my_role === 'owner',
+    (household.deletion_scheduled_at ?? null) !== null,
+  )
   const id = shown === null ? null : bannerId(shown)
   // What stood when the household was opened, a banner or none, is read in its place. Anything
   // it comes to afterwards arrived while the member was here, and nothing moved the focus to it.

@@ -68,6 +68,8 @@ function build(changed: Readonly<Record<string, string | Uint8Array | null>> = {
     'assets/display-1.js': '(function(){})()',
     'assets/index-1.js': 'import "./vendor-1.js";console.log("app")',
     'assets/vendor-1.js': 'export const react = 1',
+    // The app's own words, by the name the build gives their file: counted with the first download.
+    'assets/catalog-en.app-1.js': 'export default {"app.name":"Household"}',
     'assets/index-1.css': 'body{color:var(--text-primary)}',
     ...changed,
   }
@@ -233,6 +235,12 @@ describe('the check of a build', () => {
       'a screen’s words over the budget',
       { 'assets/catalog-de.household-1.js': randomBytes(budgets.lazy + 1000) },
       'is over the lazy budget',
+    ],
+    [
+      // Named otherwise, or written into another script, they would be counted with nothing.
+      'no file of the app’s own words',
+      { 'assets/catalog-en.app-1.js': null },
+      "holds no file of the app's own words",
     ],
     [
       'no encoding declared',

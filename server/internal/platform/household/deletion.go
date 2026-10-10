@@ -180,10 +180,11 @@ func (s *Service) unschedule(ctx context.Context, tx pgx.Tx, household, actor uu
 }
 
 // sameName reports whether typed is the household's name as its owner must type it to delete it
-// (FR-PR6): the name, whatever its case and the space around it, since the point is that they read
-// it, not that they match a capital.
+// (FR-PR6): the name, whatever its case, the space around it and how many spaces stand between its
+// words, since the point is that they read it, not that they match a capital. A page draws a run of
+// spaces as one, so a name kept with two in a row is typed with one by whoever reads it there.
 func sameName(typed, name string) bool {
-	return strings.EqualFold(strings.TrimSpace(typed), strings.TrimSpace(name))
+	return strings.EqualFold(strings.Join(strings.Fields(typed), " "), strings.Join(strings.Fields(name), " "))
 }
 
 // scheduleDeletion is postDeletion (FR-PR6, FR-HA16): an owner, typing the household's name,

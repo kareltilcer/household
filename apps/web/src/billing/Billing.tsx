@@ -40,14 +40,21 @@ import { Link } from 'react-router'
 import { readState } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { useApi } from '../api/ApiProvider.tsx'
-import { problemIn, unwrap } from '../api/problem.ts'
+import { unwrap } from '../api/problem.ts'
 import { askedNow } from '../api/query.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
 import { useFragmentAndQuery } from '../auth/fragment.ts'
-import { useReread, useSubscription, writes, type Subscription } from '../household/data.ts'
+import {
+  notTheirs,
+  useReread,
+  useRereadWhereRefused,
+  useSubscription,
+  writes,
+  type Subscription,
+} from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
-import { householdKey, subscriptionKey } from '../household/households.ts'
+import { subscriptionKey } from '../household/households.ts'
 import { HouseholdSettingsPage, Section } from '../household/settings/Page.tsx'
 import { useTimeZone } from '../household/timezone.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
@@ -97,13 +104,19 @@ const returned = [
   'redirect_status',
 ] as const
 
-/** What the state the household is in means, in a sentence, with the day it carries where it has one. */
+/**
+ * What the state the household is in means, in a sentence, with the day it carries where it has
+ * one. The day a lapse keeps its data until is not said of a household whose own deletion is
+ * scheduled: that comes first, and subscribing does not take it back.
+ */
 function useStateSentence(): (subscription: Subscription) => string | undefined {
   const t = useTranslate()
   const format = useFormat()
   const zone = useTimeZone()
+  const deleting = (useHousehold().deletion_scheduled_at ?? null) !== null
   return (subscription) => {
-    const day = (at: string | null) => (at === null ? undefined : format.dayOf(at, zone))
+    const kept = (at: string | null) =>
+      at === null || deleting ? undefined : format.dayOf(at, zone)
     switch (subscription.state) {
       case 'trialing':
       case 'active':
@@ -111,14 +124,17 @@ function useStateSentence(): (subscription: Subscription) => string | undefined 
       case 'past_due':
         return t('billing.means.past_due')
       case 'grace': {
-        const until = day(subscription.grace_ends_at)
+        const until =
+          subscription.grace_ends_at === null
+            ? undefined
+            : format.dayOf(subscription.grace_ends_at, zone)
         return until === undefined
           ? t('billing.means.grace')
           : t('billing.means.grace_until', { day: until })
       }
       case 'read_only':
       case 'canceled': {
-        const until = day(subscription.data_retained_until)
+        const until = kept(subscription.data_retained_until)
         if (subscription.state === 'canceled') {
           return until === undefined
             ? t('billing.means.canceled')
@@ -164,6 +180,8 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
   const payer = isPayer(subscription, me.id)
   const { interval } = subscription
   const { id, name } = household
+  const restricted =
+    subscription.state === 'restricted' || (household.entitlement?.restriction ?? null) !== null
   const path = { household_id: id }
   const [asking, setAsking] = useState<'interval' | 'cancel' | null>(null)
   // *Cancel* gives its place to *Resume*, and *Resume* to *Cancel*, each with the focus a press
@@ -180,7 +198,13 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
    * asked from, and is said on the page; any other is the question's own to say, and it stays.
    */
   const refused = (error: unknown) => {
-    if (!isMoved(error)) return
+    if (!isMoved(error)) {
+      // An answer that never came, or the processor's own failure, says nothing of whether the
+      // processor took the change before it: how billing stands is read again, under the
+      // question's own sentence.
+      void reread()
+      return
+    }
     refusals.refuse(error)
     setAsking(null)
   }
@@ -228,7 +252,8 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
       toast({ message: t('billing.resume.done', { household: name }) })
     },
     onError: (error) => {
-      refusals.refuse(error)
+      // As above: a refusal that is not about where its member stands is read again too.
+      if (!refusals.refuse(error)) void reread()
     },
   })
   const asked = asking === 'interval' ? change : cancel
@@ -245,13 +270,15 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
       value:
         interval === null || price === undefined ? t('billing.plan.none') : prices(interval, price),
     },
+    // No *next charge* while a payment is being retried: the next charge is the processor's
+    // retry, which no answer dates, and the period's end is no day it is charged on.
     ...(interval === null
       ? []
-      : [
-          subscription.cancel_at_period_end
-            ? { key: t('billing.period.ends'), value: ends }
-            : { key: t('billing.period.next'), value: ends },
-        ]),
+      : subscription.cancel_at_period_end
+        ? [{ key: t('billing.period.ends'), value: ends }]
+        : subscription.state === 'past_due'
+          ? []
+          : [{ key: t('billing.period.next'), value: ends }]),
     { key: t('billing.payer.label'), value: payerName },
     ...(subscription.trial_ends_at === null
       ? []
@@ -267,7 +294,12 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
       <div ref={place} tabIndex={-1} className={styles.place}>
         <StateWord state={subscription.state} />
         {means === undefined ? null : <p className={account.text}>{means}</p>}
-        {subscription.state === 'restricted' ? (
+        {/* A lapse outranks a restriction, which is there all the same (D-114): subscribing
+            again does not lift it, and that is said beside what subscribing brings back. */}
+        {restricted && subscription.state !== 'restricted' ? (
+          <p className={account.text}>{t('billing.means.restricted')}</p>
+        ) : null}
+        {restricted ? (
           <Link className={account.link} to={inHousehold.data(id)}>
             {t('household.settings.data.title')}
           </Link>
@@ -309,6 +341,8 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
             ) : null}
             {other === undefined || otherPrice === undefined ? null : (
               <Button
+                // Taking a cancellation back is on its way: one write of the subscription at a time.
+                aria-disabled={resume.isPending}
                 onClick={() => {
                   refusals.clear()
                   change.reset()
@@ -415,7 +449,6 @@ function Standing({ subscription }: { readonly subscription: Subscription }) {
 
 function Read({ cameBack }: { readonly cameBack: boolean }) {
   const t = useTranslate()
-  const queries = useQueryClient()
   const online = useOnline()
   const me = useMe()
   const household = useHousehold()
@@ -423,13 +456,9 @@ function Read({ cameBack }: { readonly cameBack: boolean }) {
   const read = useSubscription(household.id)
   const subscription = read.data
 
-  // The read's own `404` says its reader owns the household no longer, whatever this page had
+  // The read's own refusal says its reader owns the household no longer, whatever this page had
   // read of it: the household alone is read again, which is what tells the rest of the app.
-  const lowered = problemIn(read.error)?.status === 404
-  useEffect(() => {
-    if (!lowered) return
-    void queries.invalidateQueries({ queryKey: householdKey(household.id), exact: true })
-  }, [lowered, queries, household.id])
+  useRereadWhereRefused(household.id, notTheirs(read))
 
   // Back from a bank's own page: the processor may take a moment to say how it went, so the
   // subscription is read again a few times, and what it then says is all this page says.

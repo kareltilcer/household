@@ -12,7 +12,8 @@
 // while, and one sentence under the summary says where that stands, from the press on: that the
 // processor is confirming it, that the new method is in use once the summary read says another
 // method or a payment that was being retried has gone through, or that the processor has not
-// said yet. A method replaced by the same card reads the same, and is said so.
+// said yet. A method replaced by the same card reads the same, so nothing here can say that it
+// is in use: the sentence that the processor has not said yet is where that ends.
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import account from '../account/Settings.module.css'

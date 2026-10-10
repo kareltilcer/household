@@ -6,8 +6,11 @@
 // The server replaces both with whatever it is sent, and one left out is withdrawn (D-142), so
 // each change sends both as the screen holds them. A switch takes another change while one is
 // on its way, sent beside it: which of two the server took last is not the order their answers
-// come in, so only the answer to the change made last is drawn, and once that one is answered
-// what the server holds is read. A change that was refused is put back and said.
+// come in, so only the answer to the change made last is drawn, and once every one of them is
+// answered, and not before, what the server holds is read: read after the last one made but
+// before an earlier one landed, it would be drawn over by nothing when that one did. A change
+// that was refused is said, and put back where it was the last one made; an earlier one's
+// refusal leaves what the later one chose, which the read then settles.
 //
 // The switch for statistics says what they would hold and what they never would, and claims no
 // more than is so: the web app collects none yet, and the switch records the choice. A child
@@ -59,31 +62,41 @@ function Choices() {
   const [refusal, setRefusal] = useState<string | null>(null)
   // How many changes this screen has sent: the one made last is the one whose answer is drawn.
   const sent = useRef(0)
+  // How many of them are still on their way: what the server holds is read once none is.
+  const flying = useRef(0)
   const save = useMutation({
     ...askedNow,
     mutationFn: async (next: Both) => unwrap(await api.PUT('/me/consents', { body: next })),
-    onMutate: (next: Both) => {
+    onMutate: async (next: Both) => {
       setRefusal(null)
       sent.current += 1
+      flying.current += 1
+      const turn = sent.current
+      // A read on its way was asked before this change: its answer would be drawn over it.
+      await queries.cancelQueries({ queryKey: consentsKey, exact: true })
       const before = queries.getQueryData<Kept>(consentsKey)
       // Shown as chosen while it is asked: a switch that waited for the answer would feel stuck.
       queries.setQueryData<Kept>(consentsKey, (was) =>
         was === undefined ? was : { ...was, ...next },
       )
-      return { before, turn: sent.current }
+      return { before, turn }
     },
     onSuccess: (saved, _next, context) => {
       if (context.turn === sent.current) queries.setQueryData(consentsKey, saved)
     },
     onError: (error, _next, context) => {
-      // Put back: what the screen shows is what the server holds.
-      if (context?.before !== undefined) queries.setQueryData(consentsKey, context.before)
+      // Put back, where no change was made after it: what the screen shows is what the server
+      // holds. Under a later change it is that one's choice that stands until the read.
+      if (context?.before !== undefined && context.turn === sent.current) {
+        queries.setQueryData(consentsKey, context.before)
+      }
       setRefusal(say(error))
     },
-    onSettled: (_saved, _error, _next, context) => {
-      // The last of them is answered: what the server holds now is read, whichever of two sent
-      // side by side it took last.
-      if (context?.turn !== sent.current) return
+    onSettled: () => {
+      // Every one of them is answered: what the server holds now is read, whichever of two
+      // sent side by side it took last.
+      flying.current -= 1
+      if (flying.current > 0) return
       void queries.invalidateQueries({ queryKey: consentsKey, exact: true })
     },
   })

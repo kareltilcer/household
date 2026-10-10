@@ -87,18 +87,19 @@ export function I18nProvider({ children, locale: given }: I18nProviderProps) {
     setShown(next)
   }, [])
 
-  const value = useMemo<I18n>(() => {
+  // The formatters are the language's and the account's, and no part's: a part of the catalog that
+  // arrives with a screen makes a new translator, and leaves them, and whatever was made of them,
+  // as they were.
+  const format = useMemo(() => {
     const device = window.navigator.languages
-    return {
-      locale,
-      setLocale,
-      t: translatorOver(locale, messages),
-      format: createFormatters(
-        formattingLocale(locale, account === undefined ? device : [account, ...device]),
-      ),
-      setFormatting,
-    }
-  }, [locale, messages, setLocale, account])
+    return createFormatters(
+      formattingLocale(locale, account === undefined ? device : [account, ...device]),
+    )
+  }, [locale, account])
+  const value = useMemo<I18n>(
+    () => ({ locale, setLocale, t: translatorOver(locale, messages), format, setFormatting }),
+    [locale, messages, setLocale, format],
+  )
   return <I18nContext value={value}>{children}</I18nContext>
 }
 

@@ -124,3 +124,9 @@
   flex-direction: column;
   min-width: 0;
 }
+
+/* What an owner typed, as they typed it: its lines kept, and a long word broken. */
+.written {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

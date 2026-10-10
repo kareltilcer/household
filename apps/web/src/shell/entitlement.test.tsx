@@ -111,6 +111,20 @@ describe('which banner a household’s entitlement asks for', () => {
     expect(bannerOf(states.restricted, false)).toEqual({ kind: 'restricted', restriction })
   })
 
+  // The household's own deletion comes first, and the erasure takes whichever does: the day a
+  // lapse would keep its data until is a day it does not reach, and is not said.
+  it('carries no day its data is kept until where the household’s deletion is scheduled', () => {
+    expect(bannerOf(states.readOnly, true, true)).toEqual({
+      kind: 'read_only',
+      retainedUntil: null,
+      restriction: null,
+    })
+    expect(bannerOf(states.canceled, false, true)).toMatchObject({ retainedUntil: null })
+    expect(bannerOf(states.readOnly, true, false)).toMatchObject({
+      retainedUntil: '2027-10-09T08:00:00Z',
+    })
+  })
+
   // D-114: the lapse outranks the restriction, which is carried beside it.
   it('is the lapse’s for a household that is lapsed and restricted, the restriction beside it', () => {
     expect(bannerOf({ ...states.readOnly, restriction }, true)).toMatchObject({
@@ -222,7 +236,7 @@ function ways(): Record<string, string | null> {
 
 const ask = 'Only an owner can change this: Jana Tilcerová and Petr Tilcer.'
 const held =
-  'Changes waiting in this browser are kept, and sent if the household can be changed again.'
+  'Changes waiting in this browser are kept, and sent once the household can be changed again.'
 const keptUntil = 'Its data is kept until Oct 9, 2027, then deleted.'
 const restrictedBy =
   /^An owner restricted this household on Sep 9, 2026, 2:02\sPM: Jana Tilcerová\.$/
@@ -323,7 +337,8 @@ describe('the banner of a read-only household', () => {
     expect(screen.getByText('Tilcerovi is read-only')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Everything can still be read. Nothing can be added or changed until the subscription is paid.',
+        // A subscription, and not *the*: a trial that ran out lapses with none.
+        'Everything can still be read. Nothing can be added or changed until a subscription is paid for.',
       ),
     ).toBeInTheDocument()
     // FR-BI2: what waits in this browser is held, and not lost.
@@ -416,6 +431,24 @@ describe('the banner of a restricted household', () => {
     expect(ways()).toEqual({ 'Lift the restriction': inHousehold.data(home) })
     // No day of deletion: nothing of a restricted household is on its way out.
     expect(container).not.toHaveTextContent(/deleted|kept until/)
+  })
+
+  // Somebody who has left since is no owner to name as one: the data screen says who it was.
+  it('names nobody as an owner who is a member no longer', () => {
+    const { container } = banner(
+      {
+        state: 'restricted',
+        restriction: {
+          ...restriction,
+          restricted_by: { ...restriction.restricted_by, is_former_member: true },
+        },
+      },
+      'owner',
+    )
+    expect(
+      screen.getByText(/^An owner restricted this household on Sep 9, 2026, 2:02\sPM\.$/),
+    ).toBeInTheDocument()
+    expect(container).not.toHaveTextContent('Jana Tilcerová')
   })
 
   it('names nobody once that account is gone, and gives no reason where none was given', () => {

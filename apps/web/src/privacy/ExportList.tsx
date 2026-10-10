@@ -33,9 +33,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { readState, refocus, useData, useNoWithdrawal, useSaid } from '../account/common.ts'
 import account from '../account/Settings.module.css'
-import { problemIn } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
 import { askedNow } from '../api/query.ts'
+import { notTheirs } from '../household/data.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import a11y from '../ui/a11y.module.css'
@@ -131,10 +131,12 @@ function Row({
   const line = useEntryLine()
   const status = statusOf(job)
   const when = job.requested_at === undefined ? '' : format.instant(job.requested_at, zone)
+  // The moment, and not its day alone: an archive is gone at that time of the day, and on the
+  // day itself *until* would be read as the whole of it.
   const until =
     job.expires_at === undefined || job.expires_at === null
       ? undefined
-      : format.dayOf(job.expires_at, zone)
+      : format.instant(job.expires_at, zone)
   const contents = job.contents ?? []
 
   // How it stands, in words: the contract's own names for it are drawn nowhere.
@@ -268,8 +270,11 @@ export function ExportList({
     queryKey: source.key,
     queryFn: async ({ signal }) => (await source.list(signal)).map(listed),
     // While one is on its way nothing tells the page what became of it: the list is asked for
-    // again, until none is. The query client holds it back while the page is hidden.
-    refetchInterval: (query) => (query.state.data?.some(underWay) === true ? askAgainEvery : false),
+    // again, until none is. The query client holds it back while the page is hidden. And it is
+    // asked for no more once it is answered as not its reader's, a member taken out of the
+    // household meanwhile: what was kept would have it asked for every few seconds for nothing.
+    refetchInterval: (query) =>
+      query.state.data?.some(underWay) === true && !notTheirs(query.state) ? askAgainEvery : false,
   })
   const list = read.data
   const making = list?.some(underWay) === true
@@ -286,7 +291,9 @@ export function ExportList({
       if (underWay(job)) watched.current.add(job.id)
       else if (watched.current.delete(job.id)) {
         const status = statusOf(job)
-        if (status === 'ready') toast({ message: t('data.exports.ready') })
+        // Ready to download only for whoever is handed its link: a requester made a member since
+        // reads how it stands on its row.
+        if (status === 'ready' && job.linked) toast({ message: t('data.exports.ready') })
         if (status === 'failed') toast({ message: t('data.exports.failed') })
       }
     }
@@ -351,7 +358,7 @@ export function ExportList({
       )
     },
     onError: (error) => {
-      if (problemIn(error)?.status !== 404) {
+      if (!notTheirs({ error })) {
         refuse(say(error))
         return
       }

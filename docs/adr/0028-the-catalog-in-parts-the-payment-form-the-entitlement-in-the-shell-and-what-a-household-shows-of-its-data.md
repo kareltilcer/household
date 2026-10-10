@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-09
 - **Plan item:** 27
-- **Decides for:** [04-billing](../prd/04-billing-and-entitlements.md) §3, §6, FR-BI1 to FR-BI7; [05-privacy](../prd/05-privacy-and-compliance.md) §3, §4, §9; [06-clients](../prd/06-clients.md) §7, §8; [17-household-admin](../prd/modules/17-household-admin.md) §5 to §8 and Permissions; [10-sync-risk](../prd/10-sync-risk.md) §6; [02-identity](../prd/02-identity-and-access.md) FR-HH4, FR-PS1; design [03-patterns](../design/03-patterns.md) §3, DD-9, DD-15; D-114, D-125, D-128, D-131 to D-135, D-138 to D-142, D-153, D-159, D-167, D-170, D-174 to D-181; plan Q11; the consequences of [ADR 0008](0008-reference-data-pipeline.md), [ADR 0019](0019-the-sync-client-library.md), [ADR 0020](0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md), [ADR 0021](0021-export-erasure-and-the-tombstones.md), [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md), [ADR 0026](0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md) and [ADR 0027](0027-the-households-web-screens-routes-of-the-apps-own-the-grant-matrix-and-settings-asked-at-once.md) for item 27
+- **Decides for:** [04-billing](../prd/04-billing-and-entitlements.md) §3, §6, FR-BI1 to FR-BI7; [05-privacy](../prd/05-privacy-and-compliance.md) §3, §4, §9; [06-clients](../prd/06-clients.md) §7, §8; [17-household-admin](../prd/modules/17-household-admin.md) §5 to §8 and Permissions; [10-sync-risk](../prd/10-sync-risk.md) §6; [02-identity](../prd/02-identity-and-access.md) FR-HH4, FR-PS1; design [03-patterns](../design/03-patterns.md) §3, DD-9, DD-15; D-114, D-125, D-128, D-131 to D-135, D-138 to D-142, D-153, D-159, D-167, D-170, D-174 to D-182; plan Q11; the consequences of [ADR 0008](0008-reference-data-pipeline.md), [ADR 0019](0019-the-sync-client-library.md), [ADR 0020](0020-billing-the-processor-webhooks-the-payer-and-storage-lines.md), [ADR 0021](0021-export-erasure-and-the-tombstones.md), [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md), [ADR 0026](0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md) and [ADR 0027](0027-the-households-web-screens-routes-of-the-apps-own-the-grant-matrix-and-settings-asked-at-once.md) for item 27
 
 ## Context
 
@@ -64,9 +64,11 @@ outside `app`, a screen that reads a part its route does not name, a route that 
 screen does not read, and a route with words and no file of its own to fetch them with.
 
 **The first download counts the app's own words**, in the largest language, with the scripts the
-page names (`build/budget.ts`): it stands at 179 kB of 200 with the catalog split, from 194. A
-part is a file named `assets/catalog-<language>.<part>-<hash>.js`, and any part but the app's own
-is held to the budget of a script loaded later.
+page names (`build/budget.ts`): it stood at 179 kB of 200 once the catalog was split, from 194,
+and stands at 182 with this item's screens. A part is a file named
+`assets/catalog-<language>.<part>-<hash>.js`, and any part but the app's own is held to the
+budget of a script loaded later; a build that holds no file of the app's own words by that name
+fails its check, since it would be counted without them.
 
 **The server's two emails that opened the app outside a household's settings open it inside**:
 the offer of billing at `settings/billing/takeover`, a household's export at `settings/exports`,
@@ -140,11 +142,31 @@ question to ask: the screen reads the subscription again a bounded number of tim
 (`billing/cadence.ts`) and says that the processor has confirmed it once the read shows it, and
 otherwise that it has not said yet.
 
+**What nobody has said is not said either way.** A confirmation that Stripe's script resolves with
+an error that is neither the form's own nor the method's, or that throws, is one whose outcome
+nobody has given: its answer may have been lost on the way back from a processor that took it,
+and a second press of one it took is refused in that same kind (the browser showed a payer who
+had been charged told twice that nothing was). The form then says that it cannot tell yet,
+never that nothing was charged or that the household is as it was, and reads the household
+again, by which its screen draws: once the processor has told the server, the form gives way to
+what is so. A confirmation on its way holds whatever would put the form away, the choice of how
+often to pay among it. `503 billing_unavailable` is answered too once the processor has taken a
+change that could not then be read back, and the contract says of it only that the request may
+be sent again: its sentence claims nothing of what was charged or changed, and billing is read
+again after it. An offer taken back is answered `204` as one that was no longer open is, an
+accepted one among them, so who pays is read before a payer is told that they go on paying.
+And the day a new payer's own subscription starts is named, with *nobody pays twice*, only in a
+household that is `active`: where the period's own payment is owed the server starts it at once
+and charges their method (D-133), and a restriction's state does not say whether one is.
+
 **The entitlement is said in the shell, from the household's own answer** (D-180).
 `shell/EntitlementBanner.tsx` draws one banner under the offline bar's place
 (`shell/HouseholdBars.tsx`) for the state `useHousehold().entitlement` resolves, to the reader
 it is drawn for: the payer, another owner, or a member, who is who being read off the members
-(`useReader`, `household/data.ts`). It reads no billing and names no price. The settings'
+(`useReader`, `household/data.ts`). It reads no billing and names no price. The day a lapse
+keeps a household's data until is said of no household whose own deletion is scheduled, here,
+on billing, or where a restriction is lifted: the deletion comes first, the erasure taking
+whichever does, and a payment does not take it back. The settings'
 frame, which said that a household takes no writes, says only whose changing what is there is.
 In a household that takes no writes the offline bar promises nothing of a change, the conflict
 panel draws no answer, and the refused-change panel keeps *Discard*.
@@ -153,7 +175,10 @@ panel draws no answer, and the refused-change panel keeps *Discard*.
 `shell/HouseholdShell.tsx`). Where a household's address answers `404`, the member's list of
 households is read again, and only that answer decides between the lockout, where the list
 names the household suspended, and *not available*: what this browser kept of the list is not
-gone by.
+gone by. The `404` stands while the household is asked for again with nothing kept of it, as it
+is each time the page is looked at: the lockout is not taken down and built again around a
+skeleton, the focus on it lost, nor replaced by *could not be read* where the asking waits for a
+connection.
 
 **An export is downloaded by a navigation, after its job is read again** (`privacy/ExportList.tsx`).
 A job's link is good for minutes and each read renews it, and the policy's `connect-src` does
@@ -166,7 +191,11 @@ account's, reads no word of the household's part.
 **Sync health is the reader's own replicas, and reports its own browser as it opens** (D-177,
 D-181; `health/SyncHealth.tsx`). This browser's row is drawn from the replica itself, live, and
 every other from its last report; the screen has this browser report once as it opens, where it
-has caught up, holds nothing queued and the household takes writes. The diagnostic bundle
+has caught up, holds nothing queued and the household takes writes. Caught up is a checkpoint
+applied since the replica's stream came up (`Replica.caughtUp`, `@household/sync`), and not one
+from the visit before: reported as the stream came up, a copy that had yet to receive what
+changed while it was closed read to the server as one that does not match, and its row said so
+with *Download again* beside it (seen in a browser, at every visit after a change). The diagnostic bundle
 (`health/bundle.ts`) is composed from that state and the last outcomes projected to their id,
 entity type, operation, outcome, code and time; it is drawn part by part and as the very text
 that is sent, and its id is made anew whenever a part is taken out or put back, so that a
@@ -174,7 +203,10 @@ bundle sent again is the one last read.
 
 **FR-HH4 follows the server** (D-174): the payer's refusal on the screens that leave a
 household, remove a member and change a role leads to the hand-over of billing, and says that
-cancelling does not stand in for it.
+cancelling does not stand in for it. The last owner's refusal on the leave screen leads, beside
+making somebody an owner, to where the household is deleted, which is their one way out of a
+household that takes no writes. And the name an owner types to delete a household is compared
+with its runs of spaces folded (D-182), a page drawing two in a row as one.
 
 ## Alternatives rejected
 
@@ -219,6 +251,26 @@ cancelling does not stand in for it.
 | One job read again while it is made, and not the list | Two reads to keep in step where one covers every row, and a job asked for in another tab is then seen too |
 | The bundle's id kept for the visit whatever is taken out of it | The server keeps a bundle once by its id: a bundle sent, then sent again with a part taken out, would be kept as first sent, with the part its member took out |
 | Sync health reporting again after a re-download is asked of this browser, so that it begins at once | One more report for a wait of minutes that every other device has too, and a second rule for one row |
+| A payment form's unknown failure settled by asking `postBillingSubscription` again, as a confirmation that was taken is | The second ask answers a secret again where nothing was taken, which after a confirmation means *on its way* and after an unknown one means *not sent*: one answer read two ways, by a flag. The household read again says what the server knows, and the form's own sentence stands until it does |
+| A part of the catalog that failed to fetch forgotten as needed, so that the language it failed in can be switched back to | Kept as needed, every language shown is whole with every part a screen has asked for, or is not shown, which is what the translator's throw rests on. What it costs is that the language cannot be switched back to until the page is loaded again, and the screen whose words failed already says to load it again (ADR 0026) |
+| The on-open report asked again at a later status where the library answered none | It is sent once for each visit (D-181). A second ask at every status that moves is a loop on whatever refused the first, and the library reports by itself a quarter of an hour on |
+| The wait for the processor's word counted from each read's answer, so that *has not said yet* is never said of a read on its way | A read that hangs would keep the screen confirming for as long as it does, which is the wait without bound this record declines above. The sentence is true of the moment it is said, and gives way to what the last read brings |
+| One helper for leaving the app for a file, the export's link held to `https` as an invoice's is | An invoice's file is the processor's, over TLS wherever it is asked. An archive's link is the object store's, which a development stack serves over `http`: held to `https` it downloads nowhere but in a deployment. It is the API's own answer, and the policy refuses a script as a navigation's address |
+| The restriction said once on the data screen, by the shell's banner alone; and the frame's *read-only* strip left off the inbox, billing, sync health and the clients under that banner | D-177 has the data screen say that a household is restricted, by whom and why, to every member, with what lifting comes to beside the control; the banner says it above every screen. The strip is the twelve states' own, and says what its screen does in that state, which the banner does not. One sentence of the screen's did claim more than the banner under a lapse, and is left out there |
+| A sentence of its own where a restriction is asked for in a household another owner restricted a moment before, whose reason the server then drops | The answer is the household as it stands, and the notice drawn at once names who restricted it and with what reason: the second owner reads there that it is the other's. It takes two owners restricting within one stale page |
+| The banner's announcement held back until the members are read, so that the line naming the owners does not change under a region that was just said | The state is what is announced, and holding it for a second read delays it for a line that only a member reads. Whether a screen reader says the whole again was not heard, the suite running none |
+| The entitlement's banner inside the page's landmark; a notice put away in one tab followed in another; one *Sign out* on the lockout | The offline bar stands where the banner does, above the landmark, and both are read on the way to it. A dismissal is this browser's and is read as the shell opens (D-180). The lockout's own way out is its content, and the navigation's is every screen's |
+| A `404` to keeping a household told apart, by its code, from one that says its member is in the household no longer | Both are `not_found`. The household read again says which: the notice gone, or the household's place taken by *not available* or the lockout |
+| One download at a time, on the invoices as on the exports; the download begun from `mutate`'s own callback | Each row's download reads its own file, and one that is answered while another is on its way is a second file saved. A download leads to no other screen: begun wherever its member is by then, it saves the file they pressed for |
+| A table or a list behind the storage trend's columns, a value a column | The plot draws no figure a sighted reader could take from it, no axis and no value, and what it shows, the first day, the last and the fullest, is said in words. Ninety rows of sizes would be a second screen |
+| *In sync* held back on this browser's row while its replica is still downloading | A replica holds four of the household's own entities today and is whole before the row is drawn. It is the first module of size's to settle (Consequences) |
+| The mismatch's sentence not promising that downloading again puts it right; the row of a replica already told to download again saying that it has | A type the server does not sync is listed for a client newer than its server, which the web, served with its API, is not; and the contract answers one word for a replica marked and one told (plan Q11). The row says that it says so until the report after |
+| A read-only strip over an empty list of replicas or of clients | This browser's own row is drawn from the replica itself, so the list is empty only in a tab that holds none, where the sentence that nothing has reported is true as it stands |
+| *Download again* withheld from the rows of this browser's earlier sign-ins | Nothing says which replica will never report again: each is its member's, listed for ninety days after its last report (D-128), and marking one asks nothing of a browser that is gone |
+| *Card* never said of a method the catalog cannot name | A card of a brand this build has no word for is a card, and is said to be one; only a kind with no expiry, which no card is, is said to be another method |
+| The take-over's screen holding, across a reload, that a method is being confirmed | The contract has no word for a setup on its way (Consequences): the offer is drawn again with its presses, and a second setup is inert |
+| A size under fifty bytes written as a tenth of a kilobyte, so that something is never written as nothing | Every size is rounded to a tenth of its unit, and a floor would write more than is stored. What rounds to a thousand of one unit is written as one of the next |
+| One word for a subscription in German, the six older messages moved to *Abo*; one verb for making an owner in Czech, Slovak and Polish | Both words are right in each, and every one of them is a draft in its ledger: which of two a language keeps is its reviewer's pass, with the rest of the catalog before them |
 
 ## Consequences
 
@@ -251,7 +303,15 @@ cancelling does not stand in for it.
   be handed to, and sync health goes stale there; an export has a status and no progress; a
   failed payment has no date its retries end on; nothing every member reads says who cancelled
   a subscription or when; nothing counts what a household's deletion takes; a storage item names
-  nothing a client could open; and no address of support exists for the lockout to lead to.
+  nothing a client could open; and no address of support exists for the lockout to lead to. Nor
+  does it say that a method is being confirmed for a hand-over, so a reload meanwhile draws the
+  offer again; whether a restricted household's payment is owed; or that an email it promises,
+  of an offer or of billing having moved, reaches only a verified address.
+- A browser's own row says *In sync* from its connection alone. A replica holds four of the
+  household's own entities today and is whole at once: the first module of size makes the row
+  wait for the download (**item 28** on).
+- The authorities of Germany and of the United Kingdom are named as their pages named them in
+  October 2026, each a draft: whoever reviews the reference data opens the two pages first.
 - **What would make this worth revisiting**: a module whose words are needed by a screen outside
   its own routes (a dashboard's widgets), which would ask for a part named by a component and
   not a route; a processor's test mode reachable from CI without a secret; an operation that

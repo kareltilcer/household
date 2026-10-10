@@ -518,6 +518,33 @@ describe('a suspended household’s lockout', () => {
     expect(screen.getByRole('banner')).toHaveTextContent('Chata')
   })
 
+  // The household is asked for again each time the page is looked at, with nothing kept of it:
+  // the lockout stands through the asking, the focus on it kept, and is not taken down and
+  // built again around a skeleton, nor the member's households read anew at each look.
+  it('stands, with the focus on it, while the household is asked for again', async () => {
+    const { asked } = open(inHousehold.home(cottage), { suspended: [cottage] })
+    await screen.findByRole('heading', { level: 1, name: title })
+    const out = within(screen.getByRole('main')).getByRole('button', { name: 'Sign out' })
+    out.focus()
+    const lists = () => asked.filter((path) => path === '/households').length
+    const before = { lists: lists(), all: asked.length }
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    await waitFor(() => {
+      expect(asked.slice(before.all)).toContain(`/households/${cottage}`)
+    })
+    expect(screen.getByRole('heading', { level: 1, name: title })).toBeInTheDocument()
+    // The very control, and the focus still on it.
+    expect(within(screen.getByRole('main')).getByRole('button', { name: 'Sign out' })).toBe(out)
+    expect(out).toHaveFocus()
+    // The list is read again as any list is when the page is looked at, once, and by no reset.
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1, name: title })).toBeInTheDocument()
+    })
+    expect(lists() - before.lists).toBeLessThanOrEqual(1)
+  })
+
   it('says the households could not be read where they were not, and draws the lockout once they are', async () => {
     let down = true
     open(inHousehold.home(cottage), {

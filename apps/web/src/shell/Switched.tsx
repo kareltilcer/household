@@ -55,7 +55,8 @@ export function Switched() {
 
   // The household the tab was in is named only where it is this member's still, and opens: one
   // they have left since, or another person's who signed in here before them, is named to
-  // nobody, and the way back to one suspended since would open nothing (D-115).
+  // nobody, and the way back to one suspended since would open its lockout and no household
+  // (D-115).
   const previous =
     from === null
       ? undefined

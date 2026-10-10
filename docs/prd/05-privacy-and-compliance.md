@@ -170,7 +170,8 @@ within that window and backups are never restored selectively into production.
 
 **FR-PR6 — Household deletion** is owner-only, requires typing the household name, warns that it
 affects every member, and notifies all members immediately. Same 30-day window, same irreversible
-execution.
+execution. The name typed is the household's whatever its case, the space around it and the
+number of spaces between its words (D-182).
 
 **The household works as it did for the 30 days (D-138)**: the window is its members' time to take
 what is theirs, each by their own export. Every member is emailed when it is scheduled and when it

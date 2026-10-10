@@ -23,6 +23,13 @@
 // (D-134). Answered `already_subscribed` the first time it is no error either: a credit covered
 // it, or another tab paid.
 //
+// What subscribing brings back is said by what the household's own answer carries, and no more:
+// a lapsed household takes changes again and loses the day its data was kept until, but not one
+// an owner restricted, which stays as it is until an owner lifts that, nor one whose deletion is
+// scheduled, which a payment does not take back. A confirmation on its way holds the choice of
+// how often to pay: changed under it, the form would be put away with the processor still
+// answering for the payment it was pressed for.
+//
 // An owner who does not pay reads the plan and is told whose it is to subscribe; a household
 // that is subscribed, or has a payment on its way, is told so with the way to billing; a member
 // and a child profile have no billing (FR-BI5). An unverified payer is refused where they press,
@@ -50,8 +57,10 @@ import { askedNow } from '../api/query.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
 import {
+  notTheirs,
   subscriptionQuery,
   useReread,
+  useRereadWhereRefused,
   useSubscription,
   type Subscription,
 } from '../household/data.ts'
@@ -144,6 +153,8 @@ function Paying({ subscription }: { readonly subscription: Subscription }) {
   // The choice as it stands now, for an answer that arrives after it was changed.
   const choice = useRef<Interval | undefined>(undefined)
   const [asked, setAsked] = useState<Asked | null>(null)
+  // Whether the form's confirmation is on its way, or was taken: the choice is held meanwhile.
+  const [confirming, setConfirming] = useState(false)
   // How many times the server has said this account's address is not verified.
   const [blocked, setBlocked] = useState(0)
 
@@ -224,6 +235,9 @@ function Paying({ subscription }: { readonly subscription: Subscription }) {
   const price = often === undefined ? undefined : priceOf(subscription, often)
   const month = often === 'year' && price !== undefined ? byMonth(price) : undefined
   const lapsed = subscription.state === 'read_only' || subscription.state === 'canceled'
+  // What a payment does not lift: an owner's restriction, and a deletion that is scheduled.
+  const restricted = (household.entitlement?.restriction ?? null) !== null
+  const deleting = (household.deletion_scheduled_at ?? null) !== null
   const found = problemIn(begin.error)?.code === 'already_subscribed'
   return (
     <>
@@ -233,7 +247,10 @@ function Paying({ subscription }: { readonly subscription: Subscription }) {
           value={often}
           options={intervals.flatMap((interval) => {
             const each = priceOf(subscription, interval)
-            return each === undefined ? [] : [{ value: interval, label: prices(interval, each) }]
+            if (each === undefined) return []
+            // The other way of paying takes no choice while a confirmation is on its way.
+            const held = confirming && interval !== often
+            return [{ value: interval, label: prices(interval, each), disabled: held }]
           })}
           onChange={(value) => {
             if (!isInterval(value)) return
@@ -247,12 +264,13 @@ function Paying({ subscription }: { readonly subscription: Subscription }) {
         />
         {month === undefined ? null : <p className={account.note}>{month}</p>}
         <p className={account.text}>
-          {subscription.state === 'trialing'
+          {subscription.trial_ends_at !== null
             ? t('billing.subscribe.starts.trial')
-            : lapsed
+            : lapsed && !restricted && !deleting
               ? t('billing.subscribe.starts.lapsed', { household: name })
               : t('billing.subscribe.starts.now')}
         </p>
+        {restricted ? <p className={account.text}>{t('billing.means.restricted')}</p> : null}
         <div ref={place} tabIndex={-1} className={account.view}>
           <div className={account.group}>
             {/* What follows from the choice is absent until it is made (D-172). */}
@@ -265,6 +283,7 @@ function Paying({ subscription }: { readonly subscription: Subscription }) {
                     : t('billing.subscribe.pay.month', { price: format.money(price) })
                 }
                 unchanged={t('billing.subscribe.unchanged', { household: name })}
+                onConfirming={setConfirming}
                 onConfirmed={() => {
                   settle.mutate(asked.interval, { onSettled: toBilling })
                 }}
@@ -309,7 +328,13 @@ function Read() {
   const withdrawn = useNoWithdrawal()
   const read = useSubscription(household.id)
   const subscription = read.data
+  // Its own refusal says its reader owns the household no longer: the household is read again.
+  useRereadWhereRefused(household.id, notTheirs(read))
   const payerName = usePayerName(subscription ?? { payer: null })
+  // Where the focus goes once the form, or the press, has left with the household's being
+  // subscribed, read so after another tab's payment or an answer that was lost: the screen's
+  // own place, where what stands in the form's place is drawn.
+  const view = useFocusKept()
   const billing = (
     <Link className={account.link} to={inHousehold.billing(household.id)}>
       {t('household.settings.billing.title')}
@@ -321,76 +346,78 @@ function Read() {
       lead={t('billing.subscribe.lead', { household: household.name })}
       note={false}
     >
-      <StateFrame
-        state={readState(read, online)}
-        skeleton={
-          <Skeleton
-            bars={[
-              [45, 1.25],
-              [70, 1],
-              [70, 1],
-              [90, 1],
-              [40, 2.75],
-            ]}
-          />
-        }
-        // Nothing is listed here: the plan is one.
-        empty={null}
-        texts={{
-          error: {
-            title: t('billing.subscribe.error.title'),
-            text: t('billing.subscribe.error.body'),
-            actions: (
-              <Button
-                onClick={() => {
-                  void read.refetch()
-                }}
-              >
-                {t('ui.retry')}
-              </Button>
-            ),
-          },
-          withdrawn,
-        }}
-      >
-        {() => {
-          if (subscription === undefined) return null
-          if (subscription.interval !== null) {
-            return (
-              <Section title={t('billing.subscribe.already.title')}>
-                <p className={account.text}>{t('billing.subscribe.already.body')}</p>
-                {billing}
-              </Section>
-            )
+      <div ref={view} tabIndex={-1} className={account.view}>
+        <StateFrame
+          state={readState(read, online)}
+          skeleton={
+            <Skeleton
+              bars={[
+                [45, 1.25],
+                [70, 1],
+                [70, 1],
+                [90, 1],
+                [40, 2.75],
+              ]}
+            />
           }
-          if (subscription.payment_pending) {
-            return (
-              <Section title={t('billing.subscribe.pending.title')}>
-                <p className={account.text}>{t('billing.pending')}</p>
-                {billing}
-              </Section>
-            )
-          }
-          const payer = isPayer(subscription, me.id)
-          return (
-            <>
-              <Plan subscription={subscription} priced={!payer} />
-              {payer ? (
-                <Paying subscription={subscription} />
-              ) : (
-                <Section title={t('billing.payer.title')}>
-                  {payerName === null ? null : (
-                    <p className={account.text}>
-                      {t('billing.subscribe.payers', { name: payerName })}
-                    </p>
-                  )}
+          // Nothing is listed here: the plan is one.
+          empty={null}
+          texts={{
+            error: {
+              title: t('billing.subscribe.error.title'),
+              text: t('billing.subscribe.error.body'),
+              actions: (
+                <Button
+                  onClick={() => {
+                    void read.refetch()
+                  }}
+                >
+                  {t('ui.retry')}
+                </Button>
+              ),
+            },
+            withdrawn,
+          }}
+        >
+          {() => {
+            if (subscription === undefined) return null
+            if (subscription.interval !== null) {
+              return (
+                <Section title={t('billing.subscribe.already.title')}>
+                  <p className={account.text}>{t('billing.subscribe.already.body')}</p>
                   {billing}
                 </Section>
-              )}
-            </>
-          )
-        }}
-      </StateFrame>
+              )
+            }
+            if (subscription.payment_pending) {
+              return (
+                <Section title={t('billing.subscribe.pending.title')}>
+                  <p className={account.text}>{t('billing.pending')}</p>
+                  {billing}
+                </Section>
+              )
+            }
+            const payer = isPayer(subscription, me.id)
+            return (
+              <>
+                <Plan subscription={subscription} priced={!payer} />
+                {payer ? (
+                  <Paying subscription={subscription} />
+                ) : (
+                  <Section title={t('billing.payer.title')}>
+                    {payerName === null ? null : (
+                      <p className={account.text}>
+                        {t('billing.subscribe.payers', { name: payerName })}
+                      </p>
+                    )}
+                    {billing}
+                  </Section>
+                )}
+              </>
+            )
+          }}
+        </StateFrame>
+      </div>
     </HouseholdSettingsPage>
   )
 }

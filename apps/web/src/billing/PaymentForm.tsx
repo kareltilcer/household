@@ -11,10 +11,15 @@
 // carried (Billing.tsx).
 //
 // A confirmation the processor did not take is said in the app's own words, by the kind of the
-// processor's refusal and never in its sentence: the form marks what is missing itself, a method
-// that was not accepted is said to have charged nothing, and so is anything else. What the
-// processor took is its screen's to follow: nothing here says a payment went through, which only
-// the server's reading of the processor does (D-134).
+// processor's refusal and never in its sentence: the form marks what is missing itself, and a
+// method that was not accepted is said to have charged nothing. Anything else says neither that
+// nor its opposite, since nobody has said: an answer that was lost on its way back, or the
+// script's own failure, leaves a confirmation the processor may have taken all the same, and a
+// second press of one it took is refused in the same kind. The page then says that it cannot
+// tell yet, and reads how the household stands again, by which its screen draws: once the
+// processor has told the server, the form gives way to what is so. What the processor took is
+// its screen's to follow: nothing here says a payment went through, which only the server's
+// reading of the processor does (D-134).
 //
 // The form is drawn in the page and never in a modal: where a bank asks its customer to confirm
 // a payment (3-D Secure), the processor's script draws that over the page, and a modal would hold
@@ -26,6 +31,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import account from '../account/Settings.module.css'
 import { askedNow } from '../api/query.ts'
+import { useReread } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { useI18n, useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
@@ -42,7 +48,7 @@ type Fault =
   | 'incomplete'
   /** The method was not accepted: a card declined. */
   | 'declined'
-  /** Anything else: it could not be confirmed. */
+  /** Anything else: it could not be confirmed, and whether the processor took it is not known. */
   | 'failed'
 
 /** The kind of the processor's refusal, read by its `type`. */
@@ -58,13 +64,20 @@ export interface PaymentFormProps {
   readonly intent: BillingIntent
   /** The words of the press that confirms it: *Pay EUR 59.88*. */
   readonly submit: string
-  /** What a confirmation that was not taken left as it was, in the screen's own sentence. */
+  /** What a method that was not accepted left as it was, in the screen's own sentence. */
   readonly unchanged: string
   /** The processor took the confirmation: its screen reads how the subscription stands. */
   readonly onConfirmed: () => void
   /** The words of the control that puts the form away, where its screen has one. */
   readonly putAway?: string
   readonly onPutAway?: () => void
+  /**
+   * Told that a confirmation is on its way, and that one which was not taken has been answered:
+   * its screen takes nothing that would put the form away meanwhile, as the form's own control
+   * that puts it away takes none. One the processor took stays on its way until its screen has
+   * put something else in the form's place.
+   */
+  readonly onConfirming?: (confirming: boolean) => void
 }
 
 function Mounted({
@@ -74,11 +87,13 @@ function Mounted({
   onConfirmed,
   putAway,
   onPutAway,
+  onConfirming,
   language,
   onRetry,
 }: PaymentFormProps & { readonly language: FormLocale; readonly onRetry: () => void }) {
   const t = useTranslate()
   const household = useHousehold()
+  const reread = useReread(household.id)
   const host = useRef<HTMLDivElement>(null)
   // The processor's frame, while it is drawn: what a press confirms with.
   const drawn = useRef<PaymentFrame | null>(null)
@@ -142,8 +157,21 @@ function Mounted({
       const answer = await frame.confirm(returnAddress(household.id))
       return answer.error === undefined ? null : faultOf(answer.error.type)
     },
+    onMutate: () => {
+      onConfirming?.(true)
+    },
     onSuccess: (fault) => {
-      if (fault === null) onConfirmed()
+      if (fault === null) {
+        onConfirmed()
+        return
+      }
+      onConfirming?.(false)
+      // Whether the processor took it is not known: what the server knows of it is read.
+      if (fault === 'failed') void reread()
+    },
+    onError: () => {
+      onConfirming?.(false)
+      void reread()
     },
   })
   // The script itself failing is a confirmation that could not be made, as any other.
@@ -190,7 +218,8 @@ function Mounted({
                 ? t('billing.form.declined')
                 : t('billing.form.failed')}
           </p>
-          {fault === 'incomplete' ? null : <p>{unchanged}</p>}
+          {/* Said of a method that was not accepted alone: of nothing else is it known. */}
+          {fault === 'declined' ? <p>{unchanged}</p> : null}
         </Banner>
       )}
       <p className={account.note}>{t('billing.form.note')}</p>

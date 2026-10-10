@@ -660,11 +660,11 @@ func (l *loader) stripeAPI(c *Config) {
 	switch {
 	case c.Env != Development:
 		l.fail("%s is set, which only development may: anywhere else billing asks Stripe itself", StripeAPIURLVar)
-	case err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
+	case err != nil || u.Scheme != "http" || u.Host == "" || u.User != nil ||
 		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "":
-		l.fail("%s is %s; want the http(s) scheme and host a stand-in for Stripe's API answers at", StripeAPIURLVar, quotedURL(raw))
-	case u.Scheme == "http" && !loopback(u.Hostname()):
-		l.fail("%s is %s; over http only a stand-in on this machine is asked", StripeAPIURLVar, quotedURL(raw))
+		l.fail("%s is %s; want the http scheme and host a stand-in for Stripe's API answers at", StripeAPIURLVar, quotedURL(raw))
+	case !loopback(u.Hostname()):
+		l.fail("%s is %s; only a stand-in on this machine is asked", StripeAPIURLVar, quotedURL(raw))
 	case !testKey(c.StripeSecretKey) || !testKey(c.StripePublishableKey) || c.StripeWebhookSecret == "":
 		l.fail("%s is set without Stripe's test-mode keys, which are all a stand-in is asked with: set %s, %s and %s",
 			StripeAPIURLVar, StripeSecretKeyVar, StripePublishableKeyVar, StripeWebhookSecretVar)

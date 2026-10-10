@@ -10,11 +10,11 @@
 // (`askedNow`, api/query.ts), and says so where the server could not be reached.
 import type { ApiClient, components } from '@household/api'
 import { queryOptions, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { catalogLocale, pseudoLocale, pseudolocalize } from '@household/i18n/lazy'
 import { sameId } from '../account/common.ts'
 import { useApi } from '../api/ApiProvider.tsx'
-import { unwrap } from '../api/problem.ts'
+import { problemIn, unwrap } from '../api/problem.ts'
 import { useFormat, useI18n } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import {
@@ -259,6 +259,30 @@ export function useWaitingInvitations({
 /** Whether the household takes writes: one that is read-only or restricted draws none (FR-BI2). */
 export function writes(household: Pick<Household, 'entitlement'>): boolean {
   return household.entitlement?.can_write !== false
+}
+
+/**
+ * Whether `read`, of something of a household's that is not every member's to read or is a
+ * member's alone, was answered that it is not found: it is not its reader's, or not any longer,
+ * whatever this page had read of the household. Told by the problem's code and not by the status
+ * alone: a `404` from whatever stands before the server says nothing of where a member stands.
+ */
+export function notTheirs(read: { readonly error: unknown }): boolean {
+  return problemIn(read.error)?.code === 'not_found'
+}
+
+/**
+ * Reads the household alone again once `refused` is so: a read of its screen's was answered as
+ * not its reader's (`notTheirs`), which says where they stand now. The household's own answer is
+ * what tells the rest of the app, and takes the screen and its way in away; read again with it,
+ * the refused read would only be refused again.
+ */
+export function useRereadWhereRefused(household: string, refused: boolean): void {
+  const queries = useQueryClient()
+  useEffect(() => {
+    if (!refused) return
+    void queries.invalidateQueries({ queryKey: householdKey(household), exact: true })
+  }, [refused, queries, household])
 }
 
 /**

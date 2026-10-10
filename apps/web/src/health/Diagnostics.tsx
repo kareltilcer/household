@@ -61,6 +61,7 @@ import { List } from '../ui/ListRow.tsx'
 import { useOnline } from '../ui/online.ts'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
+import { useToast } from '../ui/Toast.tsx'
 import {
   bodyOf,
   compose,
@@ -274,6 +275,7 @@ export function Diagnostics() {
   const { locale } = useI18n()
   const data = useData()
   const say = useProblemText(zone)
+  const toast = useToast()
   const withdrawn = useNoWithdrawal()
   const location = useLocation()
   const { replica: held, receiving } = useSync()
@@ -286,6 +288,9 @@ export function Diagnostics() {
   const settled = read.fetchStatus !== 'fetching'
   const screen = cameFrom(location.state) ?? location.pathname
   const [bundle, setBundle] = useState<Bundle | null>(null)
+  // Whether the server's list was unread as the bundle was built: why it holds no last report is
+  // said of the bundle that is drawn, and not of a list read since.
+  const [unread, setUnread] = useState(false)
   const { phase } = held
   const { id: householdId } = household
   const { id: member } = me
@@ -296,6 +301,7 @@ export function Diagnostics() {
     const agent = agentOf(window.navigator.userAgent)
     void factsOf(replica, phase === 'elsewhere', receiving).then((facts) => {
       if (stopped) return
+      setUnread(reports === undefined)
       setBundle(
         compose({
           screen,
@@ -336,7 +342,7 @@ export function Diagnostics() {
   const [out, setOut] = useState<ReadonlySet<PartId>>(() => new Set())
   const [reference, setReference] = useState('')
   const [sent, setSent] = useState<Sent | null>(null)
-  const parts = useParts(bundle, reports === undefined)
+  const parts = useParts(bundle, unread)
   const body = bundle === null ? undefined : bodyOf(bundle, id, out, reference)
 
   const send = useMutation({
@@ -344,7 +350,11 @@ export function Diagnostics() {
     mutationFn: async (given: NonNullable<typeof body>) =>
       unwrap(await api.POST('/me/diagnostics', { body: given })),
     onSuccess: (answer, given) => {
-      setSent({ reference: answer.id ?? given.id ?? id, expires: answer.expires_at })
+      const kept = answer.id ?? given.id ?? id
+      setSent({ reference: kept, expires: answer.expires_at })
+      // Said wherever its member is by then, and not by this screen alone: a bundle cannot be
+      // read back, and somebody who went back before the answer would never learn its reference.
+      toast({ message: t('health.diagnostics.sent.said', { reference: data(kept) }) })
     },
   })
   // What was typed as the reference is the one thing of the bundle its member wrote: a refusal
@@ -374,7 +384,8 @@ export function Diagnostics() {
       <div ref={view} tabIndex={-1} className={cx(account.view, styles.stack)}>
         {sent !== null ? (
           <>
-            <Banner tone="info" title={t('health.diagnostics.sent.title')} announce>
+            {/* Said by the toast, as it arrived: read here in its place. */}
+            <Banner tone="info" title={t('health.diagnostics.sent.title')}>
               <p className={account.text}>
                 {t('health.diagnostics.sent.reference', { reference: data(sent.reference) })}
               </p>
@@ -456,6 +467,9 @@ export function Diagnostics() {
                               label={parts.name(part)}
                               checked={!left}
                               onChange={(event) => {
+                                // A bundle on its way is the one that was read: what it holds
+                                // is not changed under its answer.
+                                if (send.isPending) return
                                 const sends = event.currentTarget.checked
                                 // Another bundle than the one that might have been sent.
                                 setId(newId())
@@ -501,6 +515,7 @@ export function Diagnostics() {
                           refusedReference ? t('health.diagnostics.reference.invalid') : undefined
                         }
                         onChange={(event) => {
+                          if (send.isPending) return
                           setId(newId())
                           setReference(event.currentTarget.value)
                         }}

@@ -144,6 +144,10 @@ describe('dates and numbers', () => {
     expect(en.bytes(1_000_000_000)).toBe('1 GB')
     expect(en.bytes(412_000_000)).toBe('412 MB')
     expect(en.bytes(2_300)).toBe('2.3 kB')
+    // The unit is the one of what is written: what rounds to a thousand of one is one of the next.
+    expect(en.bytes(999_950_000)).toBe('1 GB')
+    expect(en.bytes(999_940_000)).toBe('999.9 MB')
+    expect(en.bytes(999_960)).toBe('1 MB')
     // In the member's locale: its decimal sign, and the space it sets before a unit.
     expect(createFormatters('de').bytes(19_400_000_000)).toMatch(/^19,4\sGB$/)
   })

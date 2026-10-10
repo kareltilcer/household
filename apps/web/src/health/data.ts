@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { householdKey } from '../household/households.ts'
-import { useInbox, useReplica, useSync } from '../sync/ReplicaProvider.tsx'
+import { useReplica, useSync } from '../sync/ReplicaProvider.tsx'
 
 /** One of the reader's replicas, as it last reported itself. */
 export type Report = NonNullable<components['schemas']['SyncState']['replicas']>[number]
@@ -164,33 +164,49 @@ export interface Waiting {
  * What waits in this browser's replica, as it is now. It is read when the screen opens, and
  * again whenever PowerSync's status moves, an upload begun or ended among it, or the replica's
  * own tables of answers and holds change. Undefined until the replica is open here and has been
- * read.
+ * read. `inbox` is what waits for the member as the screen reads it (`useInbox`): a hold given up
+ * or taken changes what the inbox watches, and so tells of itself here, with no second watch.
  */
-export function useWaiting(): Waiting | undefined {
+export function useWaiting(inbox: unknown): Waiting | undefined {
   const replica = useReplica()
-  // A hold given up or taken changes what the inbox watches, and so tells of itself here.
-  const inbox = useInbox()
   const [read, setRead] = useState<{ readonly replica: Replica; readonly waiting: Waiting }>()
   useEffect(() => {
     if (replica === undefined) return undefined
     let stopped = false
+    // One look at a time: a status moves many times while a replica downloads, and each look is
+    // two questions of the database that is doing the downloading. A move that arrives while
+    // one is asked is looked at once more when that one is answered.
+    let asking = false
+    let moved = false
     const look = () => {
-      Promise.all([replica.queued(), replica.held()]).then(
-        ([queued, held]) => {
-          if (stopped) return
-          // A status moves many times while a replica downloads: what was read is kept as it
-          // is unless it says something else, and nothing is drawn again for it.
-          setRead((was) =>
-            was?.replica === replica &&
-            was.waiting.queued === queued &&
-            was.waiting.held === held.length
-              ? was
-              : { replica, waiting: { queued, held: held.length } },
-          )
-        },
-        // What a read fails with as the database closes is nobody's to hear.
-        () => undefined,
-      )
+      if (asking) {
+        moved = true
+        return
+      }
+      asking = true
+      Promise.all([replica.queued(), replica.held()])
+        .then(
+          ([queued, held]) => {
+            if (stopped) return
+            // What was read is kept as it is unless it says something else, and nothing is
+            // drawn again for it.
+            setRead((was) =>
+              was?.replica === replica &&
+              was.waiting.queued === queued &&
+              was.waiting.held === held.length
+                ? was
+                : { replica, waiting: { queued, held: held.length } },
+            )
+          },
+          // What a read fails with as the database closes is nobody's to hear.
+          () => undefined,
+        )
+        .finally(() => {
+          asking = false
+          if (!moved || stopped) return
+          moved = false
+          look()
+        })
     }
     look()
     const stop = replica.db.registerListener({ statusChanged: look })

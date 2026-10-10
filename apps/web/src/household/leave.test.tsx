@@ -239,7 +239,12 @@ describe('leaving a household', () => {
       'href',
       inHousehold.billing(home),
     )
-    expect(screen.getAllByRole('link')).toHaveLength(2)
+    // The last owner's other way out is deleting the household (FR-HH4): where that is done.
+    expect(screen.getByRole('link', { name: 'Delete the household' })).toHaveAttribute(
+      'href',
+      inHousehold.data(home),
+    )
+    expect(screen.getAllByRole('link')).toHaveLength(3)
     // Absent, and not disabled.
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.getByText(behind)).toBeInTheDocument()
@@ -283,11 +288,14 @@ describe('leaving a household', () => {
         'Leaving would leave Tilcerovi with nobody in it. Deleting the household is what ends it.',
       ),
     ).toBeInTheDocument()
-    // There is nobody to make an owner, and no way to a list that could give none: the one
-    // link is billing's, which says the same of handing it over.
+    // There is nobody to make an owner, and no way to a list that could give none: what ends
+    // the household is deleting it, which is led to, beside billing's link, which says the
+    // same of handing it over.
     expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      inHousehold.data(home),
       inHousehold.billing(home),
     ])
+    expect(screen.getByRole('link', { name: 'Delete the household' })).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
@@ -365,7 +373,11 @@ describe('leaving a household', () => {
           'That has to wait: nobody can be made an owner or invited while Tilcerovi can’t be changed.',
         ),
       ).toBeInTheDocument()
-      expect(screen.queryByRole('link')).not.toBeInTheDocument()
+      // No way that could only be refused; and the one that is left them there, which the gate
+      // lets through in every state (FR-BI1): deleting the household.
+      expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+        inHousehold.data(home),
+      ])
       expect(screen.queryByRole('button')).not.toBeInTheDocument()
     },
   )

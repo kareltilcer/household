@@ -144,8 +144,14 @@ export function createFormatters(locale: string): Formatters {
     },
     percent: (fraction) => percent.format(fraction),
     bytes: (bytes) => {
+      const found = bytes === 0 ? 0 : sizeUnits.findIndex(([, each]) => bytes >= each)
+      const index = found === -1 ? sizeUnits.length - 1 : found
+      const filled = sizeUnits[index] ?? sizeUnits[2]
+      // The unit is chosen for what is written, not for what was counted: a size that rounds to
+      // a thousand of the unit it fills is written as one of the next, never as 1,000 MB.
+      const next = index > 0 ? sizeUnits[index - 1] : undefined
       const [unit, size] =
-        bytes === 0 ? sizeUnits[0] : (sizeUnits.find(([, each]) => bytes >= each) ?? sizeUnits[2])
+        next !== undefined && Math.round((bytes / filled[1]) * 10) >= 10_000 ? next : filled
       return numbers({ style: 'unit', unit, maximumFractionDigits: 1 }).format(bytes / size)
     },
     money: (amount) =>

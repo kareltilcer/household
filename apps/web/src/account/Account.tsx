@@ -546,7 +546,8 @@ function Households({ child }: { readonly child: boolean }) {
                         <span className={styles.badge}>{role(household.my_role)}</span>
                         {household.entitlement?.state === 'suspended' ? (
                           // Its every route answers `404` (D-115): its state in a word, as the
-                          // switcher says it, and no link that would open nothing.
+                          // switcher says it, and no link to a household that opens none of
+                          // its screens (its address draws the lockout, shell/Lockout.tsx).
                           <span className={styles.badge}>{t('shell.entitlement.suspended')}</span>
                         ) : (
                           <>

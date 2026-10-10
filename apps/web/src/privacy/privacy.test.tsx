@@ -95,7 +95,8 @@ describe('the privacy centre', () => {
     })
     expect(
       screen.getByText(
-        'Six rights over your data. Each is something you do here yourself, with nobody to ask.',
+        // Not *with nobody to ask*: one of them is an owner's, and a member asks an owner.
+        'Six rights over your data. Each has its way here, and none needs a request to Household.',
       ),
     ).toBeInTheDocument()
   })
@@ -276,6 +277,30 @@ describe('stopping all changes, from an account', () => {
       await within(section).findByRole('link', { name: 'Open the data of Chata Vysočina' }),
     ).toBeInTheDocument()
     expect(within(section).getAllByRole('link')).toHaveLength(1)
+    // And the page says once that it is left out, of every part of it.
+    expect(
+      screen.getByText(
+        'A household of yours is suspended. Nothing of it can be read or exported while that lasts, so this page leaves it out.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  // Its owner is not told that they own no household, nor its member that they are in none.
+  it('does not tell the owner of a suspended household, and of no other, that they own none', async () => {
+    const server = serving()
+    inHouseholds(server, [{ id: home, name: 'Tilcerovi', suspended: true }])
+    await centre(server)
+    expect(await screen.findByText(/^A household of yours is suspended\./)).toBeInTheDocument()
+    const section = right(stopping)
+    expect(within(section).queryByText(/you own no household/)).not.toBeInTheDocument()
+    expect(within(section).queryByRole('link')).not.toBeInTheDocument()
+    // Whose authority it is cannot be read off a household that answers nothing: it is asked.
+    expect(
+      await screen.findByText(
+        'No household you are in says your country here. Choose the one you live in.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/You are in no household/)).not.toBeInTheDocument()
   })
 
   it('says the households could not be read, and reads them again', async () => {
@@ -414,6 +439,52 @@ describe('the two consents', () => {
       answers[0]?.(Response.json({ analytics: true, marketing_email: false }))
     })
     // What the server holds is what is drawn in the end.
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: news })).not.toBeChecked()
+    })
+    expect(screen.getByRole('switch', { name: statistics })).toBeChecked()
+  })
+
+  // The read that follows is made once every change is answered, and not once the one made last
+  // is: answered first, that one would have what the server holds read before the earlier one
+  // landed on it, and nothing would then draw what the server came to hold.
+  it('read what the server holds only once every change is answered, whichever is answered first', async () => {
+    const server = serving()
+    let kept = { analytics: false, marketing_email: false }
+    server.on('GET /me/consents', () => Response.json(kept))
+    // The server takes each change as its answer is let go, in that order.
+    const taken: (() => void)[] = []
+    server.on('PUT /me/consents', async (request) => {
+      const sent = (await request.json()) as typeof kept
+      return new Promise<Response>((resolve) => {
+        taken.push(() => {
+          kept = sent
+          resolve(Response.json(sent))
+        })
+      })
+    })
+    const { user } = await centre(server)
+    await user.click(await screen.findByRole('switch', { name: statistics }))
+    await user.click(screen.getByRole('switch', { name: news }))
+    await waitFor(() => {
+      expect(taken).toHaveLength(2)
+    })
+    const reads = server.to('GET /me/consents').length
+    // The second is taken and answered first: nothing is read yet, the first being on its way.
+    act(() => {
+      taken[1]?.()
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: news })).toBeChecked()
+    })
+    expect(server.to('GET /me/consents')).toHaveLength(reads)
+    // Then the first, which the server took last, and which says news is off.
+    act(() => {
+      taken[0]?.()
+    })
+    await waitFor(() => {
+      expect(server.to('GET /me/consents').length).toBeGreaterThan(reads)
+    })
     await waitFor(() => {
       expect(screen.getByRole('switch', { name: news })).not.toBeChecked()
     })

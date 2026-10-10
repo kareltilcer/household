@@ -32,19 +32,15 @@
 // *conflicted* or *rejected*, a version being reported and never edited; and what would be
 // *withdrawn*, an owner made a member while the screen is open, is the absent state too, as the
 // list's own refusal says once it is read again.
-import { useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
 import { Link } from 'react-router'
 import account from '../account/Settings.module.css'
-import { readState, sameId, useData, useNoWithdrawal } from '../account/common.ts'
+import { readState, sameId, useData, useFocusKept, useNoWithdrawal } from '../account/common.ts'
 import { agentOf, useClientNames, type ClientNames } from '../account/userAgent.ts'
 import { clientName } from '../api/client.ts'
-import { problemIn } from '../api/problem.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
-import { writes } from '../household/data.ts'
+import { notTheirs, useRereadWhereRefused, writes } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
-import { householdKey } from '../household/households.ts'
 import { HouseholdSettingsPage, useStanding } from '../household/settings/Page.tsx'
 import { useTimeZone } from '../household/timezone.ts'
 import { useFormat, useTranslate } from '../i18n/I18nProvider.tsx'
@@ -108,9 +104,12 @@ function Row({
   const { version } = client
   const minimum =
     client.type === 'web' ? minimums.web : client.type === 'mobile' ? minimums.mobile : null
-  // The oldest version of its type the deployment serves, where it is under it.
-  const under =
-    version !== null && minimum !== null && isUnder(version, minimum) ? minimum : undefined
+  // The oldest version of its type the deployment serves, where it is under it. This browser's
+  // own row is held to the version of the page that draws it, which is what it syncs as from now
+  // on, and not to the one its replica last reported under: a page served since the minimum
+  // was raised would be told that it must update, by a report from before it was loaded.
+  const held = own ? ownVersion(clientName()) : version
+  const under = held !== null && minimum !== null && isUnder(held, minimum) ? minimum : undefined
 
   return (
     <li className={styles.row}>
@@ -150,7 +149,6 @@ function Row({
 
 function Listed() {
   const t = useTranslate()
-  const queries = useQueryClient()
   const household = useHousehold()
   const online = useOnline()
   const names = useClientNames()
@@ -161,18 +159,17 @@ function Listed() {
   // The list's own refusal says its reader is an owner no longer. The household alone is read
   // again, which is what takes this screen and its way in away: read again with it, the list
   // would only be refused again.
-  const refused = problemIn(read.error)?.status === 404
-  const { id } = household
-  useEffect(() => {
-    if (!refused) return
-    void queries.invalidateQueries({ queryKey: householdKey(id), exact: true })
-  }, [refused, queries, id])
-  if (refused) return <NotAvailable home={inHousehold.home(household.id)} />
+  const refused = notTheirs(read)
+  useRereadWhereRefused(household.id, refused)
 
   const items = read.data?.items ?? []
   const base = readState(read, online, items.length === 0)
   const state: DataState =
     !writes(household) && (base === 'populated' || base === 'offline') ? 'readonly' : base
+  // The screen's one control, *Try again*, leaves with the sentence it stands in once the list
+  // is read, and the focus it held would drop to the page: it is put on the list's own place.
+  const view = useFocusKept(state === 'error', state)
+  if (refused) return <NotAvailable home={inHousehold.home(household.id)} />
 
   return (
     <HouseholdSettingsPage
@@ -180,7 +177,7 @@ function Listed() {
       lead={t('clients.lead')}
       note={false}
     >
-      <div className={styles.stack}>
+      <div ref={view} tabIndex={-1} className={cx(account.view, styles.stack)}>
         <StateFrame
           state={state}
           skeleton={

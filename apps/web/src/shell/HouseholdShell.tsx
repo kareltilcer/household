@@ -95,7 +95,16 @@ function Opened({ id }: { readonly id: string }) {
   const household = useHouseholdQuery(id)
   // The server's last word: the household is none of this member's to open, whether or not this
   // browser kept it from when it was.
-  const gone = problemIn(household.error)?.status === 404
+  const refused = problemIn(household.error)?.status === 404
+  // And it stands while the household is asked for again with nothing kept of it, as it is each
+  // time the page is looked at again: the query client puts the answer away as it asks, and what
+  // stood in the household's place, the lockout among it, would be taken down and built again
+  // around a skeleton, the focus on it lost, and with no connection would give way to *could
+  // not be read*. Only an answer that is no `404` ends it.
+  const [wasRefused, setWasRefused] = useState(false)
+  const asking = household.data === undefined && household.status === 'pending'
+  if (refused !== wasRefused && !asking) setWasRefused(refused)
+  const gone = refused || (wasRefused && asking)
   const found = household.data !== undefined && !gone
   useEffect(() => {
     if (found) rememberHousehold(me.id, id)
