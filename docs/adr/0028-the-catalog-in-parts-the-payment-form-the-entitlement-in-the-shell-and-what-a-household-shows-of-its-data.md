@@ -186,6 +186,24 @@ only that the server was not reached; and where the change made last is refused
 the switches are put back to what the server last said it holds, never to what a change still
 on its way had only chosen, which two refused one after the other left drawn as saved.
 
+**A switch that saves as it is changed is drawn as chosen in the press itself.** The consents'
+two switches, and the notification switches of a member's account, were drawn from what the
+query client keeps and from nothing else. A press's change is written there after the press's
+event has ended, and the query client tells a screen of what it keeps by a timer, which a
+browser ran only after the frame that answers the press; React puts a controlled switch back,
+as its event ends, to what was last drawn. So a pressed switch stood as it was for a frame. A
+consent pressed in that frame was sent with the other as the screen still drew it, off, which
+the server takes as withdrawn (D-142): the consent its member had just given was kept as not
+given. A notification switch pressed again in it was pressed as it had stood, and the press
+that was to undo the first sent the first one's change a second time. And whatever read a
+switch it had just pressed found the press undone, which is how it was met: the end-to-end
+suite's `check()` failed on main and on item 28's branch alike, under either React. Each screen
+now holds a press in its own state from the press itself, and draws it over what is kept until
+the query client holds it (`chosen` in `privacy/Consents.tsx`, `pressed` in the settings of
+`account/Notifications.tsx`): `onMutate` puts the hold away as it writes the change, unless a
+later press has taken its place. What a refused change is put back to, and what is said of one,
+are as above.
+
 **The entitlement is said in the shell, from the household's own answer** (D-180).
 `shell/EntitlementBanner.tsx` draws one banner under the offline bar's place
 (`shell/HouseholdBars.tsx`) for the state `useHousehold().entitlement` resolves, to the reader
@@ -322,6 +340,8 @@ with its runs of spaces folded (D-182), a page drawing two in a row as one.
 | Several *Try again*s of one page given names of their own; *Go to billing* left out of the banner on billing itself; an entry of the settings' navigation marked on the exports' screen; a restriction's reason and a suspension's notice drawn as data; `billing.refused.already_subscribed` taken out | Each *Try again* stands inside a section that is named. The others are differences no member is misled by, and each is a branch or a property for it |
 | The web job's time limit raised for the larger suite | main's web job took six and a half minutes on 2026-10-09 under a limit of thirty, and this item's suite is a fifth larger, not three times |
 | The consents' changes sent one at a time, each after the one before was answered, so that two sent side by side cannot land in the other order | A switch that saves as it is changed takes another change while one is on its way (ADR 0027), and what the server came to hold is read once every one of them is answered, and drawn: a switch that went back is seen to have. Sending them in turn is a queue behind a switch, and telling the server their order is a version the contract does not take (D-142) |
+| The end-to-end suite pressing a consent's switch with `click()` and then waiting for it to read as checked, in place of `check()` | It passes over the frame and leaves it in the page. The test was right: for that frame a press was drawn as not made, and a second press made in it is as wrong for a member as it was for the suite |
+| The query client made to tell its screens in a microtask (`notifyManager.setScheduler(queueMicrotask)`) | Every screen's draws moved, the app over, for one screen's hole: when a reader is told of what is kept is the library's own batching, which every list and every form is drawn under. A screen that draws a control from what is kept holds its own press, which is its own to know |
 | *Not now* beside the subscribe screen's payment form, as the other two forms have, for a form that cannot be loaded for its secret | A secret is answered by a server that has just asked the processor whether its subscription still waits, so the one a form is drawn with is good as the form is drawn; and a press that asks again at the same way of paying is answered the same one's. A form put away would be drawn again as it was. Choosing the other way of paying asks for another, and the way back to billing stands under the form |
 | An export's row naming its job's own last moment once the moment its household goes has passed | The night's job erases the household after that moment, and its archives with it: for those hours the row names a moment that has passed beside a download that still works, which promises nothing. The job's own moment would be days the household does not reach |
 | A `focusout` listened for in every place, to tell a focus its member put on the page from one a control dropped as it left; the data screen forgetting a question that was closed unanswered | `refocus` moves a focus only from the page itself, and only to the place of the part whose control left: to be moved against its member's wish it takes a click on bare text between a press and the answer that takes the pressed control away. A second listener in each of a dozen places for that |
