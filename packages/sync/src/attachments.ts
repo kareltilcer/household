@@ -60,6 +60,26 @@ export type UploadTransport = (
   fetch: typeof globalThis.fetch,
 ) => Promise<Response>
 
+/** A file as it waits in the device's storage: where its bytes are, and what it says about itself. */
+export interface StoredFile {
+  /** Where the bytes wait, as the storage names the place (LocalStorageAdapter.getLocalUri). */
+  readonly uri: string
+  readonly contentType: string
+  readonly fileName: string
+}
+
+/**
+ * How a file is sent from where it waits, by a platform that sends one by its URI. The queue reads
+ * none of it, so that no file is held in memory whole on its way out: a file may be a hundred
+ * megabytes (FR-FL1), on a phone.
+ */
+export type StoredTransport = (
+  url: string,
+  credential: string,
+  file: StoredFile,
+  fetch: typeof globalThis.fetch,
+) => Promise<Response>
+
 export interface AttachmentOptions {
   /** Where the bytes wait: PowerSync's adapter for the platform, or the app's. */
   readonly storage: LocalStorageAdapter
@@ -69,9 +89,10 @@ export interface AttachmentOptions {
   readonly uploadUrl: (entityType: string, household: string, entityId: string) => string | null
   /**
    * How a file is sent: `multipart` on Node and in a browser, from `@household/sync/node` and
-   * `@household/sync/web`; on React Native, whose FormData takes a file by its URI, the app's.
+   * `@household/sync/web`, which is handed the file's bytes; on React Native the app's own, `byUri`,
+   * which is handed where the file waits and sends it from there.
    */
-  readonly transport: UploadTransport
+  readonly transport: UploadTransport | { readonly byUri: StoredTransport }
 }
 
 /** Reads and discards a response's body, which every platform's Response can: not all of them stream it. */
@@ -227,22 +248,34 @@ export class Attachments {
         )
         continue
       }
-      let data: ArrayBuffer
-      try {
-        data = await this.options.storage.readFile(a.local_uri)
-      } catch {
-        // Bytes the device holds and cannot read now are tried again at the next run, the files
-        // behind them not kept waiting.
-        await this.attempted(a.id)
-        continue
+      let send: (credential: string) => Promise<Response>
+      if (typeof transport === 'function') {
+        let data: ArrayBuffer
+        try {
+          data = await this.options.storage.readFile(a.local_uri)
+        } catch {
+          // Bytes the device holds and cannot read now are tried again at the next run, the files
+          // behind them not kept waiting.
+          await this.attempted(a.id)
+          continue
+        }
+        const file: AttachmentFile = { data, contentType: a.content_type, fileName: a.file_name }
+        send = (credential) => transport(url, credential, file, this.fetch)
+      } else {
+        // Sent from where it waits: nothing of it is read here.
+        const file: StoredFile = {
+          uri: a.local_uri,
+          contentType: a.content_type,
+          fileName: a.file_name,
+        }
+        send = (credential) => transport.byUri(url, credential, file, this.fetch)
       }
-      const file: AttachmentFile = { data, contentType: a.content_type, fileName: a.file_name }
       // Read before the request: a credential that cannot be had is no failed upload, and one that
       // says the device's sign-in has ended (Revoked) is thrown to the replica, as renew()'s is.
       const credential = await this.credential.current()
       let response: Response
       try {
-        response = await transport(url, credential, file, this.fetch)
+        response = await send(credential)
       } catch {
         await this.attempted(a.id)
         return
