@@ -247,6 +247,8 @@ describe('the inbox', () => {
     await userEvent.press(within(row('March electricity')).getByTestId('status:conflict'))
     expect(screen.getByTestId('resolver:surface')).toBeOnTheScreen()
     expect(screen.getByText(en['sync.conflict.question'])).toBeOnTheScreen()
+    // The marks of the rows and of the sheet, as Android draws a glyph: held to the same rules.
+    expectAccessible()
     await userEvent.press(screen.getByTestId('resolver:keep-theirs'))
     await waitFor(() => {
       expect(rows()).toHaveLength(1)
