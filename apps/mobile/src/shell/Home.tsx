@@ -1,8 +1,16 @@
-// Placeholder: a household's Home: an honest empty state until item 38.
-// Owner: the shell group (H1). The core (plan item 28, brief C1) left an empty screen here so that the route
-// exists and the table of routes holds; its owner replaces this file whole and keeps its name.
-import { Screen } from '../ui/Screen.tsx'
+// A household's Home (04-navigation §3): the first of its tabs, and every member's, one who
+// holds little among them. What it will hold is the dashboard, widgets from the modules a member
+// holds, which is item 38's to build. Until then it says what will be here, and nothing that is
+// not so: no widget that shows nothing, no count of modules, no action that leads nowhere.
+import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { EmptyState } from '../ui/EmptyState.tsx'
+import { HouseholdScreen } from './HouseholdScreen.tsx'
 
 export function HouseholdHome() {
-  return <Screen testID="route:household" />
+  const t = useTranslate()
+  return (
+    <HouseholdScreen title={t('nav.home')} testID="route:household">
+      <EmptyState sentence={t('shell.home.empty')} />
+    </HouseholdScreen>
+  )
 }
