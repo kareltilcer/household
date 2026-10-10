@@ -79,15 +79,9 @@ export function StateFrame({ state, skeleton, empty, texts, children }: StateFra
   if (standsInPlace(state)) {
     const { title, text, actions } = texts[state]
     return (
-      // Each state's sentence is a banner of its own, so that one which takes another's place is
-      // announced as one that arrives is, and not as a change to what was there.
-      <Banner
-        key={state}
-        tone={treatments[state].message}
-        title={title}
-        actions={actions}
-        announce={arrived}
-      >
+      // A sentence that takes another's place is announced as one that arrives is: a banner says
+      // what it is given whenever that changes.
+      <Banner tone={treatments[state].message} title={title} actions={actions} announce={arrived}>
         {text}
       </Banner>
     )
@@ -107,7 +101,6 @@ export function StateFrame({ state, skeleton, empty, texts, children }: StateFra
         <View style={{ gap: theme.space['space-15'] }}>
           {treatment.banner === undefined || strip === undefined ? null : (
             <Banner
-              key={state}
               tone={treatment.banner}
               title={strip.title}
               actions={strip.actions}
