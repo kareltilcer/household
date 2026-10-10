@@ -208,11 +208,13 @@ to the server, and `stack`'s sign-in is still there for the job to find whatever
   the shell's and sync's, carry a row of controls at their head, `<page>:only:<part>` and
   `<page>:only:all` (`src/dev/Only.tsx`; the harness has its own, `harness:only:<body>`), and a
   flow presses one before it looks for anything. It is not only the time saved. **On Android a
-  swipe that starts on a stepper's count scrolls nothing**: the field is a single line with its
-  text centred, which Android's text field takes for one that scrolls sideways, and it keeps
-  the touch. Maestro swipes from the middle of the screen, so a page of controls stopped under
-  it with a stepper there, and every swipe after was the same one. It is a defect of the
-  control and not of the flows, which a member's thumb meets as well.
+  swipe that starts on a stepper's count scrolled nothing**: Maestro swipes from the middle of
+  the screen, and in two flows of the fourth run the page of controls stopped with a stepper's
+  count there and was there still minutes of swipes later, where iOS scrolled the same page to
+  its end. What was seen is where it stopped. Why is read in React Native's source and was not
+  tried on a device: the count is a single line with its text centred, which Android's text
+  field takes for one that scrolls sideways, and such a field keeps the touch. If that is it,
+  it is a defect of the control and not of the flows, which a member's thumb meets as well.
 - **Scrolled to once it is there, and waited for where it stands.** `scrollUntilVisible` swipes
   for as long as it has not found its element, one that has not come yet as one that is further
   down: so it is for a thing that is drawn already. What a screen draws later, a replica opened
