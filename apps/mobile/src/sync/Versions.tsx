@@ -27,13 +27,16 @@ export interface VersionBlockProps {
    * since a banner stands on a screen whose headings are that screen's own.
    */
   readonly headed?: boolean
+  /** What a test and an end-to-end flow find it by: a version is its place, and has no name of its own. */
+  readonly testID: string
 }
 
 /** One version: a name over what it holds, inside an edge of its own. */
-export function VersionBlock({ version, headed = true }: VersionBlockProps) {
+export function VersionBlock({ version, headed = true, testID }: VersionBlockProps) {
   const theme = useTheme()
   return (
     <View
+      testID={testID}
       style={{
         gap: theme.space['space-05'],
         padding: theme.space['space-15'],
@@ -61,7 +64,7 @@ export function Versions({ versions }: { readonly versions: readonly Version[] }
     <View style={{ gap: theme.space['space-15'] }}>
       {versions.map((version, index) => (
         // A version is its place: the member's first, and two may be headed alike.
-        <VersionBlock key={index} version={version} />
+        <VersionBlock key={index} testID={`sync:version:${String(index)}`} version={version} />
       ))}
     </View>
   )

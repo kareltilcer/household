@@ -75,10 +75,12 @@ export function KeptLoser({ outcome, setting, describers, announce = false }: Ke
           {fields ? (
             <>
               <VersionBlock
+                testID="sync:kept:mine"
                 headed={false}
                 version={{ heading: t('sync.kept.mine'), pairs: pairsOf(reading.fields, 'mine') }}
               />
               <VersionBlock
+                testID="sync:kept:saved"
                 headed={false}
                 version={{
                   heading: t('sync.kept.saved'),
