@@ -21,14 +21,39 @@ export function holds(bundle: Buffer, marker: string): boolean {
   )
 }
 
+/**
+ * What stands in for the server and the replica, and the words a test draws, where they are
+ * written outside src/dev: a dev screen and a test both draw over them, and a test may import
+ * nothing of src/dev. Each file is named with words it alone holds, which a bundle is searched
+ * for as the dev screens' marker is: no source says that a screen a member is served imports
+ * none of them, so the export is what is asked.
+ */
+export const standIns: Readonly<Record<string, string>> = {
+  'src/sync/standIn.ts': 'StandInNeedsConnection',
+  'src/sync/sync.fixtures.ts': 'no registry the server serves',
+  'src/api/testing.ts': 'api.household.test',
+  'src/test/fixtures.ts': 'eva@dum.test',
+  'src/ui/controls.fixtures.ts': 'The server refused the reading.',
+}
+
 /** What is wrong with the export under `root`, a sentence a failure, with the bundles it read. */
 export function check(root: string): { failures: string[]; bundles: string[] } {
   const bundles = bundlesOf(root)
-  const failures = bundles
-    .filter((file) => holds(readFileSync(file), devMarker))
-    .map(
-      (file) =>
-        `${relative(root, file)} holds a dev screen (${devMarker}): a dev screen is in no build a member is served`,
-    )
+  const failures = bundles.flatMap((file) => {
+    const bundle = readFileSync(file)
+    return [
+      ...(holds(bundle, devMarker)
+        ? [
+            `${relative(root, file)} holds a dev screen (${devMarker}): a dev screen is in no build a member is served`,
+          ]
+        : []),
+      ...Object.entries(standIns)
+        .filter(([, words]) => holds(bundle, words))
+        .map(
+          ([source]) =>
+            `${relative(root, file)} holds ${source}: what stands in for the server, the replica or a member in a test is in no build a member is served`,
+        ),
+    ]
+  })
   return { failures, bundles }
 }
