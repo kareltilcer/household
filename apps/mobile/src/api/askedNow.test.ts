@@ -16,9 +16,17 @@ const files = jest.requireActual<Files>('node:fs')
 
 /**
  * The directories whose writes are no replica's: the session's, push's, a household's own
- * answer, and what stands beside them. Jest runs in apps/mobile.
+ * answer, what stands beside them, and the dev screens' sign-in, which is the one screen of
+ * this build that signs anybody in. Jest runs in apps/mobile.
  */
-const directories = ['src/session', 'src/push', 'src/household', 'src/links', 'src/update']
+const directories = [
+  'src/session',
+  'src/push',
+  'src/household',
+  'src/links',
+  'src/update',
+  'src/dev/signin',
+]
 
 const sources = directories.flatMap((directory) =>
   files
@@ -35,11 +43,12 @@ describe('a write that must not wait', () => {
     const writes = sources.flatMap(({ path, source }) =>
       [...source.matchAll(/useMutation\(\{\s*(\S+)/g)].map(([, first = '']) => ({ path, first })),
     )
-    // The sources were read at all: every directory is among them, and push writes.
+    // The sources were read at all: every directory is among them, and the two that write.
     expect(new Set(sources.map(({ path }) => path.split('/')[1]))).toEqual(
-      new Set(['session', 'push', 'household', 'links', 'update']),
+      new Set(['session', 'push', 'household', 'links', 'update', 'dev']),
     )
     expect(writes.map(({ path }) => path)).toContain('src/push/usePush.ts')
+    expect(writes.map(({ path }) => path)).toContain('src/dev/signin/index.tsx')
     expect(writes.filter(({ first }) => first !== '...askedNow,')).toEqual([])
     // And no mutation is written any other way than the one that is read here: each naming of
     // `useMutation` is its import or a write that was read.
