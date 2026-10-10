@@ -6,7 +6,8 @@
 # at twice the text, in both themes.
 #
 # Written ahead of the harness, against the names its cells were promised under: `awaiting`
-# keeps it out of every run until the harness is merged and the tag is taken off.
+# keeps it out of every run until the harness is merged and the tag is taken off, which is
+# also when the names are first held to the sources.
 appId: com.kareltilcer.household.dev
 tags:
   - awaiting
@@ -21,26 +22,31 @@ tags:
     visible:
       id: 'household-dev-screen:harness'
     timeout: 30000
-# The first body, the list's, in the order the states are drawn in (src/ui/states.ts).
+# The first body, the list's, in the order the states are drawn in (src/ui/states.ts). A cell
+# at twice the text may be taller than the screen, so a part of it in view is enough.
 - scrollUntilVisible:
     element:
       id: 'list:loading:light'
     direction: DOWN
     timeout: 60000
+    visibilityPercentage: 20
 - scrollUntilVisible:
     element:
       id: 'list:empty:light'
     direction: DOWN
     timeout: 60000
+    visibilityPercentage: 20
 - scrollUntilVisible:
     element:
       id: 'list:populated:light'
     direction: DOWN
     timeout: 60000
+    visibilityPercentage: 20
 - takeScreenshot: harness-populated
 - scrollUntilVisible:
     element:
       id: 'list:error:dark'
     direction: DOWN
     timeout: 60000
+    visibilityPercentage: 20
 - takeScreenshot: harness-error
