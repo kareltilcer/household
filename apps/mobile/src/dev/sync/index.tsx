@@ -15,10 +15,12 @@
 //
 // One part of it is no fixture: with somebody signed in, the first of their households that
 // opens has its real replica opened here, and the screen says in lines an end-to-end flow reads
-// whether it is open and whether it is receiving. That is the one thing of the replica only a
-// device can show: nothing on a developer's machine opens its SQLite.
-import type { RecordedOutcome } from '@household/sync'
-import { useMemo, useState, type ReactNode } from 'react'
+// whether it is open and whether it is receiving, and has it report itself when asked, which is
+// how the flow sees the server name this device among the household's clients (D-178). That is
+// the one thing of the replica only a device can show: nothing on a developer's machine opens
+// its SQLite.
+import type { RecordedOutcome, Replica } from '@household/sync'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { ThemeScope, useTheme } from '../../display/DisplayProvider.tsx'
 import { opening, useHouseholds } from '../../household/data.ts'
@@ -348,6 +350,59 @@ function Line({
   return <Text testID={`sync:live:${of}:${stands}`}>{children}</Text>
 }
 
+/** How a report asked for here stands: not asked, waiting for the replica to catch up, or answered. */
+type Reported = 'never' | 'waiting' | 'sent' | 'refused' | 'failed'
+
+/**
+ * Has the replica report itself now, and says what that came to. A replica reports by itself
+ * every quarter of an hour, and a household's clients are read off those reports (D-178), so a
+ * flow that wants to see this device named there asks here. It reports once it has caught up,
+ * as every report waits to: one made before would be read as a copy that does not match.
+ */
+function Report({ replica }: { readonly replica: Replica }) {
+  const sample = useSample()
+  const [stands, setStands] = useState<Reported>('never')
+  useEffect(() => {
+    if (stands !== 'waiting') return undefined
+    let asked = false
+    const send = () => {
+      if (asked || !replica.caughtUp) return
+      asked = true
+      replica.report().then(
+        // Null where the server took none: a write still queued, or a household that takes none.
+        (verdict) => {
+          setStands(verdict === null ? 'refused' : 'sent')
+        },
+        () => {
+          setStands('failed')
+        },
+      )
+    }
+    const unlisten = replica.db.registerListener({ statusChanged: send })
+    send()
+    return unlisten
+  }, [stands, replica])
+  return (
+    <>
+      <Line of="reported" stands={stands}>
+        {sample(`Its report: ${stands}`)}
+      </Line>
+      {/* As wide as its words, and no wider. */}
+      <View style={{ alignItems: 'flex-start' }}>
+        <Button
+          testID="sync:live:report"
+          loading={stands === 'waiting'}
+          onPress={() => {
+            setStands('waiting')
+          }}
+        >
+          {sample('Report this replica now')}
+        </Button>
+      </View>
+    </>
+  )
+}
+
 /** The lines of a real replica, as the provider around them says it stands. */
 function LiveLines({ household }: { readonly household: string }) {
   const sample = useSample()
@@ -373,6 +428,7 @@ function LiveLines({ household }: { readonly household: string }) {
           `Waiting in its inbox: ${waiting === undefined ? 'not read' : String(waiting.length)}`,
         )}
       </Line>
+      {replica.phase === 'open' ? <Report replica={replica.replica} /> : null}
     </View>
   )
 }

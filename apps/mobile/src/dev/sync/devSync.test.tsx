@@ -38,6 +38,10 @@ jest.mock('expo-router', () => ({
 /** What the sync service says of the one real replica this file opens, and who listens. */
 const mockLive = {
   status: { connected: false, downloadError: undefined as Error | undefined },
+  /** Whether a checkpoint has been applied since its stream came up: what a report waits for. */
+  caughtUp: false,
+  /** What the server answers its report with: a verdict, a refusal, or nothing at all. */
+  answers: 'matched' as 'matched' | 'refused' | 'nothing',
   listeners: new Set<{ statusChanged?: (status: unknown) => void }>(),
   asked: [] as string[],
 }
@@ -75,6 +79,18 @@ jest.mock('@household/sync/native', () => ({
         mockLive.asked.push('close')
         return Promise.resolve()
       },
+      get caughtUp() {
+        return mockLive.caughtUp
+      },
+      report: () => {
+        mockLive.asked.push('report')
+        if (mockLive.answers === 'nothing') return Promise.reject(new Error('no answer'))
+        return Promise.resolve(
+          mockLive.answers === 'refused'
+            ? null
+            : { matched: true, resnapshot_required: false, entries: [] },
+        )
+      },
     })
   },
 }))
@@ -82,6 +98,8 @@ jest.mock('@household/sync/native', () => ({
 beforeEach(async () => {
   await AsyncStorage.clear()
   mockLive.status = { connected: false, downloadError: undefined }
+  mockLive.caughtUp = false
+  mockLive.answers = 'matched'
   mockLive.listeners.clear()
   mockLive.asked.length = 0
   jest.spyOn(announcer, 'announce').mockImplementation(() => undefined)
@@ -378,5 +396,45 @@ describe('this device’s replica, on the sync screen', () => {
     await waitFor(() => {
       expect(mockLive.asked).toContain('close')
     })
+  })
+
+  it('has the replica report itself when asked, once it has caught up and not before', async () => {
+    await signedIn()
+    await waitFor(() => {
+      expect(screen.getByTestId('sync:live:reported:never')).toBeOnTheScreen()
+    })
+    await userEvent.press(screen.getByTestId('sync:live:report'))
+    // Its stream has only just come up: a report made now would read as a copy that differs.
+    expect(screen.getByTestId('sync:live:reported:waiting')).toBeOnTheScreen()
+    expect(screen.getByTestId('sync:live:report')).toBeBusy()
+    expect(mockLive.asked).not.toContain('report')
+    mockLive.caughtUp = true
+    await becomes({ connected: true, downloadError: undefined })
+    await waitFor(() => {
+      expect(screen.getByTestId('sync:live:reported:sent')).toBeOnTheScreen()
+    })
+    // Once, whatever the sync service goes on to say of itself.
+    await becomes({ connected: true, downloadError: undefined })
+    expect(mockLive.asked.filter((asked) => asked === 'report')).toHaveLength(1)
+    expect(screen.getByTestId('sync:live:report')).not.toBeBusy()
+  })
+
+  it('says a report the server took none of, and one that got no answer, each as it is', async () => {
+    mockLive.caughtUp = true
+    await signedIn()
+    await waitFor(() => {
+      expect(screen.getByTestId('sync:live:replica:open')).toBeOnTheScreen()
+    })
+    mockLive.answers = 'refused'
+    await userEvent.press(screen.getByTestId('sync:live:report'))
+    await waitFor(() => {
+      expect(screen.getByTestId('sync:live:reported:refused')).toBeOnTheScreen()
+    })
+    mockLive.answers = 'nothing'
+    await userEvent.press(screen.getByTestId('sync:live:report'))
+    await waitFor(() => {
+      expect(screen.getByTestId('sync:live:reported:failed')).toBeOnTheScreen()
+    })
+    expect(mockLive.asked.filter((asked) => asked === 'report')).toHaveLength(2)
   })
 })
