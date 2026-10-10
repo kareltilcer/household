@@ -338,13 +338,20 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   ([D-131](docs/prd/09-decisions.md)). What an answer does not establish is said neither way
   there: a confirmation that fails for a reason that is neither the form's nor the method's
   (`billing/PaymentForm.tsx`), a `503 billing_unavailable` (`useBillingRefusal`,
-  `billing/data.ts`) and the bodiless `204` of an offer taken back (`billing/Handover.tsx`) say
-  no more than that, and the household or the subscription is read again before anything says
-  what was charged or who pays; and a day or a promise the server keeps in one state, a
-  take-over's start, a next charge, the day a lapse keeps its data until, is drawn in that
-  state alone, the last never once the household's own deletion is scheduled. A refusal whose
-  own re-read takes away the part it was pressed in is said in a toast (`useRefusals`,
-  `billing/parts.tsx`). A read of something that is not every member's and is answered
+  `billing/data.ts`), the bodiless `204` of an offer taken back (`billing/Handover.tsx`) or
+  declined and the `404` of one accepted (`billing/Takeover.tsx`) say no more than that, and
+  the household or the subscription is read again before anything says what was charged or who
+  pays; and a day or a promise the server keeps in one state, a take-over's start, a next
+  charge, the day a cancelled subscription ends on, the day a lapse keeps its data until, is
+  drawn in that state alone, the last not where the household's own deletion is scheduled for
+  a day no later, the erasure taking whichever is due first (`keptUntil`,
+  `household/households.ts`). A question that stays open over a refused write keeps what it
+  was opened for, and is never drawn again from what is read behind it (the interval's dialog,
+  `billing/Billing.tsx`). A refusal whose own re-read takes away the part it was pressed in is
+  said in a toast (`useRefusals`, `billing/parts.tsx`). On these screens a body's *Try again*
+  leaves at the press, so each body that is read has a place the focus is put on:
+  `useFocusKept(state === 'error', state)` on a page that is one body, `usePartFocusKept()` on
+  a page of several (`account/common.ts`; billing's is `useFocusKept` of `billing/parts.tsx`). A read of something that is not every member's and is answered
   `not_found` reads the household alone again (`useRereadWhereRefused`, `household/data.ts`),
   told by the problem's code (`notTheirs`) and never by the status alone. An export's *Download*
   (`privacy/ExportList.tsx`) reads its job again and leaves for the link that answer carries, a
