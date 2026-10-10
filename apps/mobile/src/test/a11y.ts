@@ -137,10 +137,20 @@ const registered: readonly RegExp[] = Object.values(controls).flatMap((control) 
   ]
 })
 
+/** What a hold-to-complete's `testID` starts with: `hold:idle`, `hold:completed`. */
+export const holdPrefix = 'hold:'
+
+/** Whether `element` is the control of a hold-to-complete: what the rules find one by. */
+function isHold(element: TestInstance): boolean {
+  return text(propsOf(element).testID).startsWith(holdPrefix)
+}
+
 /**
  * An icon-only control, one that holds no word of its own, is called what the register calls
  * it (@household/icons' `controls`) and nothing else: a name made up where the control is drawn
- * is a name in one language, or one a neighbouring control already has.
+ * is a name in one language, or one a neighbouring control already has. A hold-to-complete is
+ * no control of the register's: it is named for the one thing it completes, by the screen that
+ * draws it, and the rule of its own below holds it to having that name.
  */
 export const registeredName: Rule = (tree) =>
   elementsOf(tree)
@@ -148,6 +158,7 @@ export const registeredName: Rule = (tree) =>
       (element) =>
         takesPress(element) &&
         element.type !== 'RCTSwitch' &&
+        !isHold(element) &&
         !isHiddenFromAccessibility(element) &&
         textOf(element) === '' &&
         nameOf(element) !== '',
@@ -319,6 +330,64 @@ export const fieldsNamed: Rule = (tree) =>
       ]
     })
 
+/**
+ * A hold-to-complete is completed without the hold by whoever cannot hold (06-clients §3: a
+ * gesture that is the only way to do something is an accessibility failure). Its control is
+ * within a screen reader's reach, and answers each way a platform sends an activation that is
+ * no touch: the `activate` action, which carries a label, since a platform that lists an
+ * element's actions lists a bare one by its identifier, in English; the accessibility tap,
+ * which is a screen reader's double tap where the platform asks the element itself; and a
+ * click, which is a keyboard's Enter. A name and a role are every control's to have (`named`).
+ */
+export const holdNeedsNoHold: Rule = (tree) =>
+  elementsOf(tree)
+    .filter(isHold)
+    .flatMap((element) => {
+      const props = propsOf(element)
+      const actions: readonly unknown[] = Array.isArray(props.accessibilityActions)
+        ? props.accessibilityActions
+        : []
+      const activate = actions
+        .map((action): Props =>
+          typeof action === 'object' && action !== null ? { ...action } : {},
+        )
+        .find((action) => action.name === 'activate')
+      const missing = [
+        ...(isHiddenFromAccessibility(element) ? ['is hidden from a screen reader'] : []),
+        ...(activate === undefined
+          ? ['has no `activate` accessibility action']
+          : text(activate.label) === ''
+            ? ['has an `activate` action with no label']
+            : []),
+        ...(typeof props.onAccessibilityAction === 'function'
+          ? []
+          : ['does not answer an accessibility action']),
+        ...(typeof props.onAccessibilityTap === 'function'
+          ? []
+          : ['does not answer an accessibility tap']),
+        ...(takesPress(element) ? [] : ['does not answer a click']),
+      ]
+      return missing.map((reason) =>
+        failure('hold', element, `is a hold-to-complete, and ${reason}`),
+      )
+    })
+
+/**
+ * No text is cut off: a row wraps and grows with its words, at 200 % as at 100 % (06-clients
+ * §4). Jest lays nothing out, so what was clipped by its box is not seen here; what a text was
+ * told to cut is.
+ */
+export const neverTruncated: Rule = (tree) =>
+  elementsOf(tree)
+    .filter((element) => element.type === 'Text')
+    .filter((element) => {
+      const lines = propsOf(element).numberOfLines
+      return typeof lines === 'number' && lines > 0
+    })
+    .map((element) =>
+      failure('truncated', element, 'is a text held to a number of lines, and cut off past them'),
+    )
+
 /** Every rule, in the order a failure is listed. A group that adds a rule adds it here. */
 export const rules: readonly Rule[] = [
   named,
@@ -329,6 +398,8 @@ export const rules: readonly Rule[] = [
   statusSaidThreeWays,
   ownText,
   fieldsNamed,
+  holdNeedsNoHold,
+  neverTruncated,
 ]
 
 /** Everything in `tree` that breaks a rule. */

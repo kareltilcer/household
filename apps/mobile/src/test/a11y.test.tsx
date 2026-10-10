@@ -198,6 +198,82 @@ describe('the accessibility rules', () => {
     expect(broken(statusTestID('rejected'))).toEqual(['status'])
   })
 
+  it('want a hold-to-complete completed with no hold: the action, the tap and the click', async () => {
+    const activate = [{ name: 'activate', label: words.remove }]
+    await render(
+      <View>
+        <Pressable
+          testID="hold:whole"
+          accessibilityRole="button"
+          accessibilityLabel={words.remove}
+          accessibilityActions={activate}
+          onAccessibilityAction={noop}
+          onAccessibilityTap={noop}
+          style={target}
+          onPress={noop}
+        />
+        <Pressable
+          testID="hold:gesture"
+          accessibilityRole="button"
+          accessibilityLabel={words.remove}
+          style={target}
+          onPress={noop}
+        />
+        <Pressable
+          testID="hold:bare"
+          accessibilityRole="button"
+          accessibilityLabel={words.remove}
+          accessibilityActions={[{ name: 'activate' }]}
+          onAccessibilityAction={noop}
+          onAccessibilityTap={noop}
+          style={target}
+          onPress={noop}
+        />
+        <View
+          testID="hold:deaf"
+          accessible
+          accessibilityLabel={words.remove}
+          accessibilityActions={activate}
+          onAccessibilityAction={noop}
+          onAccessibilityTap={noop}
+        />
+        <Pressable
+          testID="plain"
+          accessibilityRole="button"
+          accessibilityLabel={words.remove}
+          style={target}
+          onPress={noop}
+        />
+      </View>,
+    )
+    // Named for what it completes by whoever draws it, which no register has: and held to
+    // the rest.
+    expect(broken('hold:whole')).toEqual([])
+    expect(broken('hold:gesture')).toEqual(['hold', 'hold', 'hold'])
+    expect(broken('hold:bare')).toEqual(['hold'])
+    expect(broken('hold:deaf')).toEqual(['hold'])
+    // Any other control with no word of its own is still the register's to name.
+    expect(broken('plain')).toEqual(['registered-name'])
+    expect(() => {
+      expectAccessible(screen.getByTestId('hold:bare'))
+    }).toThrow(/\[hold\] .* is a hold-to-complete, and has an `activate` action with no label/)
+  })
+
+  it('want no text cut off at a number of lines', async () => {
+    await render(
+      <View>
+        <View testID="cut">
+          <Text numberOfLines={1}>{words.long}</Text>
+        </View>
+        <View testID="whole">
+          <Text>{words.long}</Text>
+        </View>
+      </View>,
+    )
+    expect(broken('cut')).toEqual(['truncated'])
+    expect(broken('whole')).toEqual([])
+  })
+
   it('want every text drawn by the app’s own `Text`', async () => {
     await render(
       <View>
