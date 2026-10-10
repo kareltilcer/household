@@ -206,6 +206,30 @@ describe('the sync screen', () => {
     )
   })
 
+  it('is narrowed to one section, which is how a flow reaches one without the rest', async () => {
+    await render(<DevSync />)
+    const drawn = (id: string) => screen.queryAllByTestId(id).length > 0
+    // A control for every section the screen draws, by the name its `testID` carries.
+    const named = screen
+      .getAllByRole('button')
+      .map((button) => String(button.props.testID))
+      .filter((id) => id.startsWith('sync:only:') && id !== 'sync:only:all')
+      .map((id) => id.replace('sync:only:', ''))
+    expect(named.length).toBeGreaterThan(0)
+    for (const section of named)
+      expect([section, drawn(`sync:section:${section}`)]).toEqual([section, true])
+
+    await userEvent.press(screen.getByTestId('sync:only:live'))
+    expect(drawn('sync:section:live')).toBe(true)
+    // The fixtures' offline bars are gone with their section: the one left is the replica's own.
+    expect(drawn('sync:section:bar')).toBe(false)
+    expect(drawn('offline-bar')).toBe(false)
+
+    await userEvent.press(screen.getByTestId('sync:only:resolvers'))
+    expect(drawn(`${cellId('resolvers', 'rejected', 'light')}:open:forbidden`)).toBe(true)
+    expect(drawn('sync:section:live')).toBe(false)
+  })
+
   it('holds to the accessibility rules, every cell of it, at the text’s own size and at twice it', async () => {
     const first = await render(<DevSync />)
     expectAccessible()

@@ -23,13 +23,18 @@ import { Button } from '../../ui/Button.tsx'
 import { Sheet } from '../../ui/Sheet.tsx'
 import { Text } from '../../ui/Text.tsx'
 import { DevScreen } from '../DevScreen.tsx'
+import { Shown } from '../Only.tsx'
 import { useSample } from '../sample.ts'
 import { AtScale } from './AtScale.tsx'
 import { drawings, household, names, registry, rows, widths, type Width } from './fixtures.ts'
 
 const themes: readonly Theme[] = ['light', 'dark']
 const scales = [1, 2] as const
-const rooms = Object.keys(widths) as Width[]
+// By name, each a piece of the names a bar and the panes are found by (e2e/flows.test.ts).
+const rooms: readonly Width[] = ['phone', 'tablet']
+
+/** What the page can be narrowed to (Only.tsx): forty bars are a long way to scroll past. */
+const parts = ['bars', 'app-bar', 'more', 'arrange', 'panes', 'not-available', 'switched'] as const
 
 function Heading({ children }: { readonly children: string }) {
   return (
@@ -238,26 +243,29 @@ export default function DevShell() {
   // what More lists above it.
   const [arrangement, setArrangement] = useState(noArrangement)
   return (
-    <DevScreen page="shell" title={sample('Shell')}>
-      <Bars />
-      <AppBars />
+    <DevScreen page="shell" title={sample('Shell')} parts={parts}>
+      <Shown part="bars">
+        <Bars />
+      </Shown>
+      <Shown part="app-bar">
+        <AppBars />
+      </Shown>
 
-      <Heading>{sample('More')}</Heading>
-      <Ground id="shell:more">
-        <MoreList household={household} registry={registry} arrangement={arrangement} waiting={3} />
-      </Ground>
+      <Shown part="more">
+        <Heading>{sample('More')}</Heading>
+        <Ground id="shell:more">
+          <MoreList
+            household={household}
+            registry={registry}
+            arrangement={arrangement}
+            waiting={3}
+          />
+        </Ground>
+      </Shown>
 
-      <Heading>{sample('Arrange')}</Heading>
-      <Ground id="shell:arrange">
-        <ArrangeLists
-          household={household}
-          registry={registry}
-          arrangement={arrangement}
-          onArrange={setArrangement}
-        />
-      </Ground>
-      <Room width={widths.tablet}>
-        <Ground id="shell:arrange:tablet">
+      <Shown part="arrange">
+        <Heading>{sample('Arrange')}</Heading>
+        <Ground id="shell:arrange">
           <ArrangeLists
             household={household}
             registry={registry}
@@ -265,24 +273,40 @@ export default function DevShell() {
             onArrange={setArrangement}
           />
         </Ground>
-      </Room>
+        <Room width={widths.tablet}>
+          <Ground id="shell:arrange:tablet">
+            <ArrangeLists
+              household={household}
+              registry={registry}
+              arrangement={arrangement}
+              onArrange={setArrangement}
+            />
+          </Ground>
+        </Room>
+      </Shown>
 
-      <Heading>{sample('Two panes')}</Heading>
-      {rooms.map((room) => (
-        <PanesIn key={room} id={room} width={widths[room]} />
-      ))}
-      <AtScale scale={2}>
-        <PanesIn id="tablet-200" width={widths.tablet} />
-      </AtScale>
+      <Shown part="panes">
+        <Heading>{sample('Two panes')}</Heading>
+        {rooms.map((room) => (
+          <PanesIn key={room} id={room} width={widths[room]} />
+        ))}
+        <AtScale scale={2}>
+          <PanesIn id="tablet-200" width={widths.tablet} />
+        </AtScale>
+      </Shown>
 
-      <Heading>{sample('Not available')}</Heading>
-      <Ground id="shell:not-available">
-        <Text step="title-2">{t('ui.not_available.title')}</Text>
-        <NotAvailableBody home={paths.dev.path} />
-      </Ground>
+      <Shown part="not-available">
+        <Heading>{sample('Not available')}</Heading>
+        <Ground id="shell:not-available">
+          <Text step="title-2">{t('ui.not_available.title')}</Text>
+          <NotAvailableBody home={paths.dev.path} />
+        </Ground>
+      </Shown>
 
-      <Heading>{sample('Switched by a link')}</Heading>
-      <Switch />
+      <Shown part="switched">
+        <Heading>{sample('Switched by a link')}</Heading>
+        <Switch />
+      </Shown>
     </DevScreen>
   )
 }

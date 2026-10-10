@@ -19,11 +19,25 @@ import { OfflineBar } from '../../../ui/OfflineBar.tsx'
 import { Skeleton } from '../../../ui/Skeleton.tsx'
 import { StatusMark, SyncMark, syncStates } from '../../../ui/StatusMark.tsx'
 import { Text } from '../../../ui/Text.tsx'
+import { Shown } from '../../Only.tsx'
 import { useSample } from '../../sample.ts'
 
 const statuses = Object.keys(statusGlyphs) as StatusId[]
 const tones: readonly BannerTone[] = ['neutral', 'info', 'warning', 'danger']
 const themes: readonly Theme[] = ['light', 'dark']
+
+/** The section's parts, which its page can be narrowed to (Only.tsx). */
+export const statusParts = [
+  'statuses',
+  'marks',
+  'banners',
+  'loading',
+  'hold',
+  'parts',
+  'metric',
+] as const
+
+type StatusPart = (typeof statusParts)[number]
 
 /** A part of the section in one theme, on that theme's own ground. */
 function Ground({ part, children }: { readonly part: string; readonly children: ReactNode }) {
@@ -48,12 +62,12 @@ function Part({
   name,
   children,
 }: {
-  readonly id: string
+  readonly id: StatusPart
   readonly name: string
   readonly children: ReactNode
 }) {
   return (
-    <>
+    <Shown part={id}>
       <Text step="title-3" header>
         {name}
       </Text>
@@ -62,7 +76,7 @@ function Part({
           <Ground part={`status-section:${id}:${theme}`}>{children}</Ground>
         </ThemeScope>
       ))}
-    </>
+    </Shown>
   )
 }
 

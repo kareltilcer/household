@@ -22,8 +22,12 @@ import { Sheet } from '../../../ui/Sheet.tsx'
 import { Stepper } from '../../../ui/Stepper.tsx'
 import { Text } from '../../../ui/Text.tsx'
 import { useToast } from '../../../ui/Toast.tsx'
+import { Shown as Narrowed } from '../../Only.tsx'
 import { useSample } from '../../sample.ts'
 import { words } from './fixtures.ts'
+
+/** The section's two parts, which its page can be narrowed to (Only.tsx). */
+export const controlsParts = ['controls', 'overlays'] as const
 
 /** A half of the section: what stands in it paints its own ground, in the theme it is scoped to. */
 function Panel({ children }: { readonly children: ReactNode }) {
@@ -417,30 +421,34 @@ export function ControlsSection() {
   const [out, setOut] = useState(false)
   return (
     <>
-      <Text step="title-3" header>
-        {sample(words.controls)}
-      </Text>
-      <Switch
-        testID="controls:out-of-form"
-        label={sample(words.showOut)}
-        checked={out}
-        onChange={setOut}
-      />
-      <Half theme="light" out={out} />
-      <Half theme="dark" out={out} />
-      <Text step="title-3" header>
-        {sample(words.overlays)}
-      </Text>
-      <ThemeScope theme="light">
-        <Panel>
-          <Overlays theme="light" />
-        </Panel>
-      </ThemeScope>
-      <ThemeScope theme="dark">
-        <Panel>
-          <Overlays theme="dark" />
-        </Panel>
-      </ThemeScope>
+      <Narrowed part="controls">
+        <Text step="title-3" header>
+          {sample(words.controls)}
+        </Text>
+        <Switch
+          testID="controls:out-of-form"
+          label={sample(words.showOut)}
+          checked={out}
+          onChange={setOut}
+        />
+        <Half theme="light" out={out} />
+        <Half theme="dark" out={out} />
+      </Narrowed>
+      <Narrowed part="overlays">
+        <Text step="title-3" header>
+          {sample(words.overlays)}
+        </Text>
+        <ThemeScope theme="light">
+          <Panel>
+            <Overlays theme="light" />
+          </Panel>
+        </ThemeScope>
+        <ThemeScope theme="dark">
+          <Panel>
+            <Overlays theme="dark" />
+          </Panel>
+        </ThemeScope>
+      </Narrowed>
     </>
   )
 }

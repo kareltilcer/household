@@ -61,6 +61,7 @@ import { OfflineBar } from '../../ui/OfflineBar.tsx'
 import { StateFrame } from '../../ui/StateFrame.tsx'
 import { Text } from '../../ui/Text.tsx'
 import { DevScreen } from '../DevScreen.tsx'
+import { Shown } from '../Only.tsx'
 import { useSample } from '../sample.ts'
 import {
   cellId,
@@ -79,6 +80,22 @@ const cubicMetres = 'm³'
 
 /** The least a cell is wide before two stand side by side: a phone's width, more or less. */
 const cellWidth = 320
+
+/**
+ * The screen's sections, which it can be narrowed to (Only.tsx): by the names their `testID`s
+ * carry, `sync:section:<id>`. Narrowed to the live one, the only offline bar on the screen is
+ * the real replica's own.
+ */
+const sections = [
+  'live',
+  'bar',
+  'inbox',
+  'resolvers',
+  'kept',
+  'row',
+  'honesty',
+  'connection',
+] as const
 
 /** What every cell of the screen is drawn with. */
 interface Fixtures {
@@ -163,15 +180,17 @@ function Section({
   const sample = useSample()
   const theme = useTheme()
   return (
-    <View testID={`sync:section:${id}`} style={{ gap: theme.space['space-3'] }}>
-      <View style={{ gap: theme.space['space-05'] }}>
-        <Text step="title-3" header>
-          {sample(name)}
-        </Text>
-        <Text color="text-muted">{sample(note)}</Text>
+    <Shown part={id}>
+      <View testID={`sync:section:${id}`} style={{ gap: theme.space['space-3'] }}>
+        <View style={{ gap: theme.space['space-05'] }}>
+          <Text step="title-3" header>
+            {sample(name)}
+          </Text>
+          <Text color="text-muted">{sample(note)}</Text>
+        </View>
+        {children}
       </View>
-      {children}
-    </View>
+    </Shown>
   )
 }
 
@@ -483,7 +502,7 @@ export default function DevSync() {
     outcome: rejectionWith(code),
   }))
   return (
-    <DevScreen page="sync" title={sample('Sync UI')}>
+    <DevScreen page="sync" title={sample('Sync UI')} parts={sections}>
       <Text>
         {sample(
           'The inbox, its resolvers and a row’s own states, over a stand-in replica and fixture answers. No entity the server serves is written offline yet, so nothing here but the first section can be reached on real data.',

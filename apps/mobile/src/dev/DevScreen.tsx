@@ -8,6 +8,9 @@
 // it opens one that came from outside the app (*Open in "Household Dev"?*), in a dialog of its
 // own that no flow can find by a `testID`; so the flows walk here (e2e/flows/parts/dev.yaml),
 // and so does a developer with a build on a phone. Its name is its address, which is data.
+//
+// A screen that is many screens long names its parts, and can then be narrowed to one of them
+// (Only.tsx).
 import { router } from 'expo-router'
 import type { ReactNode } from 'react'
 import { paths } from '../app/paths.ts'
@@ -15,15 +18,22 @@ import { Button } from '../ui/Button.tsx'
 import { Screen } from '../ui/Screen.tsx'
 import { DevToolbar } from './DevToolbar.tsx'
 import { devMarker, type DevPage } from './marker.ts'
+import { Only } from './Only.tsx'
 
 export interface DevScreenProps {
   readonly page: DevPage
   /** A fixture, through `useSample`: a dev screen's words are in no catalog. */
   readonly title: string
+  /**
+   * The parts the screen can be narrowed to, each of which it draws in a `Shown`: a control
+   * for each stands under the toolbar, `<page>:only:<part>`. Left out, a screen short enough
+   * to be read whole.
+   */
+  readonly parts?: readonly string[]
   readonly children?: ReactNode
 }
 
-export function DevScreen({ page, title, children }: DevScreenProps) {
+export function DevScreen({ page, title, parts, children }: DevScreenProps) {
   return (
     <Screen title={title} testID={`${devMarker}:${page}`}>
       <DevToolbar />
@@ -38,7 +48,13 @@ export function DevScreen({ page, title, children }: DevScreenProps) {
           {paths.dev.path}
         </Button>
       )}
-      {children}
+      {parts === undefined ? (
+        children
+      ) : (
+        <Only page={page} parts={parts}>
+          {children}
+        </Only>
+      )}
     </Screen>
   )
 }
