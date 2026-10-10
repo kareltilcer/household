@@ -68,7 +68,8 @@ function Opened({ household, arrangement, arrange, children }: OpenedProps) {
             paddingRight: insets.right + theme.density['dens-pad-x'],
           }}
         >
-          <HouseholdBars household={id} />
+          {/* Handed what was read here: the bars ask the server nothing of their own. */}
+          <HouseholdBars household={household} />
           {/* Item 29's entitlement banner stands here, under the offline bar's place. */}
           <Switched household={id} />
         </View>

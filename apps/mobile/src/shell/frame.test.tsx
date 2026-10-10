@@ -44,8 +44,8 @@ jest.mock('../sync/HouseholdBars.tsx', () => {
   const { createElement } = jest.requireActual<typeof import('react')>('react')
   const { View: Mark } = jest.requireActual<typeof import('react-native')>('react-native')
   return {
-    HouseholdBars: ({ household }: { readonly household: string }) =>
-      createElement(Mark, { testID: `bars:${household}` }),
+    HouseholdBars: ({ household }: { readonly household: { readonly id: string } }) =>
+      createElement(Mark, { testID: `bars:${household.id}` }),
   }
 })
 

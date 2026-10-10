@@ -122,9 +122,11 @@ export type HouseholdRead =
 
 /**
  * The household an address names, as its member reads it: the app's one reading of it. The
- * frame its screens stand in draws by it and hands it down (shell/HouseholdFrame.tsx), and what
- * stands beside or above the frame reads it here by the same key, so it is asked once: the
- * replica's provider, which opens nothing on an address's word, and the bar above the screens.
+ * frame its screens stand in draws by it and hands it on, to the screens under it and to the
+ * bar above them (shell/HouseholdFrame.tsx). The replica's provider stands above the frame and
+ * opens nothing on an address's word, so it reads it here too, by the same key and as the frame
+ * does, and the household is asked for once. Whatever else needs it is handed it: a reader that
+ * arrived after the answer would ask for it again.
  *
  * It is asked for a member, of an id that can be a household's. Anybody else is answered
  * nothing but a refusal, so nothing is asked for them and nothing kept is theirs: it is being
