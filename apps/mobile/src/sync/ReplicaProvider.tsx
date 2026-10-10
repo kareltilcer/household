@@ -10,9 +10,10 @@
 // that opens nothing for them makes no file.
 //
 // With the replica comes what the app knows of the connection: whether the device says it has
-// one, and whether the replica is receiving changes, which with the sync service down and the
-// API up it is not, though everything else works (D-105). The replica connects as it is opened
-// and keeps trying by itself: nothing here tells it to connect again.
+// one, which is what the query client was told too (api/query.ts), and whether the replica is
+// receiving changes, which with the sync service down and the API up it is not, though
+// everything else works (D-105). The replica connects as it is opened and keeps trying by
+// itself: nothing here tells it to connect again.
 import type { RecordedOutcome, Replica } from '@household/sync'
 import {
   createContext,
@@ -24,9 +25,9 @@ import {
   type ReactNode,
 } from 'react'
 import { useProblems } from '../api/ApiProvider.tsx'
+import { useOnline } from '../api/query.ts'
 import { useSession } from '../session/context.ts'
 import { useOwn } from './household.ts'
-import { useOnline } from './online.ts'
 import { openHouseholdReplica, type Opened } from './open.ts'
 
 export type ReplicaState =

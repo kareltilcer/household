@@ -221,7 +221,7 @@ export interface Read {
  * read that failed and one that cannot be made for want of a connection are the same to a
  * member: the body could not be read, and no skeleton says otherwise. With something kept it
  * is drawn, and `offline` where it is as it was last read. `online` is the device's own word
- * for it (sync's `useOnline`).
+ * for it (`useOnline`, api/query.ts).
  */
 export function readState(read: Read, online: boolean, empty = false): DataState {
   if (read.data === undefined) {

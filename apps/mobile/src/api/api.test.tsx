@@ -11,17 +11,18 @@ import {
   QueryObserver,
   type QueryClient,
 } from '@tanstack/react-query'
-import { screen } from '@testing-library/react-native'
+import { act, screen } from '@testing-library/react-native'
 import { createFormatters } from '../i18n/format.ts'
 import { ids } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
+import { sourcesIn } from '../test/sources.ts'
 import { Text } from '../ui/Text.tsx'
 import { clientName, namedFetch, setting } from './client.ts'
 import { createKeep, keepKey, writeEvery } from './keep.ts'
 import { ApiProblemError, isRetryable, problemIn, retryAt, unwrap } from './problem.ts'
 import { createProblemHub, type Problem } from './problems.ts'
 import { useProblemText } from './problemText.ts'
-import { askedNow, cacheMaxAge, createQueryClient, watchConnection } from './query.ts'
+import { askedNow, cacheMaxAge, createQueryClient, useOnline, watchConnection } from './query.ts'
 import { answering, empty, json, problem, testApi, testClient, unanswered } from './testing.ts'
 
 /** A client the test puts away: a read nobody observes is held by a timer for a day. */
@@ -447,6 +448,15 @@ describe('a request the replica makes', () => {
 describe('what the query client is told of the device’s connection', () => {
   const says = (isConnected: boolean | null) => ({ isConnected }) as NetInfoState
 
+  // A second listener would be a second rule for believing the device, and a bar that says
+  // there is no connection over a read that was sent.
+  it('is heard by one file of the app, and read from the query client by every other', () => {
+    const hearing = sourcesIn(['app', 'src'])
+      .filter(({ source }) => source.includes("'@react-native-community/netinfo'"))
+      .map(({ path }) => path)
+    expect(hearing).toEqual(['src/api/query.ts'])
+  })
+
   it('is what the device says, believed only where it says it has none', () => {
     const stop = jest.fn()
     jest.mocked(NetInfo.addEventListener).mockReturnValueOnce(stop)
@@ -461,10 +471,41 @@ describe('what the query client is told of the device’s connection', () => {
     tell?.(says(null))
     expect(onlineManager.isOnline()).toBe(true)
     tell?.(says(false))
+    // And it is wrong in one direction alone: connected, with no way to the internet, is
+    // connected.
+    tell?.({ isConnected: true, isInternetReachable: false } as NetInfoState)
+    expect(onlineManager.isOnline()).toBe(true)
+    tell?.(says(false))
     stopWatching()
     expect(stop).toHaveBeenCalledTimes(1)
     // Told nothing from then on, it takes it that there is a connection.
     expect(onlineManager.isOnline()).toBe(true)
+  })
+
+  // The offline bar and a read that waits for a connection are told by one word.
+  it('is what a screen reads as the device’s word, at each change', async () => {
+    let tell: (state: NetInfoState) => void = () => undefined
+    jest.mocked(NetInfo.addEventListener).mockImplementationOnce((listener) => {
+      tell = listener
+      return () => undefined
+    })
+    function Online() {
+      return <Text testID="online">{String(useOnline())}</Text>
+    }
+    const stopWatching = watchConnection()
+    await render(<Online />)
+    // Taken to have one until the device says otherwise: nothing is drawn for a state nobody
+    // reported.
+    expect(screen.getByTestId('online')).toHaveTextContent('true', { exact: true })
+    await act(() => {
+      tell(says(false))
+    })
+    expect(screen.getByTestId('online')).toHaveTextContent('false', { exact: true })
+    await act(() => {
+      tell(says(null))
+    })
+    expect(screen.getByTestId('online')).toHaveTextContent('true', { exact: true })
+    stopWatching()
   })
 
   // What `askedNow` is for, with the device's own word for it.

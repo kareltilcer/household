@@ -14,6 +14,7 @@ import {
   QueryClient,
   type Query,
 } from '@tanstack/react-query'
+import { useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
 import { isRetryable, problemIn } from './problem.ts'
 
@@ -110,8 +111,14 @@ export function watchFocus(): () => void {
  *
  * The device is believed in one direction only: one that says it has no connection has none.
  * One that does not know yet, as it starts, or that has a network with nothing behind it, is
- * taken to have one, and a request that then fails says so itself. It answers with what stops
- * it, after which the query client is told nothing and takes it that there is a connection.
+ * taken to have one, and a request that then fails says so itself. Whether the internet can be
+ * reached is not asked: what the device says of that it works out by asking a host that is none
+ * of the app's. It answers with what stops it, after which the query client is told nothing
+ * and takes it that there is a connection.
+ *
+ * This is the app's one listener to the device, started with the app (session/Providers.tsx):
+ * the device tells whoever starts listening what it knows now, and then of each change, so by
+ * the time a household is drawn the answer is the device's. A screen reads it with `useOnline`.
  */
 export function watchConnection(): () => void {
   const stop = NetInfo.addEventListener((state) => {
@@ -121,4 +128,18 @@ export function watchConnection(): () => void {
     stop()
     onlineManager.setOnline(true)
   }
+}
+
+const hearConnection = (notify: () => void) => onlineManager.subscribe(notify)
+const hasConnection = () => onlineManager.isOnline()
+
+/**
+ * Whether the device says it has a connection, as the query client was told (`watchConnection`):
+ * what the offline bar is drawn by (A-37), and what a body that is read from the server calls
+ * offline (household/data.ts, `readState`). One word for both, so a read that waits for a
+ * connection and the bar that says there is none never disagree. With the sync service alone
+ * away it is still true, and the replica's own status says that (D-105).
+ */
+export function useOnline(): boolean {
+  return useSyncExternalStore(hearConnection, hasConnection)
 }

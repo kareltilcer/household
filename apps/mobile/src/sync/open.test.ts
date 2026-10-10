@@ -12,6 +12,7 @@ import { createProblemHub } from '../api/problems.ts'
 import { testApi } from '../api/testing.ts'
 import type { ReplicaCredential } from '../session/context.ts'
 import { forget } from '../session/forget.ts'
+import { sourcesIn } from '../test/sources.ts'
 import { keptReplicas, replicaDatabase } from './databases.ts'
 import { filesOf, fileStorage } from './files.ts'
 import { opened, openHouseholdReplica, type OpenOptions } from './open.ts'
@@ -358,25 +359,8 @@ describe('a sign-in that ended', () => {
   })
 })
 
-/** Node's own, asked for by name: the app's sources know nothing of Node, and its tests read them. */
-interface Files {
-  readonly readdirSync: (
-    path: string,
-    options: { readonly recursive: true; readonly encoding: 'utf8' },
-  ) => string[]
-  readonly readFileSync: (path: string, encoding: 'utf8') => string
-}
-
 describe('the sync library', () => {
-  const files = jest.requireActual<Files>('node:fs')
-  // Jest runs in apps/mobile.
-  const sources = ['app', 'src'].flatMap((directory) =>
-    files
-      .readdirSync(directory, { recursive: true, encoding: 'utf8' })
-      .map((name) => `${directory}/${name.replaceAll('\\', '/')}`)
-      .filter((path) => /\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path))
-      .map((path) => ({ path, source: files.readFileSync(path, 'utf8') })),
-  )
+  const sources = sourcesIn(['app', 'src'])
 
   it('is imported for its values by this one file of the app, and for its types alone by every other', () => {
     // One import at a time: the names it takes, in braces, and where from.

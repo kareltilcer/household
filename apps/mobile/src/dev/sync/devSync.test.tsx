@@ -5,8 +5,8 @@
 // end-to-end flow's.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { pseudolocalize } from '@household/i18n'
-import NetInfo, { type NetInfoState } from '@react-native-community/netinfo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { onlineManager } from '@tanstack/react-query'
 import { act, screen, userEvent, waitFor, within } from '@testing-library/react-native'
 import type { TestInstance } from 'test-renderer'
 import * as client from '../../api/client.ts'
@@ -376,14 +376,14 @@ describe('this device’s replica, on the sync screen', () => {
     await becomes({ connected: false, downloadError: new Error('503') })
     expect(screen.getByTestId('sync:live:receiving:no')).toBeOnTheScreen()
     expect(live().getByTestId('offline-bar')).toBeOnTheScreen()
-    const hear = jest.mocked(NetInfo.addEventListener).mock.lastCall?.[0]
+    // What the app's one listener tells the query client of the device (api/query.ts).
     await act(() => {
-      hear?.({ isConnected: false } as NetInfoState)
+      onlineManager.setOnline(false)
     })
     expect(screen.getByTestId('sync:live:online:no')).toBeOnTheScreen()
     expect(live().getAllByTestId('offline-bar')).toHaveLength(1)
     await act(() => {
-      hear?.({ isConnected: true } as NetInfoState)
+      onlineManager.setOnline(true)
     })
   })
 

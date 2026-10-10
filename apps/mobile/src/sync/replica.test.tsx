@@ -2,10 +2,9 @@
 // not, how long it is held, what the app says of the connection beside it, and what is read of
 // it. The replica is a stand-in (standIn.ts): a test hands the provider what opens one, and no
 // SQLite is opened on a developer's machine.
-import { beforeEach, describe, expect, it, jest } from '@jest/globals'
-import NetInfo, { type NetInfoState } from '@react-native-community/netinfo'
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useQueryClient } from '@tanstack/react-query'
+import { onlineManager, useQueryClient } from '@tanstack/react-query'
 import { act, screen, userEvent, waitFor } from '@testing-library/react-native'
 import { useState } from 'react'
 import { answering, json, problem, testClient, unanswered } from '../api/testing.ts'
@@ -16,7 +15,6 @@ import { households, ids } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import { Button } from '../ui/Button.tsx'
 import { Text } from '../ui/Text.tsx'
-import { useOnline } from './online.ts'
 import {
   ReplicaProvider,
   useInbox,
@@ -42,16 +40,6 @@ const other: Household = { ...home, ...households.other }
 const routes = {
   [`GET /households/${home.id}`]: () => json(200, home),
   [`GET /households/${other.id}`]: () => json(200, other),
-}
-
-/** What the device says of its connection, told to whoever listens as the device tells it. */
-function connection(state: {
-  readonly isConnected: boolean | null
-  readonly isInternetReachable?: boolean
-}): void {
-  const hear = jest.mocked(NetInfo.addEventListener).mock.lastCall?.[0]
-  // What the app reads of it is all a test says of it.
-  hear?.(state as NetInfoState)
 }
 
 /** What a screen under the provider reads of it, each by a `testID`. */
@@ -108,8 +96,10 @@ async function comesTo(id: string, text: string): Promise<void> {
 
 beforeEach(async () => {
   await AsyncStorage.clear()
-  // What the test before this one left the device saying: nothing is drawn yet to hear it.
-  connection({ isConnected: true })
+})
+
+afterEach(() => {
+  onlineManager.setOnline(true)
 })
 
 describe('a household’s replica', () => {
@@ -363,48 +353,19 @@ describe('what needs the member’s attention', () => {
 })
 
 describe('whether the device says it has a connection', () => {
-  function Online() {
-    return <Text testID="online">{String(useOnline())}</Text>
-  }
-
-  it('is taken to be so until the device says otherwise, and follows what it says', async () => {
-    await render(<Online />)
-    expect(says('online')).toHaveTextContent('true', { exact: true })
-    await act(() => {
-      connection({ isConnected: false })
-    })
-    expect(says('online')).toHaveTextContent('false', { exact: true })
-    await act(() => {
-      connection({ isConnected: true })
-    })
-    expect(says('online')).toHaveTextContent('true', { exact: true })
-  })
-
-  it('reads a device that does not know as one that has: nothing is drawn for a state nobody reported', async () => {
-    await render(<Online />)
-    await act(() => {
-      connection({ isConnected: false })
-    })
-    await act(() => {
-      connection({ isConnected: null })
-    })
-    expect(says('online')).toHaveTextContent('true', { exact: true })
-  })
-
-  it('is wrong in one direction alone: connected, with no way to the internet, is connected', async () => {
-    await render(<Online />)
-    await act(() => {
-      connection({ isConnected: true, isInternetReachable: false })
-    })
-    expect(says('online')).toHaveTextContent('true', { exact: true })
-  })
-
-  it('reaches whatever is drawn under the provider', async () => {
+  // The device's word is heard in one place, which tells the query client (api/query.ts): what
+  // is drawn under the provider is told the same.
+  it('is what the query client was told, and reaches whatever is drawn under the provider', async () => {
     await drawn()
     await comesTo('phase', 'open')
+    expect(says('online')).toHaveTextContent('true', { exact: true })
     await act(() => {
-      connection({ isConnected: false })
+      onlineManager.setOnline(false)
     })
     expect(says('online')).toHaveTextContent('false', { exact: true })
+    await act(() => {
+      onlineManager.setOnline(true)
+    })
+    expect(says('online')).toHaveTextContent('true', { exact: true })
   })
 })
