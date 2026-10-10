@@ -17,11 +17,12 @@ export type Platform = (typeof platforms)[number]
 
 /**
  * What each platform's bytecode measured, in bytes, when its budget was last set: the export of
- * 2026-10-10, with the core's screens and none of the primitives, the shell or the sync UI yet.
+ * 2026-10-10 with the whole of plan item 28 in it, the primitives, the shell, the session and
+ * the sync UI over PowerSync's SDK, which is some 870 kB of it.
  */
 export const measured: Readonly<Record<Platform, number>> = {
-  android: 4_908_782,
-  ios: 4_692_544,
+  android: 6_220_747,
+  ios: 6_006_246,
 }
 
 /** A platform's budget: what it measured and a fifth of that, in whole bytes. */
