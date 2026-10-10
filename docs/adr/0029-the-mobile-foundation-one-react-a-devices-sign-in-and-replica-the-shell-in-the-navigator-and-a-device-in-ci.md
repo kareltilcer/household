@@ -154,8 +154,12 @@ a condition only where it is written, so a constant imported from elsewhere woul
 (`src/dev/gate.ts` is for a question asked at run time alone). Every dev screen stands in
 `DevScreen`, whose `testID` begins with one marker (`src/dev/marker.ts`), and `build/check.ts`
 fails an export whose bundle holds the marker, searched for as bytes so that Hermes bytecode is
-read as JavaScript is. `build/check.test.ts` holds every dev route to that exact line, and
-everything outside `src/dev` to importing nothing from it. Metro's transform cache does not key
+read as JavaScript is. It fails one that holds a stand-in the same way: what stands in for the
+server, the replica or a member in a test is written outside `src/dev`, since a test may import
+nothing from there and a dev screen draws over two of them, and each of those five files is
+named in `build/bundles.ts` (`standIns`) with words it alone holds. `build/check.test.ts` holds
+every dev route to that exact line, everything outside `src/dev` to importing nothing from it,
+and each stand-in's words to its own file and to no other source. Metro's transform cache does not key
 on an `EXPO_PUBLIC_*` variable, so the `export` script clears it every time. The dev screens'
 words are fixtures in English, accented under the pseudo-locale (`useSample`), and in no catalog.
 The harness at `/dev/harness` is eight data bodies through the twelve states, in both themes at
@@ -325,8 +329,11 @@ that makes the credential throw has ended the sign-in already.
 connected, false once an attempt has failed, for as long as the SDK keeps that failure, and
 nothing before that; never off `connecting` nor `hasSynced`. Whether the device is online is
 its own word, believed in one direction: NetInfo's `isConnected`, with *unknown* taken for
-connected and `isInternetReachable` not read; TanStack's online manager is told the same, and
-its focus is the app coming to the front. Above a household's screens stands one bar
+connected and `isInternetReachable` not read. One file hears it (`src/api/query.ts`, the one
+file that imports NetInfo, which a test of the sources holds): it tells TanStack's online
+manager, whose focus is the app coming to the front, and a screen reads the manager
+(`useOnline`), so the bar cannot say that there is no connection over a read that was sent.
+Above a household's screens stands one bar
 (`src/sync/HouseholdBars.tsx`): offline, or, with the device online and the replica not
 receiving, that sentence in the same place (D-191). Over a household that takes no writes it
 promises nothing of a change, and at the addresses whose changes are asked at once (D-170) it
@@ -368,12 +375,19 @@ The bar in front tells the toasts how high it stands, and no other does.
 
 **Every screen of a household stands in `HouseholdScreen`** (`src/shell/HouseholdScreen.tsx`):
 the app bar, which says the household's name first and the screen's one header after it, with
-the way back where the screen says it was reached from another. The name is a label that takes
-`onSwitch`, by which item 29 makes it the switcher's control. The frame
+the way back where the screen says it was reached from another. `src/app/routes.test.ts` reads
+the sources and fails a household's route whose screen is drawn in a plain `Screen`, which
+under the frame would keep clear of the top a second time and carry no bar. The name is a label
+that takes `onSwitch`, by which item 29 makes it the switcher's control. The frame
 (`src/shell/HouseholdFrame.tsx`) reads the household, and the member's arrangement of its
 modules from AsyncStorage, before anything of the shell is drawn, and draws a wait, *could not
 be read*, *not available*, or the bars and the screens under them, with a place under the
-offline bar's for item 29's one entitlement banner. More lists the modules the member holds
+offline bar's for item 29's one entitlement banner. **A household's own answer is read in one
+place** (`useHousehold`, `src/household/data.ts`), only for a member and of an id that can be a
+household's. The frame and the replica's provider read it in the same commit, by one key and so
+in one request, and whatever else needs it is handed it, as the bar above the screens is: a
+reader that mounts after the answer finds it stale at once and asks again, which is how a
+household that was opened came to be asked for twice. More lists the modules the member holds
 that this build has screens for, in their own order (`src/shell/navigation.ts`, the web's
 derivation ported whole), and after them arranging, the way to what needs their attention
 while something does, with its count, which the More tab's name carries too (D-191), and
@@ -449,8 +463,8 @@ required check takes for passed. `mobile` makes the production export of both pl
 runs `check`. `mobile-android` writes the Android project, builds it, starts the development
 services and the API from its sources, makes a member through the typed client
 (`e2e/stack.ts`), boots an emulator at API 29, the oldest Android the app supports, runs the
-flows, asks the server which devices the account lists, and holds the build's permissions to
-their reasons. `mobile-ios` makes a simulator on a named image and Xcode, installs the pods,
+flows, asks the server which devices the account lists and which clients the household does,
+and holds the build's permissions to their reasons. `mobile-ios` makes a simulator on a named image and Xcode, installs the pods,
 builds, runs the flows that ask nothing of a server, a macOS runner having no Docker, and
 reads the built `Info.plist`. The app's unit tests are Jest's, in the job that runs every
 package's.
@@ -461,23 +475,48 @@ simulator's. It is made in jobs apart from the export, Metro's cache not knowing
 The development variant may speak plain `http` on Android, which the template allows a debug
 build alone. The flows (`e2e/flows`) select by `testID` and never by a word, and
 `e2e/flows.test.ts` holds each to the app's own names, since nothing where they are written
-runs them: its `appId`, a link's scheme and address, and each piece of each `id`. Three tags
-keep a flow out of a run: `awaiting`, `stack` and `android`. Maestro is fetched as its
-release's own archive and held to its digest (`e2e/install-maestro.sh`), and one script runs
-the flows for CI and for a developer (`e2e/run.ts`).
+runs them: its `appId`, a link's scheme and address, and each piece of each `id`. The flows are
+twelve. Eight ask nothing of a server and run on both platforms: the launch, the engine, the
+theme, the harness, the primitives, the hold, the shell and the resolvers. Four run in the
+Android job alone: a link, and with the stack, which only that job has, a sign-in that outlasts
+a restart, signing out, and the replica.
+Three tags keep a flow out of a run: `stack`, `android`, and `awaiting`, for a flow written
+ahead of its screens, which excuses it its names and which no flow carries now. Maestro is
+fetched as its release's own archive and held to its digest (`e2e/install-maestro.sh`), and one
+script runs the flows for CI and for a developer (`e2e/run.ts`).
 
 **The dev screens are reached by presses, on both platforms.** On the first run iOS put a
 dialog of its own over the app when a flow sent a link, *Open in "Household Dev"?*, which
 carries no `testID` and stayed over every flow after it. So the sign-in screen has a control
-that leads to the dev sign-in form in a build that holds the dev screens, every dev screen
-leads to their index, and the flows walk that; a link is sent by one flow, on Android alone.
+that leads to the dev sign-in form in a build that holds the dev screens, More has one that
+leads a member to their index, the sync screen's live replica needing a member, every dev
+screen leads to that index, and the flows walk that. A link is sent on Android alone, by the
+flow that proves one and by the replica's.
+
+**A flow finds a thing by its own `testID`, never as inside another, and on a screen narrowed
+to one part.** The fourth run's flows looked for a cell's content as a child of the cell and
+found none on either platform: under Fabric a view that is there only to be named is mounted,
+and its children are mounted in the nearest ancestor that draws something or is a control
+*(read in React Native's source, and seen in the hierarchies Maestro saved)*, so a cell and
+what stands in it are neighbours in the tree a flow reads. A thing is found by its own name;
+where a state is to be read, by a name only that state draws, or by `selected`. And a dev
+screen that is long, the page of primitives, the shell's and sync's, has a control at its head
+for each of its parts (`src/dev/Only.tsx`; the harness has its own, by body), which a flow
+presses before it looks for anything: a page is hundreds of nodes that a driver reads at every
+step, and on Android a swipe that began on a stepper's count scrolled the page no further
+(Consequences). What a screen draws later is waited for where it stands: a scroll swipes for
+as long as its element is not found, one that has not come yet as one that is further down
+*(read in Maestro's source)*. And the tap that brings a toast does not wait for the screen to
+settle through the toast's five seconds.
 
 **A build asks its device for what `build/asked.ts` names, each with its reason, and for
 nothing else** (FR-PR1). The list a build ends with is in no file: the manifests of the
 template and of every library are merged as it is made, and the first build asked for
-thirty-one permissions. `unusedPermissions` in `app.config.ts` removes twenty-two of them from
-every variant, the development one too, so that the build the flows run is one that goes
-without them; a development build alone keeps the one React Native draws its errors by. The
+thirty-one permissions. `unusedPermissions` in `app.config.ts` removes twenty-three of them
+from every variant, the development one too, so that the build the flows run is one that goes
+without them; a development build alone keeps the one React Native draws its errors by. So a
+development build asks for eight, and one a member installs for seven, the app's own guard over
+its receivers among them. The
 Android job reads the list off the APK it built (`aapt2 dump permissions`) and `build/apk.ts`
 fails a permission with no reason and a reason for a permission the build does not ask for;
 `build/permissions.test.ts` holds each variant's configuration to the same two lists through
@@ -490,8 +529,9 @@ fails if it is there.
 `build/budget.ts`): the `.hbc` files of a production export, in their own bytes, against one
 measured number a platform from which the limit is derived. `check` fails an export over
 either, and one that holds no bytecode for a platform. Measured on 2026-10-10 with the whole
-of this item in it: 6 220 747 bytes for Android and 6 006 246 for iOS, of which PowerSync's
-SDK, the sync library and the sync UI are some 870 kB a platform.
+of this item in it: 6 221 873 bytes for Android and 6 004 499 for iOS, so budgets of 7 466 247
+and 7 205 398, of which PowerSync's SDK, the sync library and the sync UI are some 870 kB a
+platform.
 
 ## Alternatives rejected
 
@@ -536,6 +576,9 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
 | The dev screens' gate as one imported constant; `require()` behind the condition | Metro folds a condition only where it stands: with the expression written out in each route, a production export holds none of the dev screens' strings. `require` needs a suppression with an issue, and its result is untyped |
 | Metro's cache trusted between exports; a `--no-bytecode` export for the check | The cache does not key on the variable: an export made with it reused cached transforms and held no dev screen, and the reverse would put them in a store's build. The second would check another artefact than the one shipped |
 | The session's providers and the toasts' written into the root layout, and the replica's provider and the bars into the household's | Each is a file of its own that the layout composes, so a layout is edited for none of them |
+| That a store's build holds no stand-in read off the sources' imports, as the dev routes are read; one marker that every stand-in imports | A reading follows only the imports somebody thought to read: the export is what is asked. A shared marker is a line in each file that does nothing but be found. Each file is named by words it alone holds, which a test holds to that file and to no other source: the first try named one by a sentence a dev screen's own fixtures also held, and the check named the wrong file |
+| The dev screens reached by a member through a link alone; the dev sign-in form leading on to their index | No flow of both platforms can send a link, and the sync dev screen's live replica needs a member: More has a control, behind the gate's condition written out. The stack's flow waits after that form for the household's Home |
+| A focus ring's state kept, and its outline written, by each of nine controls; one pure function of the theme, the state left in each; a read that could not be made decided in each of four places | The state and its two handlers are the larger half of what was repeated: one hook draws the ring (`useFocusRing`, `src/ui/focus.ts`). And one function says that a read which holds nothing failed, or waits for a connection (`couldNotBeRead`, `src/api/query.ts`) |
 | A rule against a fixed height around text; a rule for contrast; a rule that a banner was announced | An avatar and a hold's ring are fixed boxes that grow with the scale, which a rule could not tell from a row. The tokens' own test holds contrast. An announcement is a call and no tree: each component's test spies on it |
 | A status mark, a hold and a flow's target found by their words | Five languages. A fixed `testID` on a shipped component is how a rule and a flow find it |
 | A drawing known to the rules by one platform's host name; react-native-svg stood in for by one name under Jest; a rule for each platform | react-native-svg draws another view on Android, so a status mark drawn as Android was read as one with no glyph. Under a stand-in the rules would hold a tree no device draws. And it is one fact with two names |
@@ -587,6 +630,7 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
 | The replica connected by each provider; the sync library's file fetched when a replica is first opened, as the web's | A second holder's `connect()` reconnects a replica that is connected. There is no first download to keep small, and the file must be loaded as the app starts, to say what a sign-in's end removes |
 | A replica opened for whatever id the address holds | A link to any UUID would make a file, and a replica asking every few seconds for credentials it is refused |
 | A household's own answer read in three places, the frame's, the replica's and the bar's; every screen reading it for itself, with no context from the frame; the member's id in what is read | One reading, asked only for a member and of an id that can be a household's, under one key and so in one request. Every screen would have four states to draw, which the frame draws once and hands down already read. The provider has the session at hand |
+| The bar above a household's screens reading the household for itself; a `staleTime` on the household's query; the bar reading the frame's context | The frame draws the bar only once the household is read, and a reader that mounts after an answer finds it stale at once and asks again: a household that was opened was asked for twice. A `staleTime` would hide that request and every one that should be made, the app looked at again among them. The sync dev screen draws the bar under no frame: it is handed what was read |
 | The web's *Reload* where a replica cannot be opened | A device has no page to reload: without a way to ask again its member would have to leave the household and come back |
 | *Receiving* read off `connecting` or `hasSynced` | ADR 0026: every retry is connecting, and a replica opened again has synced before and has not tried yet |
 | The file deleted, and that called the wipe; the removal waited for by the sign-out; not even its note waited for; every noted replica removed whose member is not the one signed in | A file that could not be deleted would keep its member's rows until some later start, and the deletion is the uncertain half. A sign-out's screen would be held by SQLite. An app killed after the sign-out and before the note would never remove anything. The session hands out one member, and item 29 signs several in |
@@ -596,7 +640,7 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
 | `onRevoked` handed to the replica | A second path to an end the session has reached already |
 | The sentence for the settings' addresses left out of the bar until item 29 has screens there | The addresses are real, and a push names them: the bar over *not available* there would promise that changes are saved |
 | The inbox saying nothing after *Try again*; the focus moved to its list | The control that was pressed leaves with its sentence. Where one state takes another's place no element outlives both: what trying again came to is announced |
-| The focus moved by an effect on the inbox's entries; whenever an entry leaves | On iOS the sheet goes after the row and on Android before it *(read)*: an effect steals the focus from under a leaving sheet, or misses the row. A row the replica sent by itself would take the focus from wherever its member was. It is moved once the sheet says that it has gone |
+| The focus moved by an effect on the inbox's entries alone; whenever an entry leaves; as soon as the sheet has gone | On iOS the sheet goes after the row and on Android before it *(read)*: an effect on the entries alone steals the focus from under a leaving sheet, or misses the row. A row the replica sent by itself would take the focus from wherever its member was. And the sheet may have gone before the list has heard of the answer, the focus then put on the lead of a list about to leave with its last row. It is moved once the sheet has said that it has gone and the list no longer draws the answered row |
 | The focus left to the platform once the inbox's last row is answered; a wrapper round the list as its place, as the web's; the empty sentence announced | The web puts it on the list's own place (D-166), and a device's is the lead while rows are drawn and the empty sentence once none is. An accessible view round the list closes its rows to a screen reader on iOS *(read)*. And a focus that is nowhere is still nowhere after an announcement |
 | A resolver unmounted as its answer goes, as the web's; the confirmation and its sheet closed at once | A modal unmounted says nothing of having gone, and iOS refuses what is presented meanwhile *(read)*. A controller told to dismiss while the modal it presented is leaving may stay: unverified either way, so the order that cannot fail was taken |
 | A conflict's two versions side by side | A sheet on a phone at 200 % has room for one label and its value: they stand one under the other |
@@ -648,7 +692,7 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
 | An estimated column dashed on three sides, as the web's | React Native draws a dashed border as one path round the whole box, in one width and one colour *(read)*: it is dashed on all four |
 | A badge in a status colour; as a bare dot; with a name of its own | Reserved (01-foundations). 02-components forbids it. What is counted is its owner's to say |
 | The harness drawing one body until asked; as a virtual list; its cells always side by side; the web's fixture sentences | A flow would not find a cell of another body without knowing of the chooser, and it can be narrowed to one. Jest would draw ten cells of 192. 170 pt a cell at 200 %. The web's are the prototype's, which name what was withdrawn and say *past due*: the phone's say what the product does |
-| The band behind Android's navigation buttons mended without a native module: the platform's contrast turned off by a plugin of the app's; `Appearance.setColorScheme` | With no scrim the buttons' ink follows the device's night mode, light on a light ground where the app is light on a dark device, which is worse than a band that does not match. The second changes what the `system` choice reads, and not the bar that was seen *(both read)*. `expo-navigation-bar` would set it, one native module more, which is left to decide |
+| The band behind Android's navigation buttons mended without a native module: the platform's contrast turned off by a plugin of the app's; `Appearance.setColorScheme` | With no scrim the buttons' ink follows the device's night mode, light on a light ground where the app is light on a dark device, which is worse than a band that does not match. The second changes what the `system` choice reads, and not the bar that was seen *(both read)*. `expo-navigation-bar` would set it, one native module more, which item 29 decides beside its Appearance screen (Consequences) |
 | The jobs filtered by the workflow's own `paths`; a third-party action that filters; the API's list of a pull request's files | It filters the whole workflow, and a check that never reports stays pending where it is required. An action for one `git diff`. A token and a page limit for the same answer |
 | The server's sources and the compose file among what sets the device jobs off; the contract | Two device jobs on nearly every pull request. A server change that breaks a flow is found by the next change to the app, and the typed client's breakage is the typecheck's |
 | The budget as steps of the Android job; Metro's cache cleared by hand between the two; the export after the flows | Metro's cache does not know of the variable: the build made second would be made of the first's transforms. A path of Metro's own that the workflow would have to know. The budget would go unchecked when a flow fails |
@@ -658,6 +702,7 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
 | A plugin of the app's that deletes the dev launcher's two keys | Expo's own build phase does, and a second mechanism would have to be ordered against the first. The iOS job reads the built app, since reading the plugin does not show that the phase runs |
 | The permissions asserted on the configuration alone; the prebuild's own code called in the test; the list in the test alone; held right after the build; the reasons in `app.config.ts` | It would hold what the configuration says and not what a manifest ends with. Not resolvable from the app under pnpm without naming it a dependency. The merged list exists only in a build. A list that moved would skip the stack's steps and hide whether the app still runs. Node cannot import that file |
 | The sixteen launcher-badge permissions kept in case | FR-PR1 is about what a module uses now. The runbook says what bringing a badge back takes |
+| `RECEIVE_BOOT_COMPLETED` kept with the other notification permissions, as it first was | expo-notifications asks to be started with the device so as to schedule again what an app had it hold, and the app holds nothing to show later: a notification is a push, sent when it is due. Its receiver stays in the merged manifest, and without the permission Android does not send it the device's start *(read)* |
 | Maestro by its documented installer; a composite action for it | It runs whatever that address serves on the day, in a workflow where every action is pinned by commit. A new place for six lines |
 | `actions/setup-java`; the emulator's snapshot cached; the pods, Xcode's output and Gradle's build outputs cached; `restore-keys` | An action to install what the image holds. A cache for a boot of a minute. What a build made, restored under another commit, is not safe to trust. A cache that only grows. All of Gradle's own folder was 1.6 GB: its downloads alone are kept |
 | An emulator with Google's APIs; at API 32, which Maestro's own CI uses | The app needs no Play services to start. The floor is 29, and the oldest Android is where the engine screen says most |
@@ -671,6 +716,10 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
 | Artifacts kept of a failed run alone | A screenshot is the one place the faces and the two themes are seen |
 | The iOS dialog answered by its words; the link's flow dropped; the sign-in's control leading straight to the dev index, or a control on the toolbar | It carries no `testID`, so a flow would select by the system's English, and Maestro's own issue 2610 reports that tap failing on hosted runners. A link would then be proven on no device: it is sent on Android. The first is another screen's control, and the toolbar is the display's modes |
 | The flows relying on the order they run in | Maestro promises none: each flow starts as an installation that kept nothing |
+| A flow finding one thing as inside another (`childOf`); a state read off where a thing stands | A view that is there only to be named has its children mounted beside it *(read, and seen in the fourth run's hierarchies)*: the flows scrolled whole pages for a child no cell has. A state is read off a name only that state draws, a row's own *Show* for *the row is in the hidden list*, or off `selected` |
+| A flow scrolling a whole dev screen to what it reads | A page of every control in both themes is hundreds of nodes, read at every step, and on Android the scroll stopped where a swipe began on a stepper's count. The long dev screens are narrowed to one part, as the harness is to one body, and narrowing the sync screen neither closes nor opens its live replica |
+| Signing out at the end of the stack's flow; the replica's flow taking the connection away before the replica has reported | The job asks the server for that sign-in's device after the flows: signing out is a flow of its own, and each flow being a new installation to the server, the stack's sign-in stays whatever order they run in. The step that asks for the household's clients would wait on the emulator's way back to its connection, which the flow gives back whatever became of it |
+| A state waited for by a scroll until it is visible; Maestro left to let the screen settle after a tap that brings a toast | A scroll swipes for as long as its element is not found, one not drawn yet as one further down *(read)*. A toast stays five seconds, and on a slow emulator settling takes seconds of them: the tap says how long to wait |
 
 ## Consequences
 
@@ -698,10 +747,37 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
   for a reader who dismisses none. Whether a newer toast releases the older ones is a product
   decision for the first module that raises many.
 - With nothing waiting the inbox has no row, and is reached by its address alone until
-  **item 29**'s sync health lists it. A replica reports itself a quarter of an hour after it
+  **item 29**'s sync health lists it. Nor does a press lead to arranging while no module has
+  screens: in a build of this item nothing can wait and nothing is there to arrange, until the
+  first module's (**item 30**). A replica reports itself a quarter of an hour after it
   first syncs and not as it opens, so a household's clients name a phone only then (D-178):
   item 29's sync health reports as it opens, as the web's does (D-181). The dev screen's
   control that reports now is for the flow.
+- A new reader of a household's own answer reads it in the commit the frame does, or is handed
+  it: one that mounts later asks the server again, and a test of the bar holds the household
+  to being asked for once (`src/sync/bars.test.tsx`). The member's list of households is asked
+  again as a household opens, by the notice of a switch, which names a household by a fresh
+  list: left.
+- **On Android the band behind the three navigation buttons is the device's, not the app's.**
+  With the app dark on a device that is light, CI's screenshot shows it white. The platform
+  draws it, light or dark by a flag of the window that React Native sets once, as the activity
+  is made, from the device's own night mode, and the app's theme is its member's choice, read
+  after that *(read in React Native's source)*. Nothing the app links sets the flag again;
+  `expo-navigation-bar` would, a native module more. It is not mended here: **item 29**
+  decides it beside its Appearance screen, where a member first chooses a theme that is not
+  the device's. A device that navigates by gestures draws no band, and the buttons are legible
+  on it either way.
+- **Open, on Android: a drag that begins on a stepper's count does not scroll the page.** Seen
+  as where a flow's scroll stopped, in two flows of the fourth run, the count under the middle
+  of the screen, where iOS scrolled the same page to its end. Its cause is read in React
+  Native's source and was tried on no device: the count is a single line with its text
+  centred, which Android's text field takes for one that scrolls sideways, and such a field
+  keeps the touch. If that is it, a member's thumb meets it on any form with a stepper
+  (`src/ui/Stepper.tsx`). Not decided here.
+- **Open, at 200 % on a phone: a list row's title wraps inside a word.** Seen in the fourth
+  run's screenshot of the harness, a title broken by the syllable (`src/ui/ListRow.tsx`).
+  Nothing is cut off, which is all the rules hold: they read what a text was told, and not
+  where a line broke. Not decided here.
 - **Item 29** takes the seams this leaves: the sign-in screen's place (`src/session/SignIn.tsx`)
   and `signedIn`, which a sign-in the server answered is handed to; several profiles' sign-ins
   in the token store, of which one is in use; the household's name in the app bar as the
@@ -714,8 +790,9 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
   no build can ask for a push token. It gives the app a link host and its association files,
   the scheme alone opening it today, and the store's pages. Its first upload route must not
   take the part's file name for the file's, which is the row's id on a device; the way in still
-  takes bytes, so a camera's file would be read whole once; and it takes `awaiting` off the
-  flow of the replica and adds the one that reads the household's clients.
+  takes bytes, so a camera's file would be read whole once. Its critical paths on a device
+  stand on this item's flows, which read a member's replica and a household's clients on
+  Android already; its module is the first whose rows the inbox can hold and More can arrange.
 - **Item 33**, the first module with screens on a device, adds its line to
   `src/modules/registry.ts`, its routes to `src/app/paths.ts` and `app/`, and the place they
   stand under to `src/shell/tabs.ts`. The bar draws Add as soon as a registered module has a
@@ -724,9 +801,9 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
 - **Item 36** gives the arrangement a store, which takes the place of AsyncStorage's
   (`src/shell/arrangement.ts`), as it does of the browser's (D-155).
 - **Item 93** generates the permissions' justification table from the two lists,
-  `build/asked.ts` and `unusedPermissions`. `RECEIVE_BOOT_COMPLETED` is asked for with the
-  other notification permissions and serves notifications scheduled on the device, of which the
-  app has none: a stricter reading of FR-PR1 removes it.
+  `build/asked.ts` and `unusedPermissions`. An item that has a device hold a notification to
+  show later takes `RECEIVE_BOOT_COMPLETED` out of the second and gives it its reason in the
+  first, as one that draws a count on the icon does the launchers' sixteen.
 - **Item 95**'s VoiceOver and TalkBack checklist is where everything this record marks *(read)*
   is first heard: start at the hold, a modal's focus, the tab bar and the arrange handle.
 - Android has one notification channel, of default importance, named in the app's language.
@@ -748,32 +825,41 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
   would then follow; `expo/fetch` taking a file by its place; a patched `braces`, `node-forge`
   or a `query-string` that takes the patched `decode-uri-component`; a hosted runner on which
   a flow can answer the system's own dialog.
-- **Run on a device, in CI's runs of 2026-10-10.** On the Android emulator: the app opens at
+- **Run on a device, as of CI's fourth run (2026-10-10).** This bullet says what that run and
+  the three before it showed, and nothing later: it is brought up to date from the last green
+  run before the pull request is marked ready. On the Android emulator: the app opens at
   sign-in with nothing kept; the engine screen's checks hold on Hermes, the vectors' 87 format
   cases and 8 match cases under the polyfills, the five families registered, the random source
   and the client's name, and a screenshot shows the faces drawn; the theme changes at a press;
   a link in the app's scheme opens its screen; the dev form signs in against the real server
   over plain `http` and the household's Home is drawn, and drawn again after a restart, the
   pair read back from the keystore by a build without the biometric permissions; and the built
-  APK asks for nine permissions, each with its reason. On the iOS simulator: the app opens at
-  sign-in; the engine screen's checks hold; the theme changes; a sheet opens and closes, and a
-  menu's item opens a confirmation once its sheet has gone; and the release build's
-  `Info.plist` holds neither of the dev launcher's keys. The flows that read the harness's
-  cells and the hold had found their targets on neither platform when this was written, nor
-  the primitives' flow on Android, and the step that asks the server for the account's devices
-  runs only after every flow has passed: what those read is held by Jest until a run shows it.
+  APK asked for nine permissions, each with its reason, one more than it asks for since. On
+  the iOS simulator: the app opens at sign-in; the engine screen's checks hold; the theme
+  changes; a sheet opens and closes, and a menu's item opens a confirmation once its sheet has
+  gone; and the release build's `Info.plist` holds neither of the dev launcher's keys. In that
+  run the flows of the harness and of the hold found their targets on neither platform, nor
+  the primitives' on Android, for the two reasons the flows were then mended for; so the step
+  that asks the server for the account's devices, which follows the flows, did not run. Four
+  flows were written after it and had run on nothing: the shell's and the resolvers', and in
+  the Android job signing out and the replica, with the step that asks for the household's
+  clients. What those read is held by Jest until a run shows it.
 - **Not run on a device: the session and the API on iOS.** A macOS runner has no Docker, so no
   flow signs in on iOS: the keychain, the bearer, the renewal, the household's frame and the
   replica have run there on nothing. On neither platform has a renewal at a token's real lapse
-  run, nor the end of a sign-in and the removal that follows, nor a restore from a backup;
-  that the native half of `expo/fetch` honours `credentials: 'omit'` is read.
-- **Not run on a device: the replica.** Its flow is written ahead of its screens' names and is
-  taken by no run yet: that op-sqlite, PowerSync's extension and the SDK link, that a replica
-  opens, receives and reports with the app's name, and that the offline bar arrives and leaves
-  are believed from the conformance suite, which holds the library on Node's SQLite, and from
-  Jest. That op-sqlite's own deletion removes PowerSync's file, and that expo-router loads
-  every route's file as the app starts, so that the forgetter is registered before a sign-in
-  can end, are read.
+  run, nor a sign-in ended from elsewhere and the removal that follows, nor a restore from a
+  backup; that the native half of `expo/fetch` honours `credentials: 'omit'` is read. A
+  member's own sign-out is read by a flow, on Android.
+- **Not run on a device as of the fourth run: the replica.** Its flow is the Android job's,
+  with the stack, and reads that a member's replica opens, that it receives, that its inbox is
+  read, that it reports when asked, and that the offline bar arrives with the connection taken
+  away and leaves when it is back; the job then asks the server for a client named
+  `mobile/<version>`. No run had taken it: until one has, that op-sqlite, PowerSync's
+  extension and the SDK link and the rest of it are believed from the conformance suite, which
+  holds the library on Node's SQLite, and from Jest. No flow reads a replica's removal: that
+  op-sqlite's own deletion removes PowerSync's file, and that expo-router loads every route's
+  file as the app starts, so that the forgetter is registered before a sign-in can end, are
+  read. And no flow opens a replica on iOS.
 - **Not run at all: an upload, a push, and EAS.** No route takes a file, so `File.upload` has
   met no server. No EAS project exists, so no permission was asked for, no token registered,
   no notification shown or pressed, and no build made from `eas.json`.
@@ -781,11 +867,16 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
   system hands over that names another household, which under Jest is asked of the router as a
   pressed notification asks it; a cold start by a pressed notification; and an address held
   while the app was left to sign in.
-- **Not run on a device: most of the shell and the overlays.** Three navigators deep, the
-  frame's inset meeting the bar's, the bar's measured height reaching the toasts, a tab's
-  screen keeping its place, two panes and the tablet's bar on a tablet; a dialog inside a
-  sheet, a toast inside an open sheet, the keyboard under a sheet on Android, and whether
-  Android gives the focus back to what opened a modal by itself.
+- **Not run on a device as of the fourth run: most of the shell and the overlays.** Two flows
+  written since read some of it on the dev screens, with no server: a slot opening its place
+  and saying that it is open, Add's sheet, a module hidden from a menu's item, the panes at a
+  phone's width and at a tablet's, the neutral screen's way out; and a refused change given
+  up, its confirmation drawn inside its sheet, both leaving and a toast after them. With the
+  stack, on Android, two flows read the frame and the bar around a real household, two of its
+  places and the way out. No flow reads the frame's inset meeting the bar's, the bar's measured height
+  reaching the toasts, a tab's screen keeping its place, a real tablet, a toast inside an open
+  sheet, the keyboard under a sheet on Android, or whether Android gives the focus back to
+  what opened a modal by itself.
 - **Heard by nobody: everything a screen reader does.** No run has VoiceOver or TalkBack on.
   The hold's three activations, the tab bar's traits, the adjustable handle and its two
   actions, a field's label read once on each platform, the focus on a modal's title and back,
@@ -794,7 +885,6 @@ SDK, the sync library and the sync UI are some 870 kB a platform.
   it.
 - **Seen by nobody: what only glass shows.** That nothing is clipped at 200 % on a narrow
   phone, the ring's fill and its steps, the dashed column, a shadow and an outline as the
-  tokens say, and Android's weight of a face whose one file is another weight. One thing CI's
-  screenshots did show: with the app dark on a device that is light, the band behind Android's
-  three navigation buttons stays white. The platform draws it, light or dark by the device's own
-  night mode and not by the app's theme *(read)*, and nothing the app links sets it.
+  tokens say, and Android's weight of a face whose one file is another weight. What CI's
+  screenshots did show is above: the band behind Android's navigation buttons, and a list
+  row's title at 200 %.
