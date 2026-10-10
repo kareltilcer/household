@@ -1,11 +1,13 @@
 # The page of primitives opens on a device, and a sheet opens over it and closes (plan item
-# 28): React Native's `Modal`, the sheet's own close control, and the screen behind it back in
-# reach when it has gone. What a sheet does with the focus and with what is behind it is its
-# own Jest test; this reads that the native half of it is there.
+# 28): React Native's `Modal`, the sheet's own close control, and the page behind it back in
+# reach when it has gone. Then a menu's item opens a confirmation: one modal presented as the
+# one before it leaves, which iOS refuses unless the first has gone, and which no Jest test
+# can show. What a sheet does with the focus and with what is behind it is its own Jest test;
+# this reads that the native half of each is there.
 #
-# Written ahead of the controls, against names their dev page does not have yet: `awaiting`
-# keeps it out of every run until the controls are merged, the three names below are theirs or
-# are replaced by theirs, and the tag is taken off.
+# Written ahead of the controls, against the names their notes give for the light half of the
+# page: `awaiting` keeps it out of every run until the controls are merged and the tag is
+# taken off, which is also when the names are first held to the sources.
 appId: com.kareltilcer.household.dev
 tags:
   - awaiting
@@ -20,24 +22,47 @@ tags:
     visible:
       id: 'household-dev-screen:primitives'
     timeout: 30000
+# A sheet, opened and closed by its own control.
 - scrollUntilVisible:
     element:
-      id: 'dev-controls:sheet:open'
+      id: 'controls:light:sheet:open'
     direction: DOWN
     timeout: 60000
 - tapOn:
-    id: 'dev-controls:sheet:open'
+    id: 'controls:light:sheet:open'
 - extendedWaitUntil:
     visible:
-      id: 'dev-controls:sheet'
+      id: 'controls:light:sheet:surface'
     timeout: 15000
 - takeScreenshot: sheet
 - tapOn:
-    id: 'dev-controls:sheet:close'
+    id: 'controls:light:sheet:close'
 - extendedWaitUntil:
     notVisible:
-      id: 'dev-controls:sheet'
+      id: 'controls:light:sheet:surface'
     timeout: 15000
 # The opener is in reach again: the page behind the sheet takes a press once it has closed.
 - assertVisible:
-    id: 'dev-controls:sheet:open'
+    id: 'controls:light:sheet:open'
+# A menu's item that asks to be confirmed: the dialog appears once the menu's sheet has gone.
+- scrollUntilVisible:
+    element:
+      id: 'controls:light:menu:open'
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    id: 'controls:light:menu:open'
+- tapOn:
+    id: 'controls:light:menu:remove'
+- extendedWaitUntil:
+    visible:
+      id: 'controls:light:dialog:surface'
+    timeout: 15000
+- takeScreenshot: dialog
+# The safe answer, which closes it and removes nothing.
+- tapOn:
+    id: 'controls:light:dialog:keep'
+- extendedWaitUntil:
+    notVisible:
+      id: 'controls:light:dialog:surface'
+    timeout: 15000

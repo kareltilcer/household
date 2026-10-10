@@ -5,9 +5,10 @@
 // docs/runbooks/mobile-builds.md says how CI makes it and how a developer does.
 //
 // It builds nothing and starts no device: it runs the flows, keeps what the device logged
-// meanwhile, and leaves everything under dist/e2e, which CI keeps as an artifact. `--stack`
-// says the API and the sync service are up and the environment names a member to sign in as
-// (e2e/stack.ts), which only CI's Android job can say.
+// meanwhile, and leaves everything under dist/e2e, which CI keeps as an artifact. Where more
+// than one device is up, `HOUSEHOLD_E2E_DEVICE` names the one: a simulator's id, an emulator's
+// serial. `--stack` says the API and the sync service are up and the environment names a
+// member to sign in as (e2e/stack.ts), which only CI's Android job can say.
 import { spawn, spawnSync } from 'node:child_process'
 import { closeSync, mkdirSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
