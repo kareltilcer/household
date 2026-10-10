@@ -8,7 +8,7 @@ import { act, screen, waitFor } from '@testing-library/react-native'
 import { useState } from 'react'
 import { inHousehold } from '../app/paths.ts'
 import { answering, json, problem, testClient } from '../api/testing.ts'
-import type { Household } from '../household/data.ts'
+import { useHousehold, type Household } from '../household/data.ts'
 import type { SessionState } from '../session/context.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { expectAccessible } from '../test/a11y.ts'
@@ -16,7 +16,6 @@ import { households } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Text } from '../ui/Text.tsx'
-import { useOwn } from './household.ts'
 import { changesAtOnce, HouseholdBars } from './HouseholdBars.tsx'
 import { SyncFixture, type Sync } from './ReplicaProvider.tsx'
 import { standIn, type StandIn } from './standIn.ts'
@@ -60,7 +59,7 @@ function Drawn({ stand, first }: { readonly stand: StandIn; readonly first: Stan
   }
   const sync: Sync = { replica: { phase: 'open', ...stand.opened }, ...stands }
   // What the bars read too: a test waits for it, and then moves what they are drawn by.
-  const read = useOwn(id) !== undefined
+  const read = useHousehold(id).status === 'read'
   return (
     <SyncFixture value={sync}>
       <HouseholdBars household={id} />

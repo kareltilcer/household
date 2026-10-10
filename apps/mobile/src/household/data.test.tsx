@@ -165,6 +165,31 @@ describe('the household an address names', () => {
     expect(api.asked).toEqual([])
   })
 
+  // The replica's provider and the bar read it where no guard stands above them (sync/).
+  it.each(['visitor', 'unknown', 'unreachable'] as const)(
+    'is asked for a member alone: nothing is asked, and nothing kept is read, for a %s',
+    async (status) => {
+      const api = answering({ [route]: () => json(200, household) })
+      function Twice() {
+        const client = useQueryClient()
+        // What a member read on this device a moment ago, still in the query client.
+        client.setQueryData(householdKey(ids.household), household)
+        return <Frame id={ids.household} />
+      }
+      await render(
+        <SessionFixture api={testClient(api.transport)} state={{ status }}>
+          <Twice />
+        </SessionFixture>,
+      )
+      // Long enough for a request to have left, had one been made.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      expect(api.asked).toEqual([])
+      expect(screen.getByTestId('read')).toHaveTextContent('reading', { exact: true })
+    },
+  )
+
   it('is one household whichever case its id is written in', () => {
     expect(householdKey(ids.household.toUpperCase())).toEqual(householdKey(ids.household))
   })
