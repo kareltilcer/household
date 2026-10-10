@@ -354,8 +354,38 @@ describe('a sign-in that ended', () => {
     const forgotten = forget(who.member)
     await expect(opening).rejects.toThrow(/has ended/)
     await forgotten
-    // Nothing was opened under the sign-in that ended: what was, was opened to be emptied.
-    expect(mockOpened.map((each) => each.options.apiUrl)).not.toContain(testApi)
+    // Nothing was opened under the sign-in that ended, and nothing at all: it had not been
+    // noted yet, so there is no note to say a replica is kept that never was.
+    expect(mockOpened).toEqual([])
+    expect(await keptReplicas()).toEqual([])
+  })
+
+  it('removes the note of a replica whose sign-in ended while the note was being made', async () => {
+    const who = pair()
+    // The device's storage is slow to answer the note's own reading: the sign-in ends meanwhile.
+    const getItem = jest.mocked(AsyncStorage.getItem)
+    const atOnce = getItem.getMockImplementation() ?? (() => Promise.resolve(null))
+    let answer: () => void = () => undefined
+    getItem.mockImplementationOnce(
+      (...asked) =>
+        new Promise<string | null>((resolve, reject) => {
+          answer = () => {
+            atOnce(...asked).then(resolve, reject)
+          }
+        }),
+    )
+    const opening = openHouseholdReplica(options(who))
+    // Asked for, and waiting on its note.
+    await Promise.resolve()
+    await Promise.resolve()
+    const forgotten = forget(who.member)
+    answer()
+    await expect(opening).rejects.toThrow(/has ended/)
+    await forgotten
+    // Noted, and marked as leaving in its turn: emptied for nobody, deleted, and its note gone.
+    expect(await keptReplicas()).toEqual([])
+    expect(mockOpened.map((each) => each.options.apiUrl)).toEqual(['about:blank'])
+    expect(mockOpened[0]?.asked).toEqual(['wipe', 'close'])
   })
 })
 
