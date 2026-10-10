@@ -6,7 +6,7 @@
 // `accessibilityState`, and drops every press. A control taken out of a screen reader's reach in
 // the middle of a write is one its member has to go looking for; `disabled` is for a control
 // out of its form, and one that cannot act at all is absent.
-import { useState, type ReactNode } from 'react'
+import { useState, type ReactNode, type Ref } from 'react'
 import { Pressable, View, type PressableProps, type ViewStyle } from 'react-native'
 import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
 import { Ink, StatusIcon } from './Icon.tsx'
@@ -31,6 +31,8 @@ interface Shared extends Omit<
    * It stays and keeps the focus, and a screen reader is told it is unavailable.
    */
   readonly idle?: boolean
+  /** Where its screen puts the focus back: the opener of a dialog, a sheet or a menu. */
+  readonly ref?: Ref<View>
 }
 
 export interface ButtonProps extends Shared {
