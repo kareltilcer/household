@@ -20,6 +20,10 @@
 // no answer, or the server's own failure for one, nobody has said: the sentence says that the
 // server was not reached, and the read that follows says what it holds.
 //
+// The screen holds a press from the press itself (`chosen`), and not from when the query client
+// tells it of the change, which in a browser is after the frame drawn for the press: a switch
+// is drawn as chosen in the event that pressed it, and a press on the other one carries it.
+//
 // The switch for statistics says what they would hold and what they never would, and claims no
 // more than is so: the web app collects none yet, and the switch records the choice. A child
 // profile is asked nothing and consents to nothing (§7): it is drawn no control, the server
@@ -86,6 +90,14 @@ function Choices() {
   })
   // Whether the change made last was refused: an earlier one answered after it is then drawn.
   const lastRefused = useRef(false)
+  // What a press chose, from the press until what is kept holds it. What is kept is written once
+  // a read on its way is cancelled, after the press's event has ended, and the query client
+  // tells the screen of it later still, by a timer, which Chromium runs only once it has drawn
+  // the frame that answers the press. React puts a switch back, as its event ends, to what was
+  // last drawn: left to what is kept, a pressed switch stood as it was until the screen was
+  // told, a press on the other one made meanwhile sent this one as it was, which the server
+  // took as withdrawn, and whatever read a switch it had just pressed found the press undone.
+  const [chosen, setChosen] = useState<Both | null>(null)
   const save = useMutation({
     ...askedNow,
     mutationFn: async (next: Both) => unwrap(await api.PUT('/me/consents', { body: next })),
@@ -104,6 +116,9 @@ function Choices() {
       queries.setQueryData<Kept>(consentsKey, (was) =>
         was === undefined ? was : { ...was, ...next },
       )
+      // Kept from here on, and drawn from there: the press's own hold is put away, unless a
+      // press made since has taken its place.
+      setChosen((held) => (held === next ? null : held))
       // Asked with no connection, by the browser's own word, it is sent nowhere.
       return { turn, unsent: !online }
     },
@@ -198,9 +213,14 @@ function Choices() {
       >
         {({ mark }) => {
           if (consents === undefined) return null
-          const both: Both = {
+          const both: Both = chosen ?? {
             analytics: consents.analytics,
             marketing_email: consents.marketing_email,
+          }
+          // Drawn as chosen in the press itself, and sent as the screen then holds them.
+          const change = (next: Both) => {
+            setChosen(next)
+            save.mutate(next)
           }
           return (
             <div className={account.group}>
@@ -210,7 +230,7 @@ function Choices() {
                   checked={both.analytics}
                   aria-describedby={`${ids}-analytics`}
                   onChange={(event) => {
-                    save.mutate({ ...both, analytics: event.currentTarget.checked })
+                    change({ ...both, analytics: event.currentTarget.checked })
                   }}
                 />
                 <div id={`${ids}-analytics`} className={account.group}>
@@ -224,7 +244,7 @@ function Choices() {
                   checked={both.marketing_email}
                   aria-describedby={`${ids}-marketing`}
                   onChange={(event) => {
-                    save.mutate({ ...both, marketing_email: event.currentTarget.checked })
+                    change({ ...both, marketing_email: event.currentTarget.checked })
                   }}
                 />
                 <p id={`${ids}-marketing`} className={account.note}>
