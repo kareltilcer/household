@@ -58,8 +58,16 @@ export function TestProviders({
   languages = ['en'],
 }: DrawOptions & { readonly children: ReactNode }) {
   // A client of the test's own: nothing one test read is another's, and nothing is asked twice.
+  // Nothing is collected on a timer either, a write's entry no more than a read's: a timer
+  // left running keeps a test's process from ending.
   const [queries] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } }),
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, gcTime: Infinity },
+          mutations: { gcTime: Infinity },
+        },
+      }),
   )
   return (
     <SafeAreaProvider initialMetrics={metrics}>
