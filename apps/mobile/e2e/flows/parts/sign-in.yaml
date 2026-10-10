@@ -1,0 +1,34 @@
+# Signs in the member the run was told of (`EMAIL`, `PASSWORD`: e2e/stack.ts made them), for a
+# flow that started the app with nobody signed in: through the sign-in screen's own control to
+# the dev screens' sign-in form (src/dev/signin), which a build has until plan item 29 gives
+# it the screens a member signs in on. The form leads to where the app opens, and the flow
+# that runs this says what it expects there. No flow of its own.
+appId: com.kareltilcer.household.dev
+---
+- extendedWaitUntil:
+    visible:
+      id: 'route:signIn'
+    timeout: 60000
+- tapOn:
+    id: 'sign-in:dev'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:sign-in'
+    timeout: 30000
+- tapOn:
+    id: 'dev-sign-in:email'
+- inputText: ${EMAIL}
+# With the keyboard up the screen is shorter: each control is brought into what is left of it.
+- scrollUntilVisible:
+    element:
+      id: 'dev-sign-in:password'
+    direction: DOWN
+- tapOn:
+    id: 'dev-sign-in:password'
+- inputText: ${PASSWORD}
+- scrollUntilVisible:
+    element:
+      id: 'dev-sign-in:submit'
+    direction: DOWN
+- tapOn:
+    id: 'dev-sign-in:submit'

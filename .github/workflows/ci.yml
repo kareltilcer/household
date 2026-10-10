@@ -396,13 +396,15 @@ jobs:
         run: bash apps/mobile/e2e/install-maestro.sh
       # An emulator of the oldest Android the app supports (06-clients: Android 10, API 29),
       # with the build installed, and the flows over it: every flow of apps/mobile/e2e/flows
-      # but those written ahead of their screens and the one that needs the stack, which
-      # joins them when its screens are built. They run whatever became of the stack above:
-      # they ask nothing of it. The action runs each line of its script as a command of its
-      # own, and stops the emulator when the last has run.
+      # but those written ahead of their screens. The flows that ask nothing of a server run
+      # whatever became of the stack above; those that sign in are taken where there is
+      # somebody to sign in as. The action runs each line of its script as a command of its
+      # own, by a shell, and stops the emulator when the last has run.
       - name: Run the flows on an emulator
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         timeout-minutes: 30
+        env:
+          STACK: ${{ steps.member.outcome == 'success' && '--stack' || '' }}
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 29
@@ -414,7 +416,13 @@ jobs:
           disable-animations: true
           script: |
             adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
-            pnpm --filter @household/mobile run e2e android
+            pnpm --filter @household/mobile run e2e android $STACK
+      # What the server kept of the sign-in a flow made on the emulator: the account's list of
+      # devices names an installation with the app's version, as the contract's sign-in and
+      # the app's `Household-Client` say it (apps/mobile/e2e/stack.ts).
+      - name: The account lists the device that signed in
+        if: ${{ success() && steps.member.outcome == 'success' }}
+        run: pnpm --filter @household/mobile run e2e:stack devices
       - name: The services' logs
         if: failure()
         run: |
@@ -514,7 +522,8 @@ jobs:
       - name: Install Maestro
         run: bash apps/mobile/e2e/install-maestro.sh
       # The flows that ask nothing of a server: every flow of apps/mobile/e2e/flows but those
-      # written ahead of their screens and the one that needs the stack.
+      # written ahead of their screens, those that sign in, and the one that sends the app a
+      # link, which iOS asks about first in a dialog of its own that no flow answers.
       - name: Run the flows on the simulator
         timeout-minutes: 30
         run: |

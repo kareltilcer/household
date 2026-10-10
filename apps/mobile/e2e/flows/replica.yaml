@@ -1,0 +1,56 @@
+# A member's replica on a device, against the real stack (D-93, D-105): signed in, the shell
+# is drawn; the replica of the household opens and receives; with the connection taken away
+# the offline bar comes, and goes when it is back. After it the job asks the server for the
+# household's clients, which must name `mobile/<version>` for this replica (D-178: the
+# replica's own requests named the app): `pnpm run e2e:stack clients`, a step the job gains
+# when this flow is taken.
+#
+# Written ahead of the shell and of the replica's screens. `route:household` and `offline-bar`
+# are drawn today; the two lines of the dev screen for sync are names of this flow's own until
+# its screens are merged and say theirs. `awaiting` keeps it out of every run until then.
+appId: com.kareltilcer.household.dev
+tags:
+  - awaiting
+  - stack
+  - android
+---
+- launchApp:
+    clearState: true
+- runFlow: parts/sign-in.yaml
+- extendedWaitUntil:
+    visible:
+      id: 'route:household'
+    timeout: 60000
+# The dev screen for sync says of the open household's replica that it is open, and that it
+# receives. On Android a link reaches it, signed in as signed out.
+- openLink: household-dev:///dev/sync
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:sync'
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: 'sync:replica:open'
+    timeout: 60000
+- extendedWaitUntil:
+    visible:
+      id: 'sync:replica:receiving'
+    timeout: 120000
+# Back in the household, and the connection taken away: the bar says so, and stays.
+- openLink: household-dev:///households/${HOUSEHOLD}
+- extendedWaitUntil:
+    visible:
+      id: 'route:household'
+    timeout: 30000
+- setAirplaneMode: enabled
+- extendedWaitUntil:
+    visible:
+      id: 'offline-bar'
+    timeout: 60000
+- takeScreenshot: offline
+# And back: the bar goes.
+- setAirplaneMode: disabled
+- extendedWaitUntil:
+    notVisible:
+      id: 'offline-bar'
+    timeout: 120000
