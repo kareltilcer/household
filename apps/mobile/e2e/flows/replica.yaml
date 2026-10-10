@@ -7,9 +7,14 @@
 #
 # It reads the live section of the dev screen for sync (src/dev/sync), which says each of
 # these in a line whose `testID` is how it stands, narrowed to that section so that the only
-# offline bar on the screen is the real replica's. Reached by a link, which Android opens for a
-# member as for a visitor. After the flows the job asks the server for the household's
-# clients, which must name `mobile/<version>` for this replica (`pnpm run e2e:stack clients`).
+# offline bar on the screen is the real replica's. A member reaches the dev screens by
+# presses, from More, and the household's own screens stay open beneath: the replica the
+# screen holds is the one the household's layout opened. After the flows the job asks the
+# server for the household's clients, which must name `mobile/<version>` for this replica
+# (`pnpm run e2e:stack clients`).
+#
+# Android's alone beside the stack: taking the connection away is what Maestro does there
+# and not on a simulator.
 appId: com.kareltilcer.household.dev
 tags:
   - stack
@@ -25,7 +30,29 @@ onFlowComplete:
     visible:
       id: 'route:household'
     timeout: 60000
-- openLink: household-dev:///dev/sync
+# From More to the dev screens' index, and from it to the screen for sync.
+- tapOn:
+    id: 'tab-bar:more'
+- extendedWaitUntil:
+    visible:
+      id: 'route:more'
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: 'more:dev'
+    direction: DOWN
+- tapOn:
+    id: 'more:dev'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:index'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devSync'
+    direction: DOWN
+- tapOn:
+    id: 'dev-index:devSync'
 - extendedWaitUntil:
     visible:
       id: 'household-dev-screen:sync'
