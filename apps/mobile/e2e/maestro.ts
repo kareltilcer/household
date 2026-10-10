@@ -88,9 +88,10 @@ export interface Outcome {
  * an assertion that did not hold, an element that never came.
  *
  * The driver dies on iOS when the app under it has crashed: Xcode hands its runner the crash's
- * report a minute or two later, in the middle of whichever flow is then running, and the
- * runner falls over reading it (run 38066536920: one crash, in one flow, and the three flows
- * after it failed with it). Such flows are run again (run.ts), so that one failure is one.
+ * report some minutes later, whichever flow is running by then, and the runner falls over
+ * reading it (runs 38066536920 and 38068892430: one crash, in one flow, and the three flows
+ * after it failed with it, then the two after one that passed meanwhile). Such flows are run
+ * again (run.ts), so that one failure is one.
  */
 export function outcome(report: string): Outcome {
   const failed: string[] = []

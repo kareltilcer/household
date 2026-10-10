@@ -272,11 +272,12 @@ build has no screen to draw an error on, and an exception nothing caught ends it
   Hermes a build compiles for has not, and every test passed. `apps/mobile/e2e/engine.test.ts`
   reads what a device's bundle is made of for the built-ins Hermes is known to lack, and says
   where its list comes from; a new one met on a device is added there.
-- **On iOS a crash takes Maestro's driver with it, a minute or two later.** Xcode hands the
-  driver the crash's report when it is written, in the middle of whichever flow is running by
-  then, and the driver falls over reading it (`NSInvalidArgumentException` in
-  `xctest_runner_*.log`): that flow and every one after fail with
-  `maestro.DeviceUnreachableException`, for no reason of their own. `e2e/run.ts` reads the
+- **On iOS a crash takes Maestro's driver with it, some minutes later.** Xcode hands the
+  driver the crash's report when it is written, a minute and a half after the crash in the
+  fifth run and nearly three in the sixth, and the driver falls over reading it
+  (`NSInvalidArgumentException` in `xctest_runner_*.log`): the flow running by then and every
+  one after fail with `maestro.DeviceUnreachableException`, for no reason of their own, and
+  a flow that began and ended in between passes. `e2e/run.ts` reads the
   report for them and runs them again, once, in a session of their own, whose report and
   folders are under `again/`. The flow that crashed is not run again, and fails the job.
 

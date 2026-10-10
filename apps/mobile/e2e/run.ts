@@ -13,7 +13,7 @@
 //
 // A flow that failed because Maestro's driver on the device was gone is run again, once, with
 // the others it took, in a session of their own (dist/e2e/again): on iOS a crash of the app
-// in one flow takes the driver a minute or two later, and every flow after it (maestro.ts,
+// in one flow takes the driver some minutes later, and every flow after that (maestro.ts,
 // `outcome`). A flow that failed for itself is not run again, and fails the run.
 //
 // What the flows are told is written by Maestro beside each of them, the member's password
