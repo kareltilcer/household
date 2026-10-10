@@ -12,11 +12,12 @@
 // is hidden from a screen reader. The button around it is what everything else meets, and no
 // finger reaches it, the ring covering it whole. How an activation arrives is the platform's:
 //
-// - a screen reader's double tap, a switch and a keyboard on iOS ask the element to activate,
-//   which React Native hands on as `onAccessibilityTap`, and only where that is set: without it
-//   iOS taps the screen for them, and the tap would land on the ring as a hold let go at once;
-// - TalkBack's double tap and a switch on Android perform the click action, which is the
-//   `activate` accessibility action where one is declared;
+// - on iOS a screen reader's double tap, and whatever else activates as it does, asks the
+//   element to activate itself, which React Native hands on as `onAccessibilityTap`, and only
+//   where that is set: without it iOS taps the screen in its place, and the tap would land on
+//   the ring as a hold let go at once;
+// - on Android a screen reader's double tap performs the click action, which is the `activate`
+//   accessibility action where one is declared;
 // - a keyboard's Enter on Android clicks the focused view, which reaches a pressable as a press
 //   with no touch before it;
 // - and the `activate` action is listed among an element's actions by iOS under its label,
