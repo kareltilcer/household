@@ -10,6 +10,7 @@ import { thresholds } from '@household/tokens'
 import { useEffect, useState } from 'react'
 import { Pressable, View } from 'react-native'
 import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
+import { useFocusRing } from './focus.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { StatusIcon } from './Icon.tsx'
 import { Text } from './Text.tsx'
@@ -153,7 +154,7 @@ export function SyncMark({ state, words = 'inline', onOpen, name, since }: SyncM
   const theme = useTheme()
   const target = useTarget()
   // A keyboard's focus, or a switch's: a touch gives none, so this is drawn for them alone.
-  const [focused, setFocused] = useState(false)
+  const focus = useFocusRing()
   const shown = useLongEnough(state === 'syncing', since)
   if (state === 'syncing' && !shown) return null
   if (onOpen === undefined || !opens.has(state)) {
@@ -173,12 +174,8 @@ export function SyncMark({ state, words = 'inline', onOpen, name, since }: SyncM
         // With nothing: the press is the control's own, and no event of it is its owner's.
         onOpen()
       }}
-      onFocus={() => {
-        setFocused(true)
-      }}
-      onBlur={() => {
-        setFocused(false)
-      }}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
       style={({ pressed }) => ({
         minWidth: target,
         minHeight: target,
@@ -190,14 +187,7 @@ export function SyncMark({ state, words = 'inline', onOpen, name, since }: SyncM
         paddingHorizontal: theme.space['space-1'],
         borderRadius: theme.radii['radius-control'],
         backgroundColor: pressed ? theme.color['surface-sunken'] : 'transparent',
-        ...(focused
-          ? {
-              outlineWidth: 2,
-              outlineStyle: 'solid',
-              outlineOffset: 2,
-              outlineColor: theme.color.focus,
-            }
-          : {}),
+        ...focus.ring,
       })}
     >
       <StatusIcon status={state} />

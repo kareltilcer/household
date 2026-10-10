@@ -25,6 +25,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import { useTarget, useTheme, useType } from '../display/DisplayProvider.tsx'
+import { useFocusRing } from './focus.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { BaseIcon } from './Icon.tsx'
 import { useRefusable } from './refusal.ts'
@@ -132,11 +133,12 @@ export type Fixed = 'readOnly' | 'disabled' | undefined
  */
 export function useControlStyle({
   invalid,
-  focused,
+  ring,
   fixed,
 }: {
   readonly invalid: boolean
-  readonly focused: boolean
+  /** The focus ring, while the focus is on the control (focus.ts). */
+  readonly ring: ViewStyle
   readonly fixed: Fixed
 }): ViewStyle {
   const theme = useTheme()
@@ -156,14 +158,7 @@ export function useControlStyle({
     borderWidth: 1,
     borderColor: theme.color[edge],
     borderRadius: theme.radii['radius-control'],
-    ...(focused
-      ? {
-          outlineWidth: 2,
-          outlineStyle: 'solid',
-          outlineOffset: 2,
-          outlineColor: theme.color.focus,
-        }
-      : {}),
+    ...ring,
   }
 }
 
@@ -239,9 +234,9 @@ export function FieldInput({
   ...rest
 }: FieldInputProps) {
   const theme = useTheme()
-  const [focused, setFocused] = useState(false)
+  const focus = useFocusRing()
   const fixed: Fixed = disabled ? 'disabled' : readOnly ? 'readOnly' : undefined
-  const control = useControlStyle({ invalid: wiring.invalid, focused, fixed })
+  const control = useControlStyle({ invalid: wiring.invalid, ring: focus.ring, fixed })
   // One line is centred by the platform in the height the control has. A line height of its
   // own moves it off the centre on iOS, so only several lines are given one.
   const { lineHeight, ...type } = useType(numeric ? 'num' : 'body')
@@ -272,11 +267,11 @@ export function FieldInput({
       multiline={multiline}
       placeholderTextColor={theme.color['text-muted']}
       onFocus={(event) => {
-        setFocused(true)
+        focus.onFocus()
         onFocus?.(event)
       }}
       onBlur={(event) => {
-        setFocused(false)
+        focus.onBlur()
         onBlur?.(event)
       }}
       style={[
