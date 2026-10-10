@@ -16,7 +16,7 @@ interface Shared {
   readonly label: string
   /** Out of its form: it takes no press, and says so. One that cannot act at all is absent. */
   readonly disabled?: boolean
-  readonly testID?: string
+  readonly testID?: string | undefined
   /** The row, for a form that gives the focus to its first refused control. */
   readonly ref?: Ref<View>
 }
@@ -201,16 +201,18 @@ export function Radio({
   label,
   checked,
   onPress,
+  testID,
 }: {
   readonly label: string
   readonly checked: boolean
   readonly onPress: () => void
+  readonly testID?: string | undefined
 }) {
   const theme = useTheme()
   const { textScale } = useDisplay()
   const ring = theme.space['space-3'] * textScale
   return (
-    <Row role="radio" state={{ checked }} label={label} onPress={onPress}>
+    <Row role="radio" state={{ checked }} label={label} onPress={onPress} testID={testID}>
       <View
         style={{
           width: ring,
@@ -245,6 +247,7 @@ export interface RadioGroupProps {
   readonly options: readonly RadioOption[]
   readonly value: string | undefined
   readonly onChange: (value: string) => void
+  /** The group's own. Each choice is found by it too: `<testID>:<value>`. */
   readonly testID?: string
 }
 
@@ -259,6 +262,7 @@ export function RadioGroup({ label, options, value, onChange, testID }: RadioGro
         return (
           <Radio
             key={option.value}
+            testID={testID === undefined ? undefined : `${testID}:${option.value}`}
             label={option.label}
             checked={chosen}
             onPress={() => {

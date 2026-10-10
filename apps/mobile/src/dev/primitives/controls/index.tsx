@@ -49,12 +49,14 @@ interface Shown {
    * when the section's own switch asks for them.
    */
   readonly out: boolean
+  /** The theme its half is drawn in: what its `testID`s begin with. */
+  readonly theme: Theme
 }
 
 /** The household a link of the section leads to: no household's, an address of the app's own shape. */
 const nowhere = '0198c0de-0000-7000-8000-00000000d001'
 
-function Fields({ out }: Shown) {
+function Fields({ out, theme }: Shown) {
   const sample = useSample()
   const [reading, setReading] = useState('')
   const [password, setPassword] = useState('')
@@ -62,6 +64,7 @@ function Fields({ out }: Shown) {
   return (
     <>
       <TextField
+        testID={`controls:${theme}:field`}
         label={sample(words.reading)}
         help={sample(words.readingHelp)}
         numeric
@@ -80,6 +83,7 @@ function Fields({ out }: Shown) {
       <TextField label={sample(words.readingKept)} readOnly numeric value="18 116,0" />
       {out ? <TextField label={sample(words.readingOut)} disabled numeric value="9 204,5" /> : null}
       <PasswordField
+        testID={`controls:${theme}:password`}
         label={sample(words.password)}
         help={sample(words.passwordHelp)}
         autoComplete="new-password"
@@ -92,7 +96,7 @@ function Fields({ out }: Shown) {
   )
 }
 
-function Selects({ out }: Shown) {
+function Selects({ out, theme }: Shown) {
   const sample = useSample()
   const [tariff, setTariff] = useState<string | undefined>(undefined)
   const [second, setSecond] = useState<string | undefined>('night')
@@ -104,6 +108,7 @@ function Selects({ out }: Shown) {
   return (
     <>
       <Select
+        testID={`controls:${theme}:select`}
         label={sample(words.tariff)}
         placeholder={sample(words.choose)}
         options={tariffs}
@@ -132,13 +137,14 @@ function Selects({ out }: Shown) {
   )
 }
 
-function Steppers({ out }: Shown) {
+function Steppers({ out, theme }: Shown) {
   const sample = useSample()
   const [members, setMembers] = useState(3)
   const [least, setLeast] = useState(1)
   return (
     <>
       <Stepper
+        testID={`controls:${theme}:stepper`}
         label={sample(words.members)}
         value={members}
         onChange={setMembers}
@@ -163,7 +169,7 @@ function Steppers({ out }: Shown) {
   )
 }
 
-function Choices({ out }: Shown) {
+function Choices({ out, theme }: Shown) {
   const sample = useSample()
   const [remind, setRemind] = useState(true)
   const [meters, setMeters] = useState(false)
@@ -172,7 +178,12 @@ function Choices({ out }: Shown) {
   const [repeats, setRepeats] = useState<string | undefined>('monthly')
   return (
     <>
-      <Checkbox label={sample(words.remind)} checked={remind} onChange={setRemind} />
+      <Checkbox
+        testID={`controls:${theme}:checkbox`}
+        label={sample(words.remind)}
+        checked={remind}
+        onChange={setRemind}
+      />
       {/* Some of what it stands for is chosen, until it is pressed and all of it is. */}
       <Checkbox
         label={sample(words.everyMeter)}
@@ -184,12 +195,18 @@ function Choices({ out }: Shown) {
       {out ? (
         <Checkbox label={sample(words.removed)} checked disabled onChange={() => undefined} />
       ) : null}
-      <Switch label={sample(words.share)} checked={share} onChange={setShare} />
+      <Switch
+        testID={`controls:${theme}:switch`}
+        label={sample(words.share)}
+        checked={share}
+        onChange={setShare}
+      />
       <Switch label={sample(words.quiet)} checked={quiet} onChange={setQuiet} />
       {out ? (
         <Switch label={sample(words.switchedOut)} checked disabled onChange={() => undefined} />
       ) : null}
       <RadioGroup
+        testID={`controls:${theme}:radio`}
         label={sample(words.repeats)}
         value={repeats}
         onChange={setRepeats}
@@ -317,6 +334,7 @@ function Overlays({ theme: name }: { readonly theme: Theme }) {
       >
         <TextField
           ref={field}
+          testID={id('sheet:reading')}
           label={sample(words.reading)}
           help={sample(words.readingHelp)}
           numeric
@@ -339,6 +357,7 @@ function Overlays({ theme: name }: { readonly theme: Theme }) {
         items={[
           {
             id: 'rename',
+            testID: id('menu:rename'),
             label: sample(words.rename),
             icon: <BaseIcon name="pencil" />,
             onSelect: () => {
@@ -348,6 +367,7 @@ function Overlays({ theme: name }: { readonly theme: Theme }) {
           {
             // What destroys asks first: the confirmation opens once the menu has gone.
             id: 'remove',
+            testID: id('menu:remove'),
             label: sample(words.remove),
             icon: <BaseIcon name="trash-2" />,
             danger: true,
@@ -382,10 +402,10 @@ function Half({ theme, out }: Shown & { readonly theme: Theme }) {
   return (
     <ThemeScope theme={theme}>
       <Panel>
-        <Fields out={out} />
-        <Selects out={out} />
-        <Steppers out={out} />
-        <Choices out={out} />
+        <Fields out={out} theme={theme} />
+        <Selects out={out} theme={theme} />
+        <Steppers out={out} theme={theme} />
+        <Choices out={out} theme={theme} />
         <Rows />
       </Panel>
     </ThemeScope>

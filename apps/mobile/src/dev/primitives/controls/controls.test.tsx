@@ -88,9 +88,37 @@ describe('the controls’ section', () => {
       await press(`controls:${theme}:menu:open`)
       expect(screen.getByRole('button', { name: words.rename })).toBeOnTheScreen()
       expectAccessible()
-      await userEvent.press(screen.getByRole('button', { name: words.remove }))
+      await press(`controls:${theme}:menu:remove`)
       expect(screen.queryByRole('button', { name: words.rename })).toBeNull()
       expect(screen.getByTestId(`controls:${theme}:dialog:surface`)).toBeOnTheScreen()
+    },
+  )
+
+  it.each(themes)(
+    'takes a choice, a step and a press by the `testID`s the end-to-end flow presses, in the %s theme',
+    async (theme) => {
+      await render(<ControlsSection />)
+      const id = (part: string) => `controls:${theme}:${part}`
+      await press(id('select'))
+      expect(screen.getByTestId(id('select:choices:surface'))).toBeOnTheScreen()
+      await press(id('select:night'))
+      expect(screen.queryByTestId(id('select:choices:surface'))).toBeNull()
+      expect(screen.getByTestId(id('select'))).toHaveAccessibilityValue({ text: words.night })
+
+      expect(screen.getByTestId(id('stepper')).props.value).toBe('3')
+      await press(id('stepper:increase'))
+      await press(id('stepper:increase'))
+      await press(id('stepper:decrease'))
+      expect(screen.getByTestId(id('stepper')).props.value).toBe('4')
+
+      await press(id('checkbox'))
+      expect(screen.getByTestId(id('checkbox'))).not.toBeChecked()
+      await press(id('switch'))
+      expect(screen.getByTestId(id('switch'))).not.toBeChecked()
+      await press(id('radio:weekly'))
+      expect(screen.getByTestId(id('radio:weekly'))).toBeChecked()
+      await userEvent.type(screen.getByTestId(id('field')), '18204')
+      expect(screen.getByTestId(id('field')).props.value).toBe('18204')
     },
   )
 

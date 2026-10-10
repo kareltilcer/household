@@ -254,10 +254,12 @@ export function FieldInput({
           textAlignVertical: 'top',
         }
       : null
+  // The field's own ref, which a refused form gives the focus to, and its caller's.
+  const attach = useAttached(useRefusable(wiring.invalid), ref)
   return (
     <TextInput
       {...rest}
-      ref={useAttached(useRefusable(wiring.invalid), ref)}
+      ref={attach}
       allowFontScaling={false}
       // Android reads a filled field by its text and not by its label, and is told which drawn
       // text labels it. iOS reads the label and then the value.

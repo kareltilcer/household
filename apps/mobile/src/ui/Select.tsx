@@ -32,6 +32,10 @@ export interface SelectProps extends FieldProps {
   readonly placeholder?: string
   /** Out of its form: it opens nothing, and says so. */
   readonly disabled?: boolean
+  /**
+   * The field's own. Its sheet is found by it too, as `<testID>:choices` (and what a sheet's
+   * `testID` gives, ui/Dialog.tsx), and each choice as `<testID>:<value>`.
+   */
   readonly testID?: string
   /** The field's control, for a form that gives the focus to its first refused one. */
   readonly ref?: Ref<View>
@@ -117,6 +121,7 @@ export function Select({
               {options.map((option) => (
                 <Radio
                   key={option.value}
+                  testID={testID === undefined ? undefined : `${testID}:${option.value}`}
                   label={option.label}
                   checked={option === chosen}
                   onPress={() => {

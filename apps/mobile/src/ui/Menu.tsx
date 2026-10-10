@@ -21,6 +21,7 @@ export interface MenuItem {
   readonly icon?: ReactNode
   /** Destroys something: its label names what (06-clients §3). */
   readonly danger?: boolean
+  readonly testID?: string
 }
 
 /** What the menu reads of its trigger and gives it: a `Button` or an `IconButton` has them all. */
@@ -76,6 +77,7 @@ export function Menu({ trigger, items }: MenuProps) {
           return (
             <Pressable
               key={item.id}
+              testID={item.testID}
               accessibilityRole="button"
               onPress={() => {
                 chosen.current = item

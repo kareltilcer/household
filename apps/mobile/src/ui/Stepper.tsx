@@ -28,6 +28,7 @@ export interface StepperProps extends FieldProps {
   readonly disabled?: boolean
   /** Its number is shown and not changed here. */
   readonly readOnly?: boolean
+  /** The field's own. Its buttons are `<testID>:decrease` and `<testID>:increase`. */
   readonly testID?: string
 }
 
@@ -93,6 +94,7 @@ export function Stepper({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space['space-1'] }}>
           {fixed ? null : (
             <IconButton
+              testID={testID === undefined ? undefined : `${testID}:decrease`}
               variant="secondary"
               label={decrease}
               icon={<BaseIcon name={controls.decrease.glyph.id} />}
@@ -148,6 +150,7 @@ export function Stepper({
           />
           {fixed ? null : (
             <IconButton
+              testID={testID === undefined ? undefined : `${testID}:increase`}
               variant="secondary"
               label={increase}
               icon={<BaseIcon name={controls.increase.glyph.id} />}
