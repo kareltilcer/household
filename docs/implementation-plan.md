@@ -969,7 +969,7 @@ Phase 0 · after 25, 10, 11 · size L
   - The grant matrix reads without a legend at phone width.
 - **PR:** [#32](https://github.com/kareltilcer/household/pull/32)
 
-### 27 · Web billing, storage, data, privacy and sync health · `planned`
+### 27 · Web billing, storage, data, privacy and sync health · `done`
 
 Phase 0 · after 26, 16, 19, 20 · size L
 
@@ -996,7 +996,7 @@ Phase 0 · after 26, 16, 19, 20 · size L
   - PRD: [04](prd/04-billing-and-entitlements.md); [05 §3–4, §9](prd/05-privacy-and-compliance.md); [17 HA14–16, HA18–20](prd/modules/17-household-admin.md); [10 §6](prd/10-sync-risk.md); D-93
   - Design: `household.js`
 - **Done when** critical path 3 passes E2E: subscribe (at the stand-ins for the payment processor, `cmd/stripe-standin` for its API and a script the suite serves for its payment form, [D-176](prd/09-decisions.md)) → lapse (a renewal failed and given up on there, then the household's clock advanced in the database and the hourly job brought forward) → read-only → export. A payment in Stripe's test mode is item 30's.
-- **PR:** —
+- **PR:** [#45](https://github.com/kareltilcer/household/pull/45)
 
 ### 28 · Mobile foundation — Expo app, primitives, replica, shells · `planned`
 
