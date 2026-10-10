@@ -80,18 +80,54 @@ const fonts = [
 ] as const
 
 /**
- * What Expo's Android template declares for every app and nothing of this one uses (FR-PR1: a
- * permission no module uses is removed). A file is kept in the app's own sandbox, which takes
- * no permission, and nothing is drawn over another app. A build a member installs is cleared
- * of all three, whichever library names one of them too: the manifest says of each that it is
- * removed. A development build keeps the template's own, the third being how React Native
- * draws its errors and its menu over the app.
+ * What Expo's template and the libraries the app links declare, and nothing of this app uses
+ * (FR-PR1: a permission no module uses is removed). Every build says of each that it is
+ * removed, whichever library asks for it: the manifests of them all are merged as a build is
+ * made, and a build is where the whole list first shows (CI's Android job reads it off the
+ * one it makes, and holds it to build/asked.ts, which says what a build asks for and what
+ * for). Removed from the development variant too, so that the build the flows run on a
+ * device is one that goes without them.
  */
 export const unusedPermissions = [
+  // A file is kept in the app's own sandbox, which takes no permission. The template's, and
+  // expo-file-system's.
   'android.permission.READ_EXTERNAL_STORAGE',
   'android.permission.WRITE_EXTERNAL_STORAGE',
-  'android.permission.SYSTEM_ALERT_WINDOW',
+  // The keychain is not opened behind a fingerprint or a face. androidx.biometric's, which
+  // expo-secure-store links.
+  'android.permission.USE_BIOMETRIC',
+  'android.permission.USE_FINGERPRINT',
+  // Whether the device is online is asked, and nothing of the Wi-Fi network it is on.
+  // NetInfo's, which asks for the network's own details only where it holds this.
+  'android.permission.ACCESS_WIFI_STATE',
+  // Where an installation came from is never asked. The install referrer library's, which
+  // expo-application links.
+  'com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE',
+  // No count is drawn on the app's icon. The badge library's under expo-notifications, one
+  // or two for each launcher it knows.
+  'android.permission.READ_APP_BADGE',
+  'com.anddoes.launcher.permission.UPDATE_COUNT',
+  'com.htc.launcher.permission.READ_SETTINGS',
+  'com.htc.launcher.permission.UPDATE_SHORTCUT',
+  'com.huawei.android.launcher.permission.CHANGE_BADGE',
+  'com.huawei.android.launcher.permission.READ_SETTINGS',
+  'com.huawei.android.launcher.permission.WRITE_SETTINGS',
+  'com.majeur.launcher.permission.UPDATE_BADGE',
+  'com.oppo.launcher.permission.READ_SETTINGS',
+  'com.oppo.launcher.permission.WRITE_SETTINGS',
+  'com.sec.android.provider.badge.permission.READ',
+  'com.sec.android.provider.badge.permission.WRITE',
+  'com.sonyericsson.home.permission.BROADCAST_BADGE',
+  'com.sonymobile.home.permission.PROVIDER_INSERT_BADGE',
+  'me.everything.badger.permission.BADGE_COUNT_READ',
+  'me.everything.badger.permission.BADGE_COUNT_WRITE',
 ] as const
+
+/**
+ * What a development build alone keeps of the template's: how React Native draws its errors
+ * and its menu over the app in a debug build. A build a member installs says it is removed.
+ */
+export const developmentPermissions = ['android.permission.SYSTEM_ALERT_WINDOW'] as const
 
 /** What the app reads of its build at run time, through expo-constants (src/api/client.ts). */
 export interface Extra {
@@ -153,13 +189,10 @@ export default function config(): ExpoConfig {
     },
     android: {
       package: id,
-      // What stays is what the template and the libraries declare beside these, each for
-      // something the app does: INTERNET, the API and the sync service; ACCESS_NETWORK_STATE
-      // and ACCESS_WIFI_STATE, whether the device is online (NetInfo); VIBRATE,
-      // POST_NOTIFICATIONS and RECEIVE_BOOT_COMPLETED, a notification shown, felt and kept
-      // across a restart (expo-notifications). The list a build ends with is read off the
-      // build itself (docs/runbooks/mobile-builds.md).
-      ...(variant === 'development' ? {} : { blockedPermissions: [...unusedPermissions] }),
+      blockedPermissions: [
+        ...unusedPermissions,
+        ...(variant === 'development' ? [] : developmentPermissions),
+      ],
       ...(linkHost === undefined
         ? {}
         : {

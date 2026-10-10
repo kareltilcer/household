@@ -3,14 +3,16 @@
 // write them for the variant (`expo config --type introspect`, which runs every plugin of
 // app.config.ts over the template and writes nothing).
 //
-// It reads what the configuration decides. What the libraries' own manifests add as a build is
-// merged, a notification's permissions among them, is in no file of this repository: CI's
-// Android job prints the list of the build it makes, and its iOS job reads the built app's
-// Info.plist (docs/runbooks/mobile-builds.md).
+// It reads what the configuration decides: what the template asks for, and what the manifest
+// says is removed, whichever library asks for it. What the libraries' own manifests add as a
+// build is merged is in no file of this repository: CI's Android job reads the list off the
+// build it makes and holds it to asked.ts, and its iOS job reads the built app's Info.plist
+// (docs/runbooks/mobile-builds.md).
 import { describe, expect, it } from '@jest/globals'
 import { spawnSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
-import { unusedPermissions, type Variant } from '../app.config.ts'
+import { developmentPermissions, unusedPermissions, type Variant } from '../app.config.ts'
+import { asked, developmentAsked } from './asked.ts'
 
 /** apps/mobile: Jest runs in it. */
 const app = resolve('.')
@@ -71,16 +73,20 @@ function permissions(native: unknown): { asks: string[]; removes: string[] } {
   return { asks: names(false), removes: names(true) }
 }
 
-/** What the template declares for every app, by name. */
-const template = [
-  'android.permission.INTERNET',
-  'android.permission.READ_EXTERNAL_STORAGE',
-  'android.permission.SYSTEM_ALERT_WINDOW',
-  'android.permission.VIBRATE',
-  'android.permission.WRITE_EXTERNAL_STORAGE',
-]
-
 const variants: readonly Variant[] = ['development', 'staging', 'production']
+
+describe('what a build asks for and what it removes', () => {
+  it('are two lists: nothing that has a reason is removed', () => {
+    const removed: readonly string[] = [...unusedPermissions, ...developmentPermissions]
+    expect(Object.keys(asked).filter((name) => removed.includes(name))).toEqual([])
+    expect(new Set(unusedPermissions).size).toBe(unusedPermissions.length)
+  })
+
+  it('agree on what a development build alone keeps', () => {
+    // asked.ts is read by a script Node runs, which cannot read app.config.ts: each says it.
+    expect(Object.keys(developmentAsked)).toEqual([...developmentPermissions])
+  })
+})
 
 describe.each(variants)('a %s build', (variant) => {
   const member = variant !== 'development'
@@ -88,15 +94,22 @@ describe.each(variants)('a %s build', (variant) => {
   const native = introspected(variant)
 
   it('asks Android for what it uses, and says of the rest that it is removed', () => {
-    expect(permissions(native)).toEqual(
-      member
-        ? {
-            asks: ['android.permission.INTERNET', 'android.permission.VIBRATE'],
-            removes: [...unusedPermissions].sort(),
-          }
-        : // The template's own, the dev overlay's among them, and nothing taken away.
-          { asks: template, removes: [] },
-    )
+    expect(permissions(native)).toEqual({
+      // Of the five the template declares: the two that have a reason, and in a development
+      // build the one React Native's own overlay is drawn by.
+      asks: member
+        ? ['android.permission.INTERNET', 'android.permission.VIBRATE']
+        : [
+            'android.permission.INTERNET',
+            'android.permission.SYSTEM_ALERT_WINDOW',
+            'android.permission.VIBRATE',
+          ],
+      // And everything nothing uses, the template's and every library's, by name.
+      removes: [...unusedPermissions, ...(member ? developmentPermissions : [])].sort(),
+    })
+    // What is left of the template is on the list of what a build asks for, with its reason.
+    const reasons = { ...asked, ...developmentAsked }
+    expect(permissions(native).asks.filter((name) => !(name in reasons))).toEqual([])
   })
 
   it('speaks plain http only where its API is a developer’s machine', () => {

@@ -329,16 +329,15 @@ jobs:
         working-directory: apps/mobile/android
         timeout-minutes: 40
         run: ./gradlew --no-daemon --console=plain :app:assembleRelease -PreactNativeArchitectures=x86_64
-      # What the build asks of its device, as the manifests of every library merged into it
-      # leave it (FR-PR1): the configuration's own part is held by a test
-      # (apps/mobile/build/permissions.test.ts), and the libraries' is in no file of the
-      # repository. Read here and held to nothing yet: a staging or a production build asks
-      # for this less the three the configuration removes.
+      # What the build asks of its device, as the manifests of the template and of every
+      # library merged into it leave it (FR-PR1): a list that is in no file of the repository
+      # until a build is made. Read here, and held after the flows, below.
       - name: What the build asks of its device
         continue-on-error: true
         run: |
           aapt2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort --version-sort | tail -n 1)aapt2"
-          "$aapt2" dump permissions apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          "$aapt2" dump permissions apps/mobile/android/app/build/outputs/apk/release/app-release.apk \
+            | tee "$RUNNER_TEMP/permissions.txt"
       # What the app's API runs on, as a developer starts it and as the web's job does:
       # PostgreSQL, the object store and the mail catcher, the database's roles and
       # migrations, and then PowerSync, which a member's replica connects to
@@ -423,6 +422,17 @@ jobs:
       - name: The account lists the device that signed in
         if: ${{ success() && steps.member.outcome == 'success' }}
         run: pnpm --filter @household/mobile run e2e:stack devices
+      # The list read above, held to what each permission is for (apps/mobile/build/asked.ts):
+      # one a new library brings fails here until it is given its reason or removed in
+      # app.config.ts, which is the decision FR-PR1 asks for. The build is the development
+      # variant, which the flows above ran with everything nothing uses already removed; a
+      # staging or a production build asks for the same less the one a debug build draws its
+      # errors by, which the configuration's own test holds
+      # (apps/mobile/build/permissions.test.ts). After the flows, so that a list that moved
+      # does not hide whether the app still runs.
+      - name: Every permission the build asks for has its reason
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node apps/mobile/build/apk.ts "$RUNNER_TEMP/permissions.txt"
       - name: The services' logs
         if: failure()
         run: |
