@@ -345,7 +345,8 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   charge, the day a cancelled subscription ends on, the day a lapse keeps its data until, is
   drawn in that state alone, the last not where the household's own deletion is scheduled for
   a day no later, the erasure taking whichever is due first (`keptUntil`,
-  `household/households.ts`). A question that stays open over a refused write keeps what it
+  `household/households.ts`), and the day a household in grace stops taking changes is held to
+  the same rule, on billing as in the banner (`deletedBy`). A question that stays open over a refused write keeps what it
   was opened for, and is never drawn again from what is read behind it (the interval's dialog,
   `billing/Billing.tsx`). A refusal whose own re-read takes away the part it was pressed in is
   said in a toast (`useRefusals`, `billing/parts.tsx`). On these screens a body's *Try again*
@@ -358,7 +359,12 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   navigation and never a `fetch`, the policy admitting none of the object store. The privacy
   centre (`privacy/Privacy.tsx`) is the account's and its route names no part of the
   household's words: what a household's screens and an account's share, and that reads no
-  household word, is in `account/common.ts`. A size is said by `format.bytes`
+  household word, is in `account/common.ts`. Its two consents (`privacy/Consents.tsx`) are
+  switches that save as they are changed: one whose change made last is refused is put back to
+  what the server last said it holds, never to a snapshot another change's unsaved choice may
+  be in, and *Not saved* is said of a change the server refused or one asked while the browser
+  was offline, where any other unanswered change is said only not to have reached the server.
+  A size is said by `format.bytes`
   (`i18n/format.ts`), in no unit smaller than the kilobyte: `Intl` writes a byte as an English
   word in every language. Sync health (`health/SyncHealth.tsx`) is its reader's own replicas,
   this browser's drawn from the replica itself and reported as the screen opens
