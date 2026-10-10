@@ -76,6 +76,20 @@ const fonts = [
   },
 ] as const
 
+/**
+ * What Expo's Android template declares for every app and nothing of this one uses (FR-PR1: a
+ * permission no module uses is removed). A file is kept in the app's own sandbox, which takes
+ * no permission, and nothing is drawn over another app. A build a member installs is cleared
+ * of all three, whichever library names one of them too: the manifest says of each that it is
+ * removed. A development build keeps the template's own, the third being how React Native
+ * draws its errors and its menu over the app.
+ */
+export const unusedPermissions = [
+  'android.permission.READ_EXTERNAL_STORAGE',
+  'android.permission.WRITE_EXTERNAL_STORAGE',
+  'android.permission.SYSTEM_ALERT_WINDOW',
+] as const
+
 /** What the app reads of its build at run time, through expo-constants (src/api/client.ts). */
 export interface Extra {
   readonly variant: Variant
@@ -124,6 +138,13 @@ export default function config(): ExpoConfig {
     },
     android: {
       package: id,
+      // What stays is what the template and the libraries declare beside these, each for
+      // something the app does: INTERNET, the API and the sync service; ACCESS_NETWORK_STATE
+      // and ACCESS_WIFI_STATE, whether the device is online (NetInfo); VIBRATE,
+      // POST_NOTIFICATIONS and RECEIVE_BOOT_COMPLETED, a notification shown, felt and kept
+      // across a restart (expo-notifications). The list a build ends with is read off the
+      // build itself (docs/runbooks/mobile-builds.md).
+      ...(variant === 'development' ? {} : { blockedPermissions: [...unusedPermissions] }),
       ...(linkHost === undefined
         ? {}
         : {
@@ -148,7 +169,15 @@ export default function config(): ExpoConfig {
           // 06-clients: iOS 16 and Android 10 at the least. Expo SDK 57 builds for no iOS
           // before 16.4, so that is the minimum until the PRD or the SDK moves.
           ios: { deploymentTarget: '16.4' },
-          android: { minSdkVersion: 29 },
+          android: {
+            minSdkVersion: 29,
+            // A development build asks the developer's own machine, or a runner's, over plain
+            // http (src/api/client.ts). The template allows that in a debug build alone, and
+            // the build the end-to-end flows run is a release one, so the variant says it. A
+            // staging or a production build is told an API and says nothing: Android refuses
+            // it plain http.
+            ...(variant === 'development' ? { usesCleartextTraffic: true } : {}),
+          },
         },
       ],
       [
