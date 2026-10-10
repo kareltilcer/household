@@ -103,6 +103,10 @@ export const unusedPermissions = [
   // Where an installation came from is never asked. The install referrer library's, which
   // expo-application links.
   'com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE',
+  // Nothing is held on the device to be shown later: a notification is a push, sent when it
+  // is due. expo-notifications', which asks to be started with the device so as to schedule
+  // again what an app had it hold.
+  'android.permission.RECEIVE_BOOT_COMPLETED',
   // No count is drawn on the app's icon. The badge library's under expo-notifications, one
   // or two for each launcher it knows.
   'android.permission.READ_APP_BADGE',

@@ -16,8 +16,6 @@ export const asked: Readonly<Record<string, string>> = {
   'android.permission.POST_NOTIFICATIONS':
     'Showing a notification, which its member is asked for at a press and never at launch (expo-notifications).',
   'android.permission.VIBRATE': 'A notification that is felt (expo-notifications).',
-  'android.permission.RECEIVE_BOOT_COMPLETED':
-    'What expo-notifications holds to be shown later is kept across a restart of the device.',
   'android.permission.WAKE_LOCK':
     'The device stays awake for as long as a push takes to arrive (Firebase messaging, under expo-notifications).',
   'com.google.android.c2dm.permission.RECEIVE':

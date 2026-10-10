@@ -51,6 +51,20 @@ describe('what a build asks of its device', () => {
     expect(failures[0]).toContain('android.permission.SYSTEM_ALERT_WINDOW')
   })
 
+  it('fails a build that asks to be started with its device, of any variant', () => {
+    // Nothing is held on the device to be shown later, so nothing is to be scheduled again.
+    const boot = 'android.permission.RECEIVE_BOOT_COMPLETED'
+    for (const [names, variant] of [
+      [development, 'development'],
+      [member, 'staging'],
+      [member, 'production'],
+    ] as const) {
+      const failures = judge(dump([...names, boot]), variant)
+      expect([variant, failures.length]).toEqual([variant, 1])
+      expect(failures[0]).toContain(boot)
+    }
+  })
+
   it('fails a reason for a permission the build does not ask for', () => {
     const failures = judge(dump(member.slice(1)), 'production')
     expect(failures).toHaveLength(1)

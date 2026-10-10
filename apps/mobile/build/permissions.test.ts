@@ -112,6 +112,12 @@ describe.each(variants)('a %s build', (variant) => {
     expect(permissions(native).asks.filter((name) => !(name in reasons))).toEqual([])
   })
 
+  it('does not ask to be started with its device', () => {
+    // A notification is a push, sent when it is due: nothing is held on the device to be
+    // scheduled again after a restart, which is all expo-notifications asks this for.
+    expect(permissions(native).removes).toContain('android.permission.RECEIVE_BOOT_COMPLETED')
+  })
+
   it('speaks plain http only where its API is a developer’s machine', () => {
     const application = field(native, 'android', 'manifest', 'manifest', 'application')
     const attributes = field(Array.isArray(application) ? application[0] : undefined, '$')
