@@ -4,6 +4,7 @@
 import { defaultScheduler, notifyManager, onlineManager } from '@tanstack/react-query'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { untold } from '../account/testing.tsx'
 import { inHousehold, paths } from '../app/paths.ts'
 import {
   accountOf,
@@ -356,25 +357,6 @@ describe('the two consents', () => {
       return Response.json({ ...kept, updated_at: '2026-09-09T17:00:00Z' })
     })
     return server
-  }
-
-  /**
-   * Keeps the query client from telling its screens of anything until what this returns is
-   * called. It tells them of a change by a timer, and Chromium runs no timer a press set until
-   * it has drawn the frame that answers the press: held back here, that frame lasts for as long
-   * as a test needs it to, and a test that reads a switch in it reads what a member is drawn.
-   */
-  function untold(): () => void {
-    const waiting: (() => void)[] = []
-    notifyManager.setScheduler((tell) => {
-      waiting.push(tell)
-    })
-    return () => {
-      notifyManager.setScheduler(defaultScheduler)
-      act(() => {
-        for (const tell of waiting.splice(0)) tell()
-      })
-    }
   }
 
   it('are both off until their member turns one on, and say what each is', async () => {
