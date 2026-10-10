@@ -217,7 +217,9 @@ to the server, and `stack`'s sign-in is still there for the job to find whatever
   for as long as it has not found its element, one that has not come yet as one that is further
   down: so it is for a thing that is drawn already. What a screen draws later, a replica opened
   or a report answered, is waited for with `extendedWaitUntil`, after a scroll to a neighbour
-  that is there from the start.
+  that is there from the start. The one such thing a flow does scroll to, the device's word
+  that it is offline, which the bar that comes above it moves down the screen, is in the last
+  part of a narrowed page: a swipe made early leads no further than to it.
 - **What stays a few seconds is looked for at once.** After a tap Maestro waits for the screen
   to come to rest before the next command, which on a slow emulator is seconds of a toast's
   five: the tap that brings one says `waitToSettleTimeoutMs: 500`.

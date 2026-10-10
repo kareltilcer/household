@@ -36,15 +36,18 @@ appId: com.kareltilcer.household.dev
       index: 0
     direction: DOWN
     timeout: 60000
-# Let go early: nothing is completed, and the control says to keep holding.
+# Let go early: nothing is completed, and the control says to keep holding. It says so for
+# as long as a toast stays, five seconds, so it is looked for at once, and not after the
+# screen has come to rest.
 - tapOn:
     id: 'hold:idle'
     index: 0
+    waitToSettleTimeoutMs: 500
 - extendedWaitUntil:
     visible:
       id: 'hold:released'
     timeout: 10000
-# It says so for as long as a toast stays, five seconds, and is then to be held again.
+# And is then to be held again.
 - extendedWaitUntil:
     notVisible:
       id: 'hold:released'

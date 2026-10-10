@@ -82,17 +82,22 @@ appId: com.kareltilcer.household.dev
     index: 0
 - tapOn:
     id: 'arrange:tasks:hide'
-- extendedWaitUntil:
-    visible:
+# The hidden modules are listed under the others, and the same lists are drawn again at a
+# tablet's width below: whichever of the two is met first.
+- scrollUntilVisible:
+    element:
       id: 'arrange:tasks:show'
       index: 0
-    timeout: 15000
+    direction: DOWN
+    timeout: 30000
 - assertNotVisible:
     id: 'arrange:menu:tasks'
 - takeScreenshot: shell-arrange
 
 # The panes: one at a phone's width, where a row opens over the list and its own control
-# leads back, and two at a tablet's, in a room that scrolls sideways on a phone.
+# leads back, and two at a tablet's, in a room that scrolls sideways on a phone. The phone's
+# room is brought onto the screen whole, so that what a row opens is on it too; all but
+# whole, since the room is a little wider than the phone it is drawn on.
 - scrollUntilVisible:
     element:
       id: 'shell:only:panes'
@@ -104,12 +109,7 @@ appId: com.kareltilcer.household.dev
       id: 'shell:panes:phone:one'
     direction: DOWN
     timeout: 60000
-    visibilityPercentage: 20
-- scrollUntilVisible:
-    element:
-      id: 'shell:panes:phone:cellar'
-    direction: DOWN
-    timeout: 60000
+    visibilityPercentage: 90
 - tapOn:
     id: 'shell:panes:phone:cellar'
 - extendedWaitUntil:

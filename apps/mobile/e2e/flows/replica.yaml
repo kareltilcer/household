@@ -37,8 +37,8 @@ onFlowComplete:
 - tapOn:
     id: 'sync:only:live'
 # The lines are there once the member's households are read, the device's own word among
-# them. Scrolled to once: what follows is waited for where it stands, and not scrolled after,
-# since a line that has not come yet is no place to scroll to.
+# them. Scrolled to once: the lines beside it are waited for where they stand, each a state
+# that comes in its own time.
 - scrollUntilVisible:
     element:
       id: 'sync:live:online:yes'
@@ -72,11 +72,15 @@ onFlowComplete:
     visible:
       id: 'sync:live:reported:sent'
     timeout: 120000
-# The connection taken away: the device says so, and the household's bar comes.
+# The connection taken away: the device says so, and the household's bar comes. The bar comes
+# above the lines and moves them down the screen, so this one is scrolled to: the section is
+# the last thing on the narrowed page, and a swipe made before the line has changed can lead
+# no further than to it.
 - setAirplaneMode: enabled
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: 'sync:live:online:no'
+    direction: DOWN
     timeout: 60000
 - extendedWaitUntil:
     visible:
