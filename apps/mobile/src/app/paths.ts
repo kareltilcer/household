@@ -65,8 +65,16 @@ export type RouteId = keyof typeof paths
 
 export const routeIds = Object.keys(paths) as RouteId[]
 
-/** The layouts' own files under app/, which are no route: each holds what stands around its routes. */
-export const layoutFiles = ['_layout', 'households/[household]/_layout'] as const
+/**
+ * The layouts' own files under app/, which are no route: each holds what stands around its
+ * routes. The households' own is the stack a household is a screen of, which is what has the
+ * router open another household for an address that names one (src/shell/HouseholdsLayout.tsx).
+ */
+export const layoutFiles = [
+  '_layout',
+  'households/_layout',
+  'households/[household]/_layout',
+] as const
 
 /**
  * The file under app/ that is route `id`, with no extension: its address, or `index` inside its
