@@ -13,20 +13,25 @@ import { heldDestination, holdDestination, takeDestination } from '../links/dest
 import { announceNow } from '../ui/announce.ts'
 import { Button } from '../ui/Button.tsx'
 import { Screen } from '../ui/Screen.tsx'
+import { Skeleton, type SkeletonBar } from '../ui/Skeleton.tsx'
 import { Text } from '../ui/Text.tsx'
 import { useSession } from './context.ts'
 
+/** The shape of a screen: its title, and two lines under it. */
+const page: readonly SkeletonBar[] = [
+  [40, 2],
+  [90, 1],
+  [70, 1],
+]
+
 /**
  * In a screen's place while it is not yet known who is signed in, or while what the screen is
- * drawn from is read for the first time.
+ * drawn from is read for the first time: the shape of a screen, and never a spinner.
  */
 export function Waiting() {
-  const t = useTranslate()
   return (
     <Screen testID="waiting">
-      {/* stub: P2 (Skeleton). The shape of a page stands here once the skeleton is built; until
-          then, the word a skeleton is named by. */}
-      <Text color="text-muted">{t('ui.loading')}</Text>
+      <Skeleton bars={page} />
     </Screen>
   )
 }

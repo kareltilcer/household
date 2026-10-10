@@ -13,7 +13,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ApiProvider } from '../api/ApiProvider.tsx'
 import { createMobileClient } from '../api/client.ts'
 import { createProblemHub, type ProblemHub } from '../api/problems.ts'
-import { createQueryClient, watchFocus } from '../api/query.ts'
+import { createQueryClient, watchConnection, watchFocus } from '../api/query.ts'
 import { Links } from '../links/Links.tsx'
 import { Push } from '../push/Push.tsx'
 import { UpdateRequired } from '../update/UpdateRequired.tsx'
@@ -92,7 +92,14 @@ export interface SessionProvidersProps {
 
 export function SessionProviders({ children, services: given }: SessionProvidersProps) {
   const [services] = useState(() => given ?? createServices())
-  useEffect(() => watchFocus(), [])
+  // What the query client is told of the device: when the app comes to the front, and whether
+  // there is a connection.
+  useEffect(() => {
+    const stops = [watchFocus(), watchConnection()]
+    return () => {
+      for (const stop of stops) stop()
+    }
+  }, [])
   return (
     <QueryClientProvider client={services.queries}>
       <ApiProvider client={services.api} problems={services.problems}>

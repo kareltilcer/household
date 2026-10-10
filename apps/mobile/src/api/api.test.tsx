@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { catalogs, createTranslator } from '@household/i18n'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import NetInfo, { type NetInfoState } from '@react-native-community/netinfo'
 import {
   MutationObserver,
   onlineManager,
@@ -20,7 +21,7 @@ import { createKeep, keepKey, writeEvery } from './keep.ts'
 import { ApiProblemError, isRetryable, problemIn, retryAt, unwrap } from './problem.ts'
 import { createProblemHub, type Problem } from './problems.ts'
 import { useProblemText } from './problemText.ts'
-import { askedNow, cacheMaxAge, createQueryClient } from './query.ts'
+import { askedNow, cacheMaxAge, createQueryClient, watchConnection } from './query.ts'
 import { answering, empty, json, problem, testApi, testClient, unanswered } from './testing.ts'
 
 /** A client the test puts away: a read nobody observes is held by a timer for a day. */
@@ -440,6 +441,54 @@ describe('a request the replica makes', () => {
     await fetch(`${testApi}/households/${ids.household}/sync/mutations`, { method: 'POST' })
     await fetch(`${testApi}/households/${ids.household}/sync/digest`, { method: 'POST' })
     expect(heard).not.toHaveBeenCalled()
+  })
+})
+
+describe('what the query client is told of the device’s connection', () => {
+  const says = (isConnected: boolean | null) => ({ isConnected }) as NetInfoState
+
+  it('is what the device says, believed only where it says it has none', () => {
+    const stop = jest.fn()
+    jest.mocked(NetInfo.addEventListener).mockReturnValueOnce(stop)
+    const stopWatching = watchConnection()
+    const tell = jest.mocked(NetInfo.addEventListener).mock.calls.at(-1)?.[0]
+    tell?.(says(false))
+    expect(onlineManager.isOnline()).toBe(false)
+    tell?.(says(true))
+    expect(onlineManager.isOnline()).toBe(true)
+    tell?.(says(false))
+    // A device that does not know is taken to have one: a request that fails says so itself.
+    tell?.(says(null))
+    expect(onlineManager.isOnline()).toBe(true)
+    tell?.(says(false))
+    stopWatching()
+    expect(stop).toHaveBeenCalledTimes(1)
+    // Told nothing from then on, it takes it that there is a connection.
+    expect(onlineManager.isOnline()).toBe(true)
+  })
+
+  // What `askedNow` is for, with the device's own word for it.
+  it('holds back a read asked with none, and sends it when one returns', async () => {
+    let tell: (state: NetInfoState) => void = () => undefined
+    jest.mocked(NetInfo.addEventListener).mockImplementationOnce((listener) => {
+      tell = listener
+      return () => undefined
+    })
+    const stopWatching = watchConnection()
+    tell(says(false))
+    const client = queryClient()
+    client.mount()
+    const asked = jest.fn(() => Promise.resolve('an answer'))
+    const reading = new QueryObserver(client, { queryKey: ['read'], queryFn: asked })
+    const stop = reading.subscribe(() => undefined)
+    expect(asked).not.toHaveBeenCalled()
+    expect(reading.getCurrentResult()).toMatchObject({ fetchStatus: 'paused', data: undefined })
+    tell(says(true))
+    await client.getQueryCache().find({ queryKey: ['read'] })?.promise
+    expect(asked).toHaveBeenCalledTimes(1)
+    stop()
+    client.unmount()
+    stopWatching()
   })
 })
 

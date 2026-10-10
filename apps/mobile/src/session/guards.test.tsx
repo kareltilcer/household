@@ -65,6 +65,12 @@ describe('a household’s screen', () => {
     )
     expect(screen.getByTestId('waiting')).toBeOnTheScreen()
     expect(screen.queryByTestId('inside')).toBeNull()
+    // The shape of a screen, said once as loading: never a spinner, and no word drawn.
+    expect(screen.getByTestId('skeleton')).toHaveProp(
+      'accessibilityLabel',
+      catalogs.en['ui.loading'],
+    )
+    expect(screen.queryByText(catalogs.en['ui.loading'])).toBeNull()
     expectAccessible()
   })
 

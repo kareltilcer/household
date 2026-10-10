@@ -4,10 +4,12 @@
 // that the app opens with no connection at the household it was last in. A module's own rows
 // are the replica's, which is the offline surface: nothing here stands in for it.
 import type { ApiProblem, UnreadableProblem } from '@household/api'
+import NetInfo from '@react-native-community/netinfo'
 import {
   defaultShouldDehydrateQuery,
   focusManager,
   MutationCache,
+  onlineManager,
   QueryCache,
   QueryClient,
   type Query,
@@ -89,10 +91,6 @@ export function isKept(query: Query): boolean {
  * Tells the query client when the app is looked at again: on a device that is the app coming to
  * the front, which is when a read that has gone stale is asked for again, the account's every
  * time. It answers with what stops it.
- *
- * Whether the device has a connection is not told here. Told nothing, the query client takes
- * it that there is one, so a read asked without is sent and fails where the web's would wait:
- * to a member the two are one, the read could not be made (household/data.ts, `readState`).
  */
 export function watchFocus(): () => void {
   const subscription = AppState.addEventListener('change', (status) => {
@@ -100,5 +98,27 @@ export function watchFocus(): () => void {
   })
   return () => {
     subscription.remove()
+  }
+}
+
+/**
+ * Tells the query client whether the device has a connection, as the device says and at each
+ * change. Told that it has none, a read is not sent: it waits, which a screen draws as could
+ * not be read where nothing is kept of it (household/data.ts, `readState`), and it is asked
+ * when a connection returns. A write left to the query client would wait the same way, unseen,
+ * which is what `askedNow` is for.
+ *
+ * The device is believed in one direction only: one that says it has no connection has none.
+ * One that does not know yet, as it starts, or that has a network with nothing behind it, is
+ * taken to have one, and a request that then fails says so itself. It answers with what stops
+ * it, after which the query client is told nothing and takes it that there is a connection.
+ */
+export function watchConnection(): () => void {
+  const stop = NetInfo.addEventListener((state) => {
+    onlineManager.setOnline(state.isConnected !== false)
+  })
+  return () => {
+    stop()
+    onlineManager.setOnline(true)
   }
 }

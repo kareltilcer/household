@@ -151,10 +151,100 @@ describe('where the app opens', () => {
         screen.getByRole('header', { name: catalogs.en['account.households.empty.title'] }),
       ).toBeOnTheScreen()
     })
+    expect(screen.getByTestId('route:home')).toBeOnTheScreen()
     expect(screen.queryByTestId(/^redirect:/)).toBeNull()
     expectAccessible()
   })
+})
 
+describe('a member in no household', () => {
+  const signOut = jest.fn<() => Promise<void>>()
+  const action = catalogs.en['shell.sign_out.action']
+
+  /** The index for a member in none, whose sign-out a test answers. */
+  async function inNone(options: Parameters<typeof render>[1] = {}) {
+    const api = answering({ 'GET /households': () => json(200, { items: [] }) })
+    await render(
+      <SessionFixture api={testClient(api.transport)} signOut={signOut}>
+        <Home />
+      </SessionFixture>,
+      options,
+    )
+    await waitFor(() => {
+      expect(screen.getByTestId('route:home')).toBeOnTheScreen()
+    })
+  }
+
+  beforeEach(() => {
+    signOut.mockReset()
+  })
+
+  // Every other way out of the account is inside a household, until item 29's screens.
+  it('can sign out: the one action of the screen', async () => {
+    signOut.mockResolvedValue(undefined)
+    await inNone()
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    await userEvent.press(screen.getByRole('button', { name: action }))
+    expect(signOut).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('toast')).toBeNull()
+  })
+
+  it('is busy while leaving, and asks to leave once for two presses', async () => {
+    let left: () => void = () => undefined
+    signOut.mockReturnValue(
+      new Promise<void>((resolve) => {
+        left = resolve
+      }),
+    )
+    await inNone()
+    const button = screen.getByTestId('home:sign-out')
+    await userEvent.press(button)
+    expect(button).toBeBusy()
+    await userEvent.press(button)
+    expect(signOut).toHaveBeenCalledTimes(1)
+    // Busy until the index has led away: the session says who is here, and it is its to say.
+    await act(() => {
+      left()
+    })
+    expect(button).toBeBusy()
+  })
+
+  // No control of the screen says that the press came to nothing.
+  it('is told in a toast that they are still signed in, where the server could not be reached', async () => {
+    const said = jest.spyOn(announcer, 'announce').mockImplementation(() => undefined)
+    signOut.mockRejectedValueOnce(new TypeError('Network request failed'))
+    await inNone()
+    const button = screen.getByTestId('home:sign-out')
+    await userEvent.press(button)
+    await waitFor(() => {
+      expect(screen.getByTestId('toast')).toHaveTextContent(
+        new RegExp(catalogs.en['shell.sign_out.failed'].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+      )
+    })
+    // Said as a toast is: by what it is, and then its sentence.
+    expect(said).toHaveBeenCalledTimes(1)
+    expect(said).toHaveBeenCalledWith(
+      `${catalogs.en['ui.toast.label']}: ${catalogs.en['shell.sign_out.failed']}`,
+    )
+    // And the control takes the press again.
+    expect(button).not.toBeBusy()
+    signOut.mockResolvedValueOnce(undefined)
+    await userEvent.press(button)
+    expect(signOut).toHaveBeenCalledTimes(2)
+    expectAccessible()
+  })
+
+  it('survives the largest text, in the longest language', async () => {
+    signOut.mockResolvedValue(undefined)
+    await inNone({ locale: 'de', scale: 2 })
+    expect(
+      screen.getByRole('button', { name: catalogs.de['shell.sign_out.action'] }),
+    ).toBeOnTheScreen()
+    expectAccessible()
+  })
+})
+
+describe('where the app opens, with nothing kept', () => {
   it('says the households could not be read where nothing is kept of them, and asks again', async () => {
     let reachable = false
     const api = answering({
