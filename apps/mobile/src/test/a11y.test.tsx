@@ -4,7 +4,7 @@ import { describe, expect, it } from '@jest/globals'
 import { controls } from '@household/icons'
 import { catalogs } from '@household/i18n'
 import { screen } from '@testing-library/react-native'
-import { Image, Pressable, Text as NativeText, View } from 'react-native'
+import { Image, Pressable, Text as NativeText, TextInput, View } from 'react-native'
 import { BaseIcon, StatusIcon } from '../ui/Icon.tsx'
 import { Text } from '../ui/Text.tsx'
 import { expectAccessible, statusTestID, violations } from './a11y.ts'
@@ -211,5 +211,30 @@ describe('the accessibility rules', () => {
     )
     expect(broken('native')).toEqual(['own-text'])
     expect(broken('own')).toEqual([])
+  })
+
+  it('want a field that is typed in named, by a label or by a text that is drawn, in the app’s own type', async () => {
+    await render(
+      <View>
+        <View testID="bare">
+          <TextInput placeholder={words.title} />
+        </View>
+        <View testID="named">
+          <TextInput accessibilityLabel={words.title} allowFontScaling={false} />
+        </View>
+        <View testID="tied">
+          <Text nativeID="its-label">{words.title}</Text>
+          <TextInput accessibilityLabelledBy="its-label" allowFontScaling={false} />
+        </View>
+        <View testID="tied-to-nothing">
+          <TextInput accessibilityLabelledBy="no-such-label" allowFontScaling={false} />
+        </View>
+      </View>,
+    )
+    // A placeholder is no label, and the platform's own field is scaled by the system.
+    expect(broken('bare')).toEqual(['field', 'field'])
+    expect(broken('named')).toEqual([])
+    expect(broken('tied')).toEqual([])
+    expect(broken('tied-to-nothing')).toEqual(['field'])
   })
 })

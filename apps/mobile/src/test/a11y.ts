@@ -285,6 +285,40 @@ export const ownText: Rule = (tree) =>
     .filter((element) => element.type === 'Text' && propsOf(element).allowFontScaling !== false)
     .map((element) => failure('own-text', element, 'is a text drawn outside the app’s own `Text`'))
 
+/**
+ * Whether anything drawn on the screen `element` is on carries `nativeID` and holds words a
+ * screen reader reads: a field's label stands beside the field, outside what a rule was run over.
+ */
+function drawnText(element: TestInstance, nativeID: string): boolean {
+  let top = element
+  while (top.parent !== null) top = top.parent
+  return elementsOf(top).some((each) => propsOf(each).nativeID === nativeID && textOf(each) !== '')
+}
+
+/**
+ * A field that is typed in has a name, and is drawn in the app's own type. The platform's text
+ * field is called nothing by itself, and a placeholder is no label: it is named by a label of
+ * its own, or tied to a text that is drawn and read (`accessibilityLabelledBy`, which is how
+ * Android is told a filled field's label). And as every text has it, the system's own scaling
+ * is off: the field's type is already the reader's size (ui/Field.tsx).
+ */
+export const fieldsNamed: Rule = (tree) =>
+  elementsOf(tree)
+    .filter((element) => element.type === 'TextInput' && !isHiddenFromAccessibility(element))
+    .flatMap((element) => {
+      const props = propsOf(element)
+      const tied = text(props.accessibilityLabelledBy)
+      const called =
+        (text(props['aria-label']) || text(props.accessibilityLabel)) !== '' ||
+        (tied !== '' && drawnText(element, tied))
+      return [
+        ...(called ? [] : [failure('field', element, 'is a field with no name')]),
+        ...(props.allowFontScaling === false
+          ? []
+          : [failure('field', element, 'is a field whose text the system scales a second time')]),
+      ]
+    })
+
 /** Every rule, in the order a failure is listed. A group that adds a rule adds it here. */
 export const rules: readonly Rule[] = [
   named,
@@ -294,6 +328,7 @@ export const rules: readonly Rule[] = [
   picturesNamedOrHidden,
   statusSaidThreeWays,
   ownText,
+  fieldsNamed,
 ]
 
 /** Everything in `tree` that breaks a rule. */
