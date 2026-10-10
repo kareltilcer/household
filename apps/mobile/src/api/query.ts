@@ -1,0 +1,104 @@
+// The app's data layer for what is read from the server and is no part of a replica (06-clients,
+// PL-4): TanStack Query, by the web's rules. The account, the member's households and a
+// household's own answer are read through it, and kept on the device for a day (keep.ts), so
+// that the app opens with no connection at the household it was last in. A module's own rows
+// are the replica's, which is the offline surface: nothing here stands in for it.
+import type { ApiProblem, UnreadableProblem } from '@household/api'
+import {
+  defaultShouldDehydrateQuery,
+  focusManager,
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  type Query,
+} from '@tanstack/react-query'
+import { AppState } from 'react-native'
+import { isRetryable, problemIn } from './problem.ts'
+
+/** How long a read is kept on this device, and so how long the cache holds one unobserved. */
+export const cacheMaxAge = 24 * 60 * 60 * 1000
+
+export interface QueryClientOptions {
+  /**
+   * Told of every problem document a query or a mutation met: where the app reacts to what is
+   * about the app and not about one screen, a `400 update_required`.
+   */
+  readonly onProblem?: (problem: ApiProblem | UnreadableProblem) => void
+}
+
+export function createQueryClient({ onProblem }: QueryClientOptions = {}): QueryClient {
+  const report = (error: unknown) => {
+    const problem = problemIn(error)
+    if (problem !== undefined) onProblem?.(problem)
+  }
+  return new QueryClient({
+    queryCache: new QueryCache({ onError: report }),
+    mutationCache: new MutationCache({ onError: report }),
+    defaultOptions: {
+      queries: {
+        gcTime: cacheMaxAge,
+        // A problem the server stated is its answer, and only one that may yet clear is asked
+        // again: its own failure, and a first attempt still running. A request that got no
+        // answer is not: the transport has already resent it twice (retryingFetch), and asked
+        // twice more from here it would be nine requests, and several seconds, before a member
+        // is told the server cannot be reached. Nor is an error that is no answer at all.
+        retry: (failures, error) =>
+          failures < 2 && problemIn(error) !== undefined && isRetryable(error),
+      },
+      // An unsafe request is resent by the transport alone, with the key it left with.
+      mutations: { retry: false },
+    },
+  })
+}
+
+/**
+ * How a write that must not wait is asked: at once, connection or none (D-164). Left to itself
+ * the query client holds a write made with no connection and sends it when one returns, and a
+ * sign-in completed, a device registered for notifications or a household's setting changed
+ * minutes after the press, with nothing on the screen to say it is still to come and nobody
+ * there to see it, is not what was asked for. Asked at once it fails at once, and its screen
+ * says that the server could not be reached and nothing was changed. Every write that is no part
+ * of a replica is asked so, and a test holds each to it (askedNow.test.ts): a write that should
+ * wait for a connection is the replica's, which keeps it across a restart and says that it
+ * waits.
+ */
+export const askedNow = { networkMode: 'always' } as const
+
+/** What a query may say of itself, beside its key (TanStack's `meta`). */
+export interface QueryNotes extends Record<string, unknown> {
+  /**
+   * `false` keeps its answer out of what this device keeps: what nobody reads again, or what is
+   * of no use later, a link to a file that is good for minutes. Such a query names its own
+   * `gcTime` too, where it should not stay in memory for the day.
+   */
+  readonly persist?: boolean
+}
+
+declare module '@tanstack/react-query' {
+  interface Register {
+    queryMeta: QueryNotes
+  }
+}
+
+/** Whether a query's answer is written to this device: one that succeeded, unless it says no. */
+export function isKept(query: Query): boolean {
+  return defaultShouldDehydrateQuery(query) && query.meta?.persist !== false
+}
+
+/**
+ * Tells the query client when the app is looked at again: on a device that is the app coming to
+ * the front, which is when a read that has gone stale is asked for again, the account's every
+ * time. It answers with what stops it.
+ *
+ * Whether the device has a connection is not told here. Told nothing, the query client takes
+ * it that there is one, so a read asked without is sent and fails where the web's would wait:
+ * to a member the two are one, the read could not be made (household/data.ts, `readState`).
+ */
+export function watchFocus(): () => void {
+  const subscription = AppState.addEventListener('change', (status) => {
+    focusManager.setFocused(status === 'active')
+  })
+  return () => {
+    subscription.remove()
+  }
+}

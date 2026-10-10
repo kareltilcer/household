@@ -1,8 +1,60 @@
-// Placeholder: where the app opens. No screen of its own: it leads to sign-in or to a household, and draws a wait or an unread meanwhile.
-// Owner: the session group (S1). The core (plan item 28, brief C1) left an empty screen here so that the route
-// exists and the table of routes holds; its owner replaces this file whole and keeps its name.
+// Where the app opens. It has no screen of its own: a visitor is sent to sign in, and a member to
+// their household, the one they were last in on this device where they are still in it, or else
+// their first. The household is in the address from then on (D-4). What it draws meanwhile is a
+// wait, and what could not be read where nothing is kept of it.
+//
+// A household the platform suspended is passed over while the member is in one that opens
+// (D-162, household/data.ts). A member who is in none is told so and no more: making a
+// household and answering an invitation are plan item 29's screens.
+import { Redirect } from 'expo-router'
+import { opening, useHouseholds, useLastHousehold } from '../household/data.ts'
+import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { useSession, type Me } from '../session/context.ts'
+import { Unreachable, Unread, Waiting } from '../session/guards.tsx'
 import { Screen } from '../ui/Screen.tsx'
+import { inHousehold, paths } from './paths.ts'
+
+function MemberHome({ me }: { readonly me: Me }) {
+  const t = useTranslate()
+  const households = useHouseholds()
+  const last = useLastHousehold(me.id)
+  if (households.data === undefined) {
+    // A read that waits for a connection could not be made, to a member: it is said so.
+    if (!households.isError && households.fetchStatus !== 'paused') return <Waiting />
+    return (
+      <Unread
+        title={t('shell.households.error.title')}
+        body={t('shell.households.error.body')}
+        retry={() => {
+          void households.refetch()
+        }}
+      />
+    )
+  }
+  // Where they were last is the device's to say, and it is asked before the app opens anywhere.
+  if (!last.read) return <Waiting />
+  const open = opening(households.data, last.household)
+  if (open === undefined) {
+    // In none, as this device last read it, which may be a day old: somebody who has joined one
+    // since, by an invitation answered elsewhere, is not told they are in none. The list is
+    // being read again, and where the app opens waits for it. With no connection nothing is
+    // being read, and what was kept is what there is to go by.
+    if (households.isFetching) return <Waiting />
+    return <Screen title={t('account.households.empty.title')} testID="home:none" />
+  }
+  return <Redirect href={inHousehold.home(open.id)} />
+}
 
 export function Home() {
-  return <Screen testID="route:home" />
+  const { state, retry } = useSession()
+  switch (state.status) {
+    case 'member':
+      return <MemberHome me={state.me} />
+    case 'visitor':
+      return <Redirect href={paths.signIn.path} />
+    case 'unknown':
+      return <Waiting />
+    case 'unreachable':
+      return <Unreachable retry={retry} />
+  }
 }
