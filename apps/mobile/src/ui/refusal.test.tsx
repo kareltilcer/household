@@ -92,19 +92,20 @@ describe('a refused form', () => {
     await render(<Form />)
     const first = {}
     await act(() => {
-      refuse({ refused: first, marks: ['third'] })
+      refuse({ refused: first, marks: ['second', 'third'] })
     })
-    expect(focused(spy)).toEqual([sample.third])
-    // Drawn again for the same refusal, a field's error put right as it is typed in: the focus
-    // stays where its member has it.
+    expect(focused(spy)).toEqual([sample.second])
+    // Drawn again for the same refusal, one field's error put right as it is typed in and
+    // another's still standing: the focus stays where its member has it, and is not sent on to
+    // the next marked field.
     await act(() => {
-      refuse({ refused: first, marks: [] })
+      refuse({ refused: first, marks: ['third'] })
     })
     expect(spy).toHaveBeenCalledTimes(1)
     await act(() => {
       refuse({ refused: {}, marks: ['first', 'third'] })
     })
-    expect(focused(spy)).toEqual([sample.third, sample.first])
+    expect(focused(spy)).toEqual([sample.second, sample.first])
   })
 
   it('moves nothing for a refusal that marks no field: its banner is announced where it is drawn', async () => {
