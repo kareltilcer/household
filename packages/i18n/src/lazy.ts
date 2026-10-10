@@ -16,7 +16,15 @@ import type { CatalogPart, Part } from './parts.ts'
 export { locales, sourceLocale, type Catalog, type Locale, type MessageKey } from './locales.ts'
 export type { MessageArgs } from './generated/messages.ts'
 export { matchLocale } from './locale.ts'
-export { clientParts, partOf, parts, serverSegments, type CatalogPart, type Part } from './parts.ts'
+export {
+  clientParts,
+  deviceSegments,
+  partOf,
+  parts,
+  serverSegments,
+  type CatalogPart,
+  type Part,
+} from './parts.ts'
 export { pseudoLocale, pseudolocalize } from './pseudo.ts'
 export { catalogLocale, translatorOver, type DisplayLocale, type Translate } from './translate.ts'
 
