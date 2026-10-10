@@ -161,24 +161,35 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
     openedId === null ? undefined : entries?.find((entry) => entry.mutation_id === openedId)
 
   // The row a sheet was opened from is gone once its answer is given, and the focus the sheet
-  // gave back went with it: it is put on the list's own place, where the next row is. Not
-  // before the sheet has gone from the screen, which would take the focus back from under it;
-  // and by asking the replica whether the answer still waits, since the list drawn here hears
-  // of it a moment later on one platform and a moment sooner on the other.
+  // gave back went with it: it is put on the list's own place, where the next row is, or,
+  // where that was the last row, on the sentence that says nothing waits. Not before the sheet
+  // has gone from the screen, which would take the focus back from under it; by asking the
+  // replica whether the answer still waits, since a sheet closed with no answer leaves its row
+  // and the focus on it; and not before the list drawn here has heard, which it does a moment
+  // later on one platform and a moment sooner on the other: the place the focus would be put
+  // on is what stands once the row has left.
   const place = useRef<View>(null)
   const answering = useRef<string | null>(null)
+  const [answered, setAnswered] = useState<string | null>(null)
   const closed = () => {
     const id = answering.current
     answering.current = null
     if (id === null || replica === undefined) return
     replica.inbox().then(
       (waiting) => {
-        if (!waiting.some((entry) => entry.mutation_id === id)) focusOn(place)
+        if (!waiting.some((entry) => entry.mutation_id === id)) setAnswered(id)
       },
       // A replica that was closed meanwhile has no list to put the focus on.
       () => undefined,
     )
   }
+  useEffect(() => {
+    if (answered === null || entries === undefined) return
+    if (entries.some((entry) => entry.mutation_id === answered)) return
+    // Once: a row the replica sends by itself later takes the focus from nowhere.
+    setAnswered(null)
+    focusOn(place)
+  }, [answered, entries])
 
   const empty = !online
     ? t('sync.inbox.empty_offline')
@@ -222,7 +233,12 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
             ]}
           />
         }
-        empty={<EmptyState sentence={empty} />}
+        empty={
+          // The list's place once its last row has been answered: one thing to a screen reader.
+          <View ref={place} accessible testID="sync:inbox:empty">
+            <EmptyState sentence={empty} />
+          </View>
+        }
         texts={{
           error: {
             title: t('sync.inbox.error.title'),
@@ -252,7 +268,7 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
         {() => (
           <>
             {/* One thing to a screen reader, and where its focus is put once a row has left. */}
-            <View ref={place} accessible>
+            <View ref={place} accessible testID="sync:inbox:lead">
               <Text color="text-muted">{t('device.sync.inbox.lead')}</Text>
             </View>
             {/* Said where there is something to decide: a household that does not write reads. */}

@@ -281,8 +281,114 @@ describe('the inbox', () => {
     })
     // One thing to a screen reader, which says what the list under it is.
     const place = focus.mock.lastCall?.[0].current
-    expect({ ...place?.props }).toMatchObject({ accessible: true })
-    expect(screen.getByText(en['device.sync.inbox.lead'])).toBeOnTheScreen()
+    expect({ ...place?.props }).toMatchObject({ accessible: true, testID: 'sync:inbox:lead' })
+    expect(screen.getByTestId('sync:inbox:lead')).toHaveTextContent(en['device.sync.inbox.lead'], {
+      exact: true,
+    })
+  })
+
+  // With the last row answered there is no list: its place is the sentence that says so.
+  it('puts the focus on the sentence that nothing waits once the last row has been answered', async () => {
+    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    await inbox({ entries: [conflict] })
+    await userEvent.press(screen.getByTestId('status:conflict'))
+    const { onDismiss } = screen.getByTestId('resolver').props as {
+      readonly onDismiss: () => void
+    }
+    focus.mockClear()
+    await userEvent.press(screen.getByTestId('resolver:keep-theirs'))
+    await waitFor(() => {
+      expect(screen.getByTestId('empty-state')).toBeOnTheScreen()
+    })
+    // The sheet is still leaving.
+    expect(focus).not.toHaveBeenCalled()
+    await act(async () => {
+      onDismiss()
+      await Promise.resolve()
+    })
+    await waitFor(() => {
+      expect(focus).toHaveBeenCalledTimes(1)
+    })
+    // One thing to a screen reader, which reads the sentence as the focus lands on it.
+    expect({ ...focus.mock.lastCall?.[0].current?.props }).toMatchObject({
+      accessible: true,
+      testID: 'sync:inbox:empty',
+    })
+    expect(screen.getByTestId('sync:inbox:empty')).toHaveTextContent(en['sync.inbox.empty'], {
+      exact: true,
+    })
+    expectAccessible()
+  })
+
+  // A device's own watch of its inbox is a moment behind the answer, and on the platform that
+  // says a sheet has gone as it closes the sheet is gone first.
+  it('waits for the list to have heard before it puts the focus, where the sheet had gone first', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android')
+    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    const stand = standIn({ registry, entries: [conflict] })
+    // What the replica says of its inbox after the first time, held until the test lets it by.
+    let tell: () => void = () => undefined
+    const behind: StandIn = {
+      ...stand,
+      opened: {
+        ...stand.opened,
+        watchInbox: (listener) => {
+          let first = true
+          return stand.opened.watchInbox((entries) => {
+            if (first) listener(entries)
+            else
+              tell = () => {
+                listener(entries)
+              }
+            first = false
+          })
+        },
+      },
+    }
+    await render(<Over stand={behind} />)
+    await userEvent.press(screen.getByTestId('status:conflict'))
+    focus.mockClear()
+    await userEvent.press(screen.getByTestId('resolver:keep-theirs'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('resolver:surface')).toBeNull()
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // The sheet has gone, the answer was given, and the row is still drawn: the lead above it
+    // is about to leave with it, and is no place to put the focus on.
+    expect(rows()).toHaveLength(1)
+    expect(focus).not.toHaveBeenCalled()
+    await act(() => {
+      tell()
+    })
+    await waitFor(() => {
+      expect(focus).toHaveBeenCalledTimes(1)
+    })
+    expect({ ...focus.mock.lastCall?.[0].current?.props }).toMatchObject({
+      testID: 'sync:inbox:empty',
+    })
+  })
+
+  it('takes the focus once for an answered row: a row the replica sends by itself later takes none', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android')
+    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    const stand = await inbox({
+      entries: [conflict, rejectionWith('forbidden'), rejectionWith('not_found')],
+    })
+    await userEvent.press(within(row('March electricity')).getByTestId('status:conflict'))
+    focus.mockClear()
+    await userEvent.press(screen.getByTestId('resolver:keep-theirs'))
+    await waitFor(() => {
+      expect(focus).toHaveBeenCalledTimes(1)
+    })
+    await act(async () => {
+      await stand.opened.replica.discard(rejectionWith('forbidden').mutation_id)
+    })
+    await waitFor(() => {
+      expect(rows()).toHaveLength(1)
+    })
+    expect(focus).toHaveBeenCalledTimes(1)
   })
 
   it('leaves the focus where the sheet gave it back when it was closed with no answer', async () => {
