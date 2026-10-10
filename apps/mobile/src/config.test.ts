@@ -5,12 +5,15 @@ import { fonts } from '@household/tokens'
 import config, { type Extra } from '../app.config.ts'
 import { version } from '../package.json'
 import { clientName } from './api/client.ts'
+import { storeUrl } from './update/store.ts'
 
 const told = [
   'APP_VARIANT',
   'HOUSEHOLD_MOBILE_API_URL',
   'HOUSEHOLD_MOBILE_LINK_HOST',
   'EAS_PROJECT_ID',
+  'HOUSEHOLD_MOBILE_STORE_URL_IOS',
+  'HOUSEHOLD_MOBILE_STORE_URL_ANDROID',
 ]
 
 /** The configuration a tool reads when the environment names `settings` and nothing else. */
@@ -108,5 +111,26 @@ describe('app.config.ts', () => {
       linkHost: 'app.household.test',
       eas: { projectId: '0198c0de-0000-7000-8000-000000000000' },
     })
+  })
+
+  // *Please update* opens the app's page in the store of the device it runs on, and draws no
+  // control where the build names none: what the screen reads is what this gives (src/update).
+  it('names the app’s page in a store for each platform it is told one for, and none by default', () => {
+    expect(storeUrl(configured().extra, 'ios')).toBeUndefined()
+    expect(storeUrl(configured().extra, 'android')).toBeUndefined()
+
+    const android = 'https://play.google.com/store/apps/details?id=com.kareltilcer.household'
+    const one = configured({ HOUSEHOLD_MOBILE_STORE_URL_ANDROID: android })
+    expect(one.extra).toEqual({ variant: 'development', storeUrl: { android } })
+    expect(storeUrl(one.extra, 'android')).toBe(android)
+    expect(storeUrl(one.extra, 'ios')).toBeUndefined()
+
+    const ios = 'https://apps.apple.com/app/id0000000000'
+    const both = configured({
+      HOUSEHOLD_MOBILE_STORE_URL_IOS: ios,
+      HOUSEHOLD_MOBILE_STORE_URL_ANDROID: android,
+    })
+    expect((both.extra as Extra).storeUrl).toEqual({ ios, android })
+    expect(storeUrl(both.extra, 'ios')).toBe(ios)
   })
 })

@@ -15,6 +15,9 @@
 //   on iOS and an app link on Android. No host, no associated domain: the scheme alone opens it.
 // - `EAS_PROJECT_ID`: the EAS project a build belongs to and a push token is asked for. None
 //   exists yet, and nothing here needs one to bundle or to prebuild.
+// - `HOUSEHOLD_MOBILE_STORE_URL_IOS`, `HOUSEHOLD_MOBILE_STORE_URL_ANDROID`: the app's own page
+//   in each platform's store, which *please update* opens (src/update). A build told neither
+//   draws that screen with no control: the app is in no store yet.
 //
 // Expo's loader compiles this file alone, so it imports nothing of the workspace's: what it
 // shares with the app is held to it by a test (src/config.test.ts).
@@ -96,6 +99,8 @@ export interface Extra {
   readonly apiUrl?: string
   readonly linkHost?: string
   readonly eas?: { readonly projectId: string }
+  /** The app's page in a store, for each platform the build was told one for. */
+  readonly storeUrl?: { readonly ios?: string; readonly android?: string }
 }
 
 function setting(value: string | undefined): string | undefined {
@@ -108,6 +113,8 @@ export default function config(): ExpoConfig {
   const apiUrl = setting(process.env.HOUSEHOLD_MOBILE_API_URL)
   const linkHost = setting(process.env.HOUSEHOLD_MOBILE_LINK_HOST)
   const projectId = setting(process.env.EAS_PROJECT_ID)
+  const iosStore = setting(process.env.HOUSEHOLD_MOBILE_STORE_URL_IOS)
+  const androidStore = setting(process.env.HOUSEHOLD_MOBILE_STORE_URL_ANDROID)
   if (variant !== 'development' && apiUrl === undefined) {
     throw new Error(`HOUSEHOLD_MOBILE_API_URL is not set, and a ${variant} build has no default`)
   }
@@ -118,6 +125,14 @@ export default function config(): ExpoConfig {
     ...(apiUrl === undefined ? {} : { apiUrl }),
     ...(linkHost === undefined ? {} : { linkHost }),
     ...(projectId === undefined ? {} : { eas: { projectId } }),
+    ...(iosStore === undefined && androidStore === undefined
+      ? {}
+      : {
+          storeUrl: {
+            ...(iosStore === undefined ? {} : { ios: iosStore }),
+            ...(androidStore === undefined ? {} : { android: androidStore }),
+          },
+        }),
   }
 
   return {
