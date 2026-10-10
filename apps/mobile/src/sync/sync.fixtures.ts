@@ -235,14 +235,19 @@ export const replacingMerge = answer({
   answeredAt: '2026-03-04T07:25:00Z',
 })
 
-/** Everything at once, oldest first, as an inbox lists it. */
+/**
+ * Everything at once, oldest first, as an inbox lists it. Sorted where it is made, a list
+ * nobody else holds, and by `sort`: the engine on a device has no `toSorted`, which Node has,
+ * and this file is read as the sync dev screen is opened, so the screen never came
+ * (e2e/engine.test.ts).
+ */
 export const everything: readonly RecordedOutcome[] = [
   conflictWithDeletion,
   conflict,
   ...rejections,
   overriddenMerge,
   replacingMerge,
-].toSorted((a, b) => a.answered_at.localeCompare(b.answered_at))
+].sort((a, b) => a.answered_at.localeCompare(b.answered_at))
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
