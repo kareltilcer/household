@@ -28,3 +28,22 @@ packages/*/src/generated/
 # Turborepo and test output
 .turbo/
 coverage/
+
+# Expo: its cache, and the native projects a prebuild generates from app.config.ts, which are
+# never committed (the app is built from its configuration, PL-5)
+.expo/
+apps/mobile/android/
+apps/mobile/ios/
+
+# What a native build makes, and what signs or configures one: none of it belongs in a history
+# that gitleaks reads whole
+*.apk
+*.aab
+*.ipa
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist

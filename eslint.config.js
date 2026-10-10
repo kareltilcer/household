@@ -493,8 +493,20 @@ export default defineConfig(
   // design/ holds the clickable ES5 prototype, a reference that never ships; Prettier and
   // CodeQL skip it too. An editor that lints it with this file would flag every script.
   // src/generated/ is written by each package's `gen` script from a committed source (the
-  // contract, the catalogs) and is never edited by hand.
-  globalIgnores(['**/dist/', '**/coverage/', '**/.turbo/', 'design/', 'packages/*/src/generated/']),
+  // contract, the catalogs) and is never edited by hand. And what Expo's tools write into the
+  // mobile app's folder is theirs: the cache beside a bundle (.expo/) and the two native
+  // projects a prebuild generates from app.config.ts, which no one edits and no one commits. A
+  // bundle it exports is in dist/, as every package's build is.
+  globalIgnores([
+    '**/dist/',
+    '**/coverage/',
+    '**/.turbo/',
+    'design/',
+    'packages/*/src/generated/',
+    'apps/mobile/.expo/',
+    'apps/mobile/android/',
+    'apps/mobile/ios/',
+  ]),
   {
     linterOptions: {
       // A suppression that suppresses nothing is an error, so a rule cannot be switched

@@ -1,0 +1,35 @@
+{
+  "cli": {
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "node": "24.21.0",
+      "pnpm": "12.6.0"
+    },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "development"
+      }
+    },
+    "staging": {
+      "extends": "base",
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "staging",
+        "HOUSEHOLD_MOBILE_API_URL": "https://api.staging.household.example/api/v1"
+      }
+    },
+    "production": {
+      "extends": "base",
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "production",
+        "HOUSEHOLD_MOBILE_API_URL": "https://api.household.example/api/v1"
+      }
+    }
+  }
+}
