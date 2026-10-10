@@ -1,0 +1,45 @@
+# The shell around a real household, and the way out of it (04-navigation; PRD 02 FR-ID3):
+# signed in, the bar's Today and More each open their place, and More's sign-out leads back to
+# sign-in, the server told first. With no build of a module's screens yet the bar is three
+# slots, and More lists the rows that are no module's.
+#
+# A flow of its own, apart from stack.yaml: that one's sign-in must outlast the flows, for
+# the job to find its device on the server after them.
+appId: com.kareltilcer.household.dev
+tags:
+  - stack
+---
+- launchApp:
+    clearState: true
+- runFlow: parts/sign-in.yaml
+- extendedWaitUntil:
+    visible:
+      id: 'route:household'
+    timeout: 60000
+- tapOn:
+    id: 'tab-bar:today'
+- extendedWaitUntil:
+    visible:
+      id: 'route:today'
+    timeout: 15000
+- assertVisible:
+    id: 'tab-bar:today'
+    selected: true
+- tapOn:
+    id: 'tab-bar:more'
+- extendedWaitUntil:
+    visible:
+      id: 'route:more'
+    timeout: 15000
+- takeScreenshot: more
+- scrollUntilVisible:
+    element:
+      id: 'more:sign-out'
+    direction: DOWN
+- tapOn:
+    id: 'more:sign-out'
+# Signed out at the server, and then on the device: the app is a visitor's again.
+- extendedWaitUntil:
+    visible:
+      id: 'route:signIn'
+    timeout: 60000

@@ -1,18 +1,22 @@
-# A member's replica on a device, against the real stack (D-93, D-105): signed in, the shell
-# is drawn; the replica of the household opens and receives; with the connection taken away
-# the offline bar comes, and goes when it is back. After it the job asks the server for the
-# household's clients, which must name `mobile/<version>` for this replica (D-178: the
-# replica's own requests named the app): `pnpm run e2e:stack clients`, a step the job gains
-# when this flow is taken.
+# A member's replica on a device, against the real stack (D-93, D-105, D-178): signed in, the
+# replica of their household opens, the sync service's stream comes up and the device says it
+# receives, with nothing waiting in its inbox; asked to, it reports itself, which is what the
+# household's clients are read off; and with the connection taken away the device says it is
+# offline and the household's own bar comes, and goes when the connection is back. It is what
+# nothing on a developer's machine can show: none opens the replica's SQLite.
 #
-# Written ahead of the shell and of the replica's screens. `route:household` and `offline-bar`
-# are drawn today; the two lines of the dev screen for sync are names of this flow's own until
-# its screens are merged and say theirs. `awaiting` keeps it out of every run until then.
+# It reads the live section of the dev screen for sync (src/dev/sync), which says each of
+# these in a line whose `testID` is how it stands, narrowed to that section so that the only
+# offline bar on the screen is the real replica's. Reached by a link, which Android opens for a
+# member as for a visitor. After the flows the job asks the server for the household's
+# clients, which must name `mobile/<version>` for this replica (`pnpm run e2e:stack clients`).
 appId: com.kareltilcer.household.dev
 tags:
-  - awaiting
   - stack
   - android
+# Whatever became of the flow, the emulator has its connection back for the flows after it.
+onFlowComplete:
+  - setAirplaneMode: disabled
 ---
 - launchApp:
     clearState: true
@@ -21,35 +25,70 @@ tags:
     visible:
       id: 'route:household'
     timeout: 60000
-# The dev screen for sync says of the open household's replica that it is open, and that it
-# receives. On Android a link reaches it, signed in as signed out.
 - openLink: household-dev:///dev/sync
 - extendedWaitUntil:
     visible:
       id: 'household-dev-screen:sync'
     timeout: 30000
-- extendedWaitUntil:
-    visible:
-      id: 'sync:replica:open'
+- scrollUntilVisible:
+    element:
+      id: 'sync:only:live'
+    direction: DOWN
+- tapOn:
+    id: 'sync:only:live'
+# The lines are there once the member's households are read, the device's own word among
+# them. Scrolled to once: what follows is waited for where it stands, and not scrolled after,
+# since a line that has not come yet is no place to scroll to.
+- scrollUntilVisible:
+    element:
+      id: 'sync:live:online:yes'
+    direction: DOWN
     timeout: 60000
+# The replica is opened, and then it receives: its stream is up and has not failed.
 - extendedWaitUntil:
     visible:
-      id: 'sync:replica:receiving'
+      id: 'sync:live:replica:open'
     timeout: 120000
-# Back in the household, and the connection taken away: the bar says so, and stays.
-- openLink: household-dev:///households/${HOUSEHOLD}
 - extendedWaitUntil:
     visible:
-      id: 'route:household'
+      id: 'sync:live:receiving:yes'
+    timeout: 120000
+- extendedWaitUntil:
+    visible:
+      id: 'sync:live:inbox:0'
     timeout: 30000
+- takeScreenshot: replica-receiving
+# It reports itself once it has caught up, and the server takes the report: while everything
+# is reachable, so that what the job asks the server afterwards does not hang on the
+# emulator's way back from no connection.
+- scrollUntilVisible:
+    element:
+      id: 'sync:live:report'
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: 'sync:live:report'
+- extendedWaitUntil:
+    visible:
+      id: 'sync:live:reported:sent'
+    timeout: 120000
+# The connection taken away: the device says so, and the household's bar comes.
 - setAirplaneMode: enabled
+- extendedWaitUntil:
+    visible:
+      id: 'sync:live:online:no'
+    timeout: 60000
 - extendedWaitUntil:
     visible:
       id: 'offline-bar'
     timeout: 60000
-- takeScreenshot: offline
-# And back: the bar goes.
+- takeScreenshot: replica-offline
+# And back: the device says it is online, and the bar goes.
 - setAirplaneMode: disabled
+- extendedWaitUntil:
+    visible:
+      id: 'sync:live:online:yes'
+    timeout: 120000
 - extendedWaitUntil:
     notVisible:
       id: 'offline-bar'

@@ -426,12 +426,19 @@ jobs:
       - name: The account lists the device that signed in
         if: ${{ success() && steps.member.outcome == 'success' }}
         run: pnpm --filter @household/mobile run e2e:stack devices
-      # The list read above, held to what each permission is for (apps/mobile/build/asked.ts):
-      # one a new library brings fails here until it is given its reason or removed in
-      # app.config.ts, which is the decision FR-PR1 asks for. The build is the development
-      # variant, which the flows above ran with everything nothing uses already removed; a
-      # staging or a production build asks for the same less the one a debug build draws its
-      # errors by, which the configuration's own test holds
+      # And what it kept of the replica a flow opened there and had report itself
+      # (e2e/flows/replica.yaml): the household's clients, which an owner reads off its
+      # replicas' reports, name the app and its version, as the replica's own requests said
+      # them (D-178).
+      - name: The household lists the replica that reported
+        if: ${{ success() && steps.member.outcome == 'success' }}
+        run: pnpm --filter @household/mobile run e2e:stack clients
+      # The permissions read off the package above, held to what each is for
+      # (apps/mobile/build/asked.ts): one a new library brings fails here until it is given
+      # its reason or removed in app.config.ts, which is the decision FR-PR1 asks for. The
+      # build is the development variant, which the flows above ran with everything nothing
+      # uses already removed; a staging or a production build asks for the same less the one a
+      # debug build draws its errors by, which the configuration's own test holds
       # (apps/mobile/build/permissions.test.ts). After the flows, so that a list that moved
       # does not hide whether the app still runs.
       - name: Every permission the build asks for has its reason

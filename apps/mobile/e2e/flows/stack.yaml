@@ -1,11 +1,12 @@
 # A device signs in against the real server, and stays signed in (PRD 02 FR-ID3): the member
-# e2e/stack.ts made signs in through the dev form, the app opens at their household, and
-# started again it opens there still, by the tokens it kept and with nothing typed. The API is
-# the run's own, where an emulator finds the machine it runs on, and the app's development
-# build asks it there (src/api/client.ts).
+# e2e/stack.ts made signs in through the dev form, the app opens at their household, in the
+# household's frame and over its tab bar, and started again it opens there still, by the
+# tokens it kept and with nothing typed. The API is the run's own, where an emulator finds the
+# machine it runs on, and the app's development build asks it there (src/api/client.ts).
 #
-# After the flows the job asks the server for the member's devices, which must name this
-# installation with the app's version (`pnpm run e2e:stack devices`).
+# It does not sign out: after the flows the job asks the server for the member's devices,
+# which must name an installation with the app's version (`pnpm run e2e:stack devices`), and
+# a device that signed out is listed no more. Signing out is sign-out.yaml's.
 appId: com.kareltilcer.household.dev
 tags:
   - stack
@@ -13,11 +14,15 @@ tags:
 - launchApp:
     clearState: true
 - runFlow: parts/sign-in.yaml
-# Where the app opens for a member of one household: that household.
+# Where the app opens for a member of one household: that household, in its frame.
 - extendedWaitUntil:
     visible:
       id: 'route:household'
     timeout: 60000
+- assertVisible:
+    id: 'household-frame'
+- assertVisible:
+    id: 'tab-bar'
 - takeScreenshot: household
 # Stopped and started again, with what it kept.
 - launchApp
@@ -25,3 +30,5 @@ tags:
     visible:
       id: 'route:household'
     timeout: 60000
+- assertVisible:
+    id: 'tab-bar'
