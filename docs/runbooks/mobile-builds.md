@@ -232,7 +232,9 @@ to the server, and `stack`'s sign-in is still there for the job to find whatever
 
 **The way to a dev screen is by presses, and not by a link.** The sign-in screen has a control that
 leads to the dev sign-in form (`sign-in:dev`), and every dev screen leads to their index
-(`dev-screen:index`): `flows/parts/dev.yaml` walks that, and each flow runs it. iOS asks before it
+(`dev-screen:index`): `flows/parts/dev.yaml` walks that, and each flow runs it. A member reaches
+the index from More (`more:dev`), which is how `replica` comes to the screen for sync with the
+household's own screens, and the replica they opened, still beneath it. iOS asks before it
 opens a link that came from outside the app, *Open in "Household Dev"?*, in a dialog of the
 system's own, which carries no `testID` and stays over the app until it is answered: on the first
 run it stayed over every flow after the one that sent a link. Answering it by its words is what
@@ -248,6 +250,35 @@ whether the app drew something else or something stood over it. Xcode's whole ou
 where the build is what failed. It is kept of a run that passed as well: a screenshot is the one
 place the app's faces and its two themes are seen. A simulator's log is the whole simulator's,
 some hundred megabytes a flow before it is packed.
+
+**Where a failure's screenshot is the device's own home screen, the app is gone**: a release
+build has no screen to draw an error on, and an exception nothing caught ends it.
+
+- **What it was** is in the flow's folder. On Android, `logs/crash-report.txt`, which Maestro
+  cuts out of the device's log; on iOS, the lines of `logs/device-simulator.log` that say
+  `Unhandled JS Exception`. The stack names no file: each frame is a place in the bytecode,
+  `anonymous@1:725253`. The Android job keeps the map from those places to the sources where
+  something failed (`index.android.bundle.map`, beside the report), and Metro's own tool reads
+  the two together, at the version of Metro the lockfile holds:
+
+  ```bash
+  pnpm dlx metro-symbolicate@0.84.6 index.android.bundle.map < debug/resolvers/logs/crash-report.txt
+  ```
+
+  The first frame of the fifth run's was `/apps/mobile/src/sync/sync.fixtures.ts:245`. iOS's
+  bundle is another, with places of its own, and its map is not kept: what ends the app in
+  its JavaScript ends it on both, so read it on Android.
+- **Jest's engine is not a device's.** That crash was `[…].toSorted(…)`: Node has it, the
+  Hermes a build compiles for has not, and every test passed. `apps/mobile/e2e/engine.test.ts`
+  reads what a device's bundle is made of for the built-ins Hermes is known to lack, and says
+  where its list comes from; a new one met on a device is added there.
+- **On iOS a crash takes Maestro's driver with it, a minute or two later.** Xcode hands the
+  driver the crash's report when it is written, in the middle of whichever flow is running by
+  then, and the driver falls over reading it (`NSInvalidArgumentException` in
+  `xctest_runner_*.log`): that flow and every one after fail with
+  `maestro.DeviceUnreachableException`, for no reason of their own. `e2e/run.ts` reads the
+  report for them and runs them again, once, in a session of their own, whose report and
+  folders are under `again/`. The flow that crashed is not run again, and fails the job.
 
 ### On a developer's machine
 
