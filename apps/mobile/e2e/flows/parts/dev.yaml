@@ -1,0 +1,28 @@
+# The way to the dev screens' index, for a flow that started the app with nobody signed in:
+# the sign-in screen's own control leads to the dev sign-in form, and every dev screen leads
+# to their index (src/dev/DevScreen.tsx). A flow runs it and then presses the screen it came
+# for. No flow of its own: Maestro runs the files of the folder above this one.
+#
+# By presses and not by a link, on both platforms: iOS asks before it opens a link that came
+# from outside the app, in a dialog of its own (*Open in "Household Dev"?*) which stays over
+# the app, and over every flow after it, until somebody answers. It carries no `testID`, and
+# answering it by its words is what Maestro's own issue 2610 reports failing on a hosted
+# runner. That a link opens the app at its address is link.yaml's, on Android.
+appId: com.kareltilcer.household.dev
+---
+- extendedWaitUntil:
+    visible:
+      id: 'route:signIn'
+    timeout: 60000
+- tapOn:
+    id: 'sign-in:dev'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:sign-in'
+    timeout: 30000
+- tapOn:
+    id: 'dev-screen:index'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:index'
+    timeout: 30000

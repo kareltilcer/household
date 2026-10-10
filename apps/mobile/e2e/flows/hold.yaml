@@ -1,0 +1,65 @@
+# Hold to complete, by a finger on a device (02-components §4.1): a touch let go early
+# completes nothing and says so, and a touch held for the whole two seconds completes. The
+# control says where it stands in its `testID`, `hold:<phase>`; the ring it draws is hidden
+# from assistive technology, which is the tree Maestro reads, and is the same square, so a
+# touch on the control lands on the ring. The exact two seconds, the finger that slides off
+# and the completion with no hold for a screen reader are its own Jest tests.
+#
+# The first row of the three on the page of primitives, in the light half
+# (src/dev/primitives/status): its completion is answered at once.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devPrimitives'
+    direction: DOWN
+- tapOn:
+    id: 'dev-index:devPrimitives'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:primitives'
+    timeout: 30000
+# Far down the page: under every control and most of the status section.
+- scrollUntilVisible:
+    element:
+      id: 'hold:idle'
+      childOf:
+        id: 'status-section:hold:light'
+    direction: DOWN
+    timeout: 240000
+# Let go early: nothing is completed, and the control says to keep holding.
+- tapOn:
+    id: 'hold:idle'
+    childOf:
+      id: 'status-section:hold:light'
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: 'hold:released'
+      childOf:
+        id: 'status-section:hold:light'
+    timeout: 10000
+# It says so for as long as a toast stays, five seconds, and is then to be held again.
+- extendedWaitUntil:
+    notVisible:
+      id: 'hold:released'
+      childOf:
+        id: 'status-section:hold:light'
+    timeout: 20000
+# Held: Maestro's long press is about three seconds, and the hold is two.
+- longPressOn:
+    id: 'hold:idle'
+    childOf:
+      id: 'status-section:hold:light'
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: 'hold:completed'
+      childOf:
+        id: 'status-section:hold:light'
+    timeout: 15000
+- takeScreenshot: hold-completed

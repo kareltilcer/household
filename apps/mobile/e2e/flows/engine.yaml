@@ -2,22 +2,14 @@
 # checks on the engine it is drawn on, Hermes itself, and says how each came out in a `testID`
 # (src/dev/engine). Jest runs the same checks on Node, over an `Intl` cut down to Hermes's.
 #
-# It is reached as a link reaches the app, by the development variant's scheme, and then by the
-# dev screens' own index: both are in the end-to-end build alone.
+# It starts with nobody signed in, which is where the way to the dev screens begins
+# (parts/dev.yaml): they are in the end-to-end build alone.
 appId: com.kareltilcer.household.dev
 ---
-- launchApp
-# Whichever screen the app opens at: a link sent before the first one is drawn may arrive
-# before anything listens for it.
-- extendedWaitUntil:
-    visible:
-      id: 'route:.*'
-    timeout: 60000
-- openLink: household-dev:///dev
-- extendedWaitUntil:
-    visible:
-      id: 'household-dev-screen:index'
-    timeout: 30000
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
 - scrollUntilVisible:
     element:
       id: 'dev-index:devEngine'

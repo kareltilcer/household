@@ -1,10 +1,11 @@
 // The dev screens the core draws: the engine's lines, the toolbar, the index and the page of
 // primitives. Their words are fixtures (D-154), so a test reads them by `testID`, as the
 // end-to-end flow does.
-import { describe, expect, it } from '@jest/globals'
+import { describe, expect, it, jest } from '@jest/globals'
 import { pseudolocalize } from '@household/i18n'
 import { fonts } from '@household/tokens'
 import { screen, userEvent } from '@testing-library/react-native'
+import { router } from 'expo-router'
 import { paths } from '../app/paths.ts'
 import { expectAccessible } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
@@ -108,6 +109,25 @@ describe('the dev toolbar', () => {
     expect(scale).toHaveTextContent('Text: 200')
     expect(high()).toBe(88)
     expectAccessible(screen.root, { scale: 2 })
+  })
+})
+
+describe('a dev screen', () => {
+  it('leads to the index of them at a press, by a `testID` and with no address to type', async () => {
+    const push = jest.spyOn(router, 'push').mockImplementation(() => undefined)
+    await render(<Engine checks={[]} />)
+    const index = screen.getByTestId('dev-screen:index')
+    // Its name is the address it leads to, which is data.
+    expect(index).toHaveTextContent(paths.dev.path)
+    await userEvent.press(index)
+    expect(push.mock.calls).toEqual([[paths.dev.path]])
+    expectAccessible()
+    push.mockRestore()
+  })
+
+  it('offers no way to the index on the index itself', async () => {
+    await render(<DevIndex />)
+    expect(screen.queryByTestId('dev-screen:index')).toBeNull()
   })
 })
 

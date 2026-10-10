@@ -14,8 +14,12 @@ const run: Run = {
 
 describe('a run of the flows', () => {
   it('leaves out what is written ahead of its screens, and what needs a stack it has not', () => {
-    expect(leftOut({ stack: false })).toEqual(['awaiting', 'stack'])
-    expect(leftOut({ stack: true })).toEqual(['awaiting'])
+    expect(leftOut({ platform: 'android', stack: false })).toEqual(['awaiting', 'stack'])
+    expect(leftOut({ platform: 'android', stack: true })).toEqual(['awaiting'])
+  })
+
+  it('leaves out on iOS what only Android lets a flow do', () => {
+    expect(leftOut({ platform: 'ios', stack: false })).toEqual(['awaiting', 'stack', 'android'])
   })
 
   it('asks Maestro for every flow of the folder but those, on the platform it names', () => {
@@ -31,11 +35,10 @@ describe('a run of the flows', () => {
     expect(asked[asked.indexOf('--device') + 1]).toBe('A1B2')
   })
 
-  it('keeps the report, the logs and the screenshots under one folder', () => {
+  it('keeps the report and everything a flow left under one folder', () => {
     const asked = test(run)
     expect(asked[asked.indexOf('--output') + 1]).toBe(join('out', 'report.xml'))
     expect(asked[asked.indexOf('--debug-output') + 1]).toBe(join('out', 'debug'))
-    expect(asked[asked.indexOf('--test-output-dir') + 1]).toBe(join('out', 'kept'))
     expect(asked).toContain('--flatten-debug-output')
   })
 

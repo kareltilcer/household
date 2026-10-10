@@ -4,15 +4,17 @@
 // the dev screens in it (`EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS=1`), which is what the flows walk:
 // docs/runbooks/mobile-builds.md says how CI makes it and how a developer does.
 //
-// It builds nothing and starts no device: it runs the flows, keeps what the device logged
-// meanwhile, and leaves everything under dist/e2e, which CI keeps as an artifact. Where more
-// than one device is up, `HOUSEHOLD_E2E_DEVICE` names the one: a simulator's id, an emulator's
-// serial. `--stack` says the API and the sync service are up and the environment names a
-// member to sign in as (e2e/stack.ts), which only CI's Android job can say.
-import { spawn, spawnSync } from 'node:child_process'
-import { closeSync, mkdirSync, openSync, readFileSync, rmSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { platforms, test, type Platform } from './maestro.ts'
+// It builds nothing and starts no device: it runs the flows and leaves what they left under
+// dist/e2e, which CI keeps as an artifact. Maestro keeps the device's own log beside each
+// flow, so nothing here follows it. Where more than one device is up, `HOUSEHOLD_E2E_DEVICE`
+// names the one: a simulator's id, an emulator's serial. `--stack` says the API and the sync
+// service are up and the environment names a member to sign in as (e2e/stack.ts), which only
+// CI's Android job can say.
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { app, setting, version } from './app.ts'
+import { platforms, test } from './maestro.ts'
 
 const [named, ...flags] = process.argv.slice(2)
 const platform = platforms.find((known) => known === named)
@@ -21,29 +23,9 @@ if (platform === undefined) {
   process.exit(2)
 }
 const stack = flags.includes('--stack')
-
-/** apps/mobile: pnpm runs the script in it. */
-const app = resolve('.')
 const output = join(app, 'dist', 'e2e')
 
-/** One of the settings the run is told through the environment, or undefined for none. */
-function setting(name: string): string | undefined {
-  const value = process.env[name]
-  return value === undefined || value === '' ? undefined : value
-}
-
-/** The app's own version, which the engine screen shows after `mobile/` (src/api/client.ts). */
-function version(): string {
-  const manifest: unknown = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8'))
-  const found =
-    typeof manifest === 'object' && manifest !== null && 'version' in manifest
-      ? manifest.version
-      : undefined
-  if (typeof found !== 'string') throw new Error('package.json names no version')
-  return found
-}
-
-/** The member the stack's flow signs in as, whom e2e/stack.ts made and the environment names. */
+/** The member the stack's flows sign in as, whom e2e/stack.ts made and the environment names. */
 function member(): Record<string, string> {
   const told = {
     EMAIL: setting('HOUSEHOLD_E2E_EMAIL'),
@@ -60,41 +42,9 @@ function member(): Record<string, string> {
   return Object.fromEntries(entries)
 }
 
-/**
- * What follows the device's log as the flows run: the emulator's own, or the simulator's lines
- * of this app, whose process is named for it in every variant (app.config.ts).
- */
-function following(on: Platform, device: string | undefined): [string, string[]] {
-  return on === 'android'
-    ? ['adb', [...(device === undefined ? [] : ['-s', device]), 'logcat', '-v', 'time']]
-    : [
-        'xcrun',
-        [
-          'simctl',
-          'spawn',
-          device ?? 'booted',
-          'log',
-          'stream',
-          '--style',
-          'compact',
-          '--predicate',
-          'processImagePath CONTAINS "Household"',
-        ],
-      ]
-}
-
 const device = setting('HOUSEHOLD_E2E_DEVICE')
 rmSync(output, { recursive: true, force: true })
 mkdirSync(output, { recursive: true })
-
-// The log is written by its own process straight to the file, so it is kept while this one
-// waits on Maestro, and it is a help to whoever reads a failure, never a reason for one.
-const log = openSync(join(output, 'device.log'), 'w')
-const [command, watching] = following(platform, device)
-const follower = spawn(command, watching, { stdio: ['ignore', log, log] })
-follower.on('error', (error) => {
-  console.error(`e2e: the device's log is not kept: ${error.message}`)
-})
 
 const ran = spawnSync(
   'maestro',
@@ -108,9 +58,6 @@ const ran = spawnSync(
   }),
   { stdio: 'inherit' },
 )
-
-follower.kill()
-closeSync(log)
 
 if (ran.error !== undefined) {
   console.error(

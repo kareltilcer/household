@@ -5,19 +5,21 @@
 # can show. What a sheet does with the focus and with what is behind it is its own Jest test;
 # this reads that the native half of each is there.
 #
-# Written ahead of the controls, against the names their notes give for the light half of the
-# page: `awaiting` keeps it out of every run until the controls are merged and the tag is
-# taken off, which is also when the names are first held to the sources.
+# The names are the controls' own, of the light half of their section
+# (src/dev/primitives/controls): `controls:light:<what>`, and what a sheet or a dialog draws
+# under its own name, `:surface` and `:close` (src/ui/Dialog.tsx).
 appId: com.kareltilcer.household.dev
-tags:
-  - awaiting
 ---
-- launchApp
-- extendedWaitUntil:
-    visible:
-      id: 'route:.*'
-    timeout: 60000
-- openLink: household-dev:///dev/primitives
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devPrimitives'
+    direction: DOWN
+- tapOn:
+    id: 'dev-index:devPrimitives'
 - extendedWaitUntil:
     visible:
       id: 'household-dev-screen:primitives'
@@ -27,7 +29,7 @@ tags:
     element:
       id: 'controls:light:sheet:open'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
 - tapOn:
     id: 'controls:light:sheet:open'
 - extendedWaitUntil:

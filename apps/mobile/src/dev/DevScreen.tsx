@@ -1,7 +1,17 @@
 // What every dev screen stands in: the screen itself, its title, the dev toolbar, and the marker
 // in its `testID`, which is how the end-to-end flow knows a dev screen is open and how the check
 // of a production export knows that none is in it (marker.ts).
+//
+// And, on every dev screen but the index, the way to the index. A dev screen is reached from
+// the sign-in screen's own control, which leads to one of them, and from there this leads to
+// the rest: by a press, with no address to type. A link would do it too, but iOS asks before
+// it opens one that came from outside the app (*Open in "Household Dev"?*), in a dialog of its
+// own that no flow can find by a `testID`; so the flows walk here (e2e/flows/parts/dev.yaml),
+// and so does a developer with a build on a phone. Its name is its address, which is data.
+import { router } from 'expo-router'
 import type { ReactNode } from 'react'
+import { paths } from '../app/paths.ts'
+import { Button } from '../ui/Button.tsx'
 import { Screen } from '../ui/Screen.tsx'
 import { DevToolbar } from './DevToolbar.tsx'
 import { devMarker, type DevPage } from './marker.ts'
@@ -17,6 +27,17 @@ export function DevScreen({ page, title, children }: DevScreenProps) {
   return (
     <Screen title={title} testID={`${devMarker}:${page}`}>
       <DevToolbar />
+      {page === 'index' ? null : (
+        <Button
+          variant="ghost"
+          testID="dev-screen:index"
+          onPress={() => {
+            router.push(paths.dev.path)
+          }}
+        >
+          {paths.dev.path}
+        </Button>
+      )}
       {children}
     </Screen>
   )

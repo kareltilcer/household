@@ -15,8 +15,10 @@ export type Platform = (typeof platforms)[number]
  *   when its names are first held to the sources.
  * - `stack`: needs the API, the sync service and a member to sign in as. Only a run that says
  *   it has them takes it: CI's Android job, which has Docker; a macOS runner has none.
+ * - `android`: does what only Android lets a flow do. A link is the one such thing: iOS asks
+ *   before it opens one that came from outside the app, in a dialog no `testID` finds.
  */
-export const tags = ['awaiting', 'stack'] as const
+export const tags = ['awaiting', 'stack', 'android'] as const
 
 export type Tag = (typeof tags)[number]
 
@@ -35,8 +37,13 @@ export interface Run {
 }
 
 /** The tags a run leaves out. */
-export function leftOut(run: Pick<Run, 'stack'>): Tag[] {
-  return tags.filter((tag) => tag !== 'stack' || !run.stack)
+export function leftOut(run: Pick<Run, 'platform' | 'stack'>): Tag[] {
+  const taken: Readonly<Record<Tag, boolean>> = {
+    awaiting: false,
+    stack: run.stack,
+    android: run.platform === 'android',
+  }
+  return tags.filter((tag) => !taken[tag])
 }
 
 /** Maestro's arguments for `run`, as `maestro test` of the pinned version takes them. */
@@ -46,8 +53,9 @@ export function test(run: Run): string[] {
     '--platform',
     run.platform,
     ...(run.device === undefined ? [] : ['--device', run.device]),
-    // One file for whoever reads the run on a page, and everything else beside it, flat: a
-    // failure's screenshot and its log are found by name, with no folder named for the minute.
+    // One file for whoever reads the run on a page, and beside it a folder a flow, by the
+    // flow's name and with none named for the minute: the screenshots it took, and of a
+    // failure the screen, the hierarchy Maestro saw and what the device logged meanwhile.
     '--format',
     'junit',
     '--output',
@@ -55,9 +63,6 @@ export function test(run: Run): string[] {
     '--debug-output',
     join(run.output, 'debug'),
     '--flatten-debug-output',
-    // What a flow itself keeps, its `takeScreenshot`s.
-    '--test-output-dir',
-    join(run.output, 'kept'),
     '--exclude-tags',
     leftOut(run).join(','),
     ...Object.entries(run.told).flatMap(([name, value]) => ['-e', `${name}=${value}`]),

@@ -9,15 +9,8 @@ appId: com.kareltilcer.household.dev
 ---
 - launchApp:
     clearState: true
-- extendedWaitUntil:
-    visible:
-      id: 'route:.*'
-    timeout: 60000
-- openLink: household-dev:///dev
-- extendedWaitUntil:
-    visible:
-      id: 'household-dev-screen:index'
-    timeout: 30000
+    clearKeychain: true
+- runFlow: parts/dev.yaml
 # Light is the default, whatever the device prefers.
 - assertVisible:
     id: 'dev-toolbar:theme'
