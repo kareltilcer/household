@@ -124,8 +124,12 @@ async function member(): Promise<void> {
     for (const line of lines) console.log(line)
     return
   }
+  // Not the password: a job's log is public, and every step after this one prints its
+  // environment into it. The runner is told to write the value as stars from here on, before
+  // it is in any step's environment. It is a password to nothing: the account is in the
+  // job's own database, which goes with the runner.
+  console.log(`::add-mask::${password}`)
   appendFileSync(later, `${lines.join('\n')}\n`)
-  // Not the password: a job's log is public, and the environment file is not shown in it.
   console.log(`e2e:stack: made ${email} and the household ${household}`)
 }
 

@@ -15,8 +15,9 @@ export type Platform = (typeof platforms)[number]
  *   when its names are first held to the sources.
  * - `stack`: needs the API, the sync service and a member to sign in as. Only a run that says
  *   it has them takes it: CI's Android job, which has Docker; a macOS runner has none.
- * - `android`: does what only Android lets a flow do. A link is the one such thing: iOS asks
- *   before it opens one that came from outside the app, in a dialog no `testID` finds.
+ * - `android`: does what only Android lets a flow do. A link is one such thing: iOS asks
+ *   before it opens one that came from outside the app, in a dialog no `testID` finds. Taking
+ *   the device's connection away is the other, which Maestro does on Android alone.
  */
 export const tags = ['awaiting', 'stack', 'android'] as const
 
@@ -68,4 +69,39 @@ export function test(run: Run): string[] {
     ...Object.entries(run.told).flatMap(([name, value]) => ['-e', `${name}=${value}`]),
     run.flows,
   ]
+}
+
+/** What a run's report says became of its flows, each by its name. */
+export interface Outcome {
+  /** Every flow that did not pass. */
+  readonly failed: readonly string[]
+  /**
+   * Those of them that failed for no reason of their own: Maestro's driver on the device was
+   * gone, and every flow after says so at its first step.
+   */
+  readonly lost: readonly string[]
+}
+
+/**
+ * Reads Maestro's JUnit report. A flow that the driver's death took says so in its failure,
+ * by the name of Maestro's own exception, and is told apart from one that failed for itself:
+ * an assertion that did not hold, an element that never came.
+ *
+ * The driver dies on iOS when the app under it has crashed: Xcode hands its runner the crash's
+ * report a minute or two later, in the middle of whichever flow is then running, and the
+ * runner falls over reading it (run 38066536920: one crash, in one flow, and the three flows
+ * after it failed with it). Such flows are run again (run.ts), so that one failure is one.
+ */
+export function outcome(report: string): Outcome {
+  const failed: string[] = []
+  const lost: string[] = []
+  for (const [, attributes = '', , body = ''] of report.matchAll(
+    /<testcase\b([^>]*?)(\/>|>([\s\S]*?)<\/testcase>)/g,
+  )) {
+    const name = /\bname="([^"]*)"/.exec(attributes)?.[1]
+    if (name === undefined || !body.includes('<failure')) continue
+    failed.push(name)
+    if (body.includes('DeviceUnreachableException')) lost.push(name)
+  }
+  return { failed, lost }
 }
