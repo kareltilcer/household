@@ -74,10 +74,14 @@ const summary = (household: { id: string; name: string }): HouseholdSummary => (
 const route = `GET /households/${ids.household}`
 type Answer = () => Response | Promise<Response>
 
+/** Every arrangement a screen under the frame was drawn with, the first one first. */
+const handed: unknown[] = []
+
 /** What a screen under the frame is handed: the household's name, and its member's arrangement. */
 function Inside() {
   const household = useHouseholdShown()
   const [arrangement, arrange] = useArrangement()
+  handed.push(arrangement)
   const pinned: Arrangement = { pinned: ['tasks'], order: [], hidden: [] }
   return (
     <View testID="inside">
@@ -134,6 +138,7 @@ let said: jest.SpiedFunction<typeof announcer.announce>
 beforeEach(async () => {
   await AsyncStorage.clear()
   jest.clearAllMocks()
+  handed.length = 0
   resetSwitched()
   mockFront.is = true
   said = jest.spyOn(announcer, 'announce').mockImplementation(() => undefined)
@@ -268,12 +273,53 @@ describe('a household’s frame, once its household is read', () => {
     })
   })
 
-  it('hands down the arrangement this device kept, read before anything of the shell is drawn', async () => {
+  it('hands down the arrangement this device kept', async () => {
     const kept: Arrangement = { pinned: [], order: ['tasks'], hidden: ['shopping'] }
     await AsyncStorage.setItem(arrangementKey(ids.member, ids.household), JSON.stringify(kept))
     await opened(() => json(200, own))
     await drawn()
     expect(screen.getByTestId(`inside:arrangement:${JSON.stringify(kept)}`)).toBeOnTheScreen()
+  })
+
+  // A device's storage answers when it answers: no list is drawn in the product's order for a
+  // moment, or in none, and then in its member's.
+  it('draws nothing of the shell until the device has said how its member arranged the modules', async () => {
+    const kept: Arrangement = { pinned: ['tasks'], order: [], hidden: [] }
+    const key = arrangementKey(ids.member, ids.household)
+    // The device's storage as a test has it, which answers at once: this one question it is
+    // made to answer when the test says.
+    const getItem = jest.mocked(AsyncStorage.getItem)
+    const atOnce = getItem.getMockImplementation() ?? (() => Promise.resolve(null))
+    let answer: (stored: string | null) => void = () => undefined
+    getItem.mockImplementation((asked, ...rest) =>
+      asked === key
+        ? new Promise<string | null>((resolve) => {
+            answer = resolve
+          })
+        : atOnce(asked, ...rest),
+    )
+    try {
+      const api = await opened(() => json(200, own))
+      await waitFor(() => {
+        expect(api.sent(route)).toHaveLength(1)
+      })
+      // The household has been read, and the device has not answered yet.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(screen.getByTestId('waiting')).toBeOnTheScreen()
+      expect(screen.queryByTestId('household-frame')).toBeNull()
+      expect(handed).toEqual([])
+
+      await act(async () => {
+        answer(JSON.stringify(kept))
+        await Promise.resolve()
+      })
+      await drawn()
+      expect(handed[0]).toEqual(kept)
+    } finally {
+      getItem.mockImplementation(atOnce)
+    }
   })
 
   it('keeps a change to the arrangement on this device, for this member and this household', async () => {

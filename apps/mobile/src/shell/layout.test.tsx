@@ -273,33 +273,75 @@ describe('a household’s layout', () => {
     expect(screen.queryByTestId('switched')).toBeNull()
   })
 
-  // The banner's own way back, and the switcher's once there is one: no link, so nothing is said.
-  it('is the other household’s from its first render where the address changes under a layout that stays', async () => {
-    await opened(home)
-    await shows('route:household')
+  // The banner's own way back, and whatever else leads to another household with no link: the
+  // router opens that household on top as well, and nothing is said of it.
+  it('opens another household over the one on screen when its member goes there themselves', async () => {
+    await opened(more)
+    await shows('route:more')
     await goes(inHousehold.today(ids.otherHousehold))
     await waitFor(() => {
       expect(named()).toHaveTextContent(households.other.name)
     })
-    await shows('route:today')
-    await isOpen('today')
-    // Nothing of the household that was open is drawn any more, and no notice of a switch.
-    expect(screen.queryByText(households.own.name)).toBeNull()
     expect(screen.queryByTestId('switched')).toBeNull()
+    // The household that was open is underneath, as it was left, and is gone back to.
+    expect(router.canGoBack()).toBe(true)
+    await act(async () => {
+      router.back()
+      await Promise.resolve()
+    })
+    await waitFor(() => {
+      expect(named()).toHaveTextContent(households.own.name)
+    })
+    expect(screen.getByTestId('route:more')).toBeOnTheScreen()
   })
+
+  /** Says of the bar in front that its slots stand `height` high. */
+  async function stands(height: number): Promise<void> {
+    const front = screen.getAllByTestId('tab-bar:tabs').at(-1)
+    if (front === undefined) throw new Error('no bar is drawn')
+    await fireEvent(front, 'layout', {
+      nativeEvent: { layout: { x: 0, y: 0, width: 390, height } },
+    })
+  }
+
+  /** How far from the foot of the screen a toast is drawn, once signing out has failed. */
+  async function toastStands(): Promise<unknown> {
+    await userEvent.press(screen.getByRole('button', { name: en['shell.sign_out.action'] }))
+    const toast = await waitFor(() => screen.getByTestId('toast'))
+    return StyleSheet.flatten(toast.parent?.props.style as StyleProp<ViewStyle>).paddingBottom
+  }
+
+  const refused = () => Promise.reject(new Error('no answer'))
 
   // A toast stands above the bar, whose height is the bar's to say: it grows with the text.
   it('tells the toasts how high its bar stands', async () => {
-    const signOut = () => Promise.reject(new Error('no answer'))
-    await opened(more, { signOut })
+    await opened(more, { signOut: refused })
     await shows('route:more')
-    await fireEvent(screen.getByTestId('tab-bar:tabs'), 'layout', {
-      nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 61 } },
-    })
-    await userEvent.press(screen.getByRole('button', { name: en['shell.sign_out.action'] }))
-    const toast = await waitFor(() => screen.getByTestId('toast'))
-    const region = StyleSheet.flatten(toast.parent?.props.style as StyleProp<ViewStyle>)
+    await stands(61)
     // The toasts' own room, and the bar's 61 under it.
-    expect(region.paddingBottom).toBe(16 + 61)
+    expect(await toastStands()).toBe(16 + 61)
+  })
+
+  // Two households' bars are drawn at once, one under the other: the toasts are told by one.
+  it('keeps the toasts above the bar in front when another household was opened over it and left', async () => {
+    await opened(more, { signOut: refused })
+    await shows('route:more')
+    await stands(61)
+    await act(async () => {
+      router.push(inHousehold.today(ids.otherHousehold))
+      await Promise.resolve()
+    })
+    await waitFor(() => {
+      expect(named()).toHaveTextContent(households.other.name)
+    })
+    await stands(80)
+    await act(async () => {
+      router.back()
+      await Promise.resolve()
+    })
+    await waitFor(() => {
+      expect(named()).toHaveTextContent(households.own.name)
+    })
+    expect(await toastStands()).toBe(16 + 61)
   })
 })

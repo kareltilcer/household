@@ -73,12 +73,13 @@ function Glyph({ slot, size }: { readonly slot: Destination; readonly size: numb
     case 'more':
       return <BaseIcon name="more-horizontal" size={size} />
     case 'add':
-      // The one filled glyph of the bar: Add is an action, and is drawn as one.
+      // The one filled glyph of the bar: Add is an action, and is drawn as one. Its ground is
+      // the bar's size in both layouts, with the list's glyph in it and room around that.
       return (
         <View
           style={{
-            width: size * textScale,
-            height: size * textScale,
+            width: glyphSize.bar * textScale,
+            height: glyphSize.bar * textScale,
             alignItems: 'center',
             justifyContent: 'center',
             borderRadius: theme.radii['radius-pill'],
