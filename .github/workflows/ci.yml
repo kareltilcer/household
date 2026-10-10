@@ -444,11 +444,24 @@ jobs:
       - name: Every permission the build asks for has its reason
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: node apps/mobile/build/apk.ts "$RUNNER_TEMP/permissions.txt"
+      # The sync service's among them: it is started under a profile of its own, and what it
+      # says of a replica that connected, or of one it turned away, is said nowhere else.
       - name: The services' logs
         if: failure()
         run: |
-          docker compose logs --tail 200
+          docker compose --profile sync logs --tail 200
           cat "$RUNNER_TEMP/api.log" || true
+      # What a crash on the device is read by. A release build's stack names no file: each
+      # frame is a place in the bytecode, `anonymous@1:725253`, and this is the map from those
+      # places to the sources, which Gradle wrote as it made the bundle. Kept where something
+      # failed, beside the flow's own `crash-report.txt`
+      # (docs/runbooks/mobile-builds.md says how the two are read together).
+      - name: Keep the map from the bundle to the sources
+        if: ${{ failure() && steps.build.outcome == 'success' }}
+        run: |
+          mkdir -p apps/mobile/dist/e2e
+          cp apps/mobile/android/app/build/generated/sourcemaps/react/release/index.android.bundle.map \
+            apps/mobile/dist/e2e/ || true
       # Maestro's report and, flow by flow, the screenshots it took, what the device logged
       # and of a failure the screen and the hierarchy Maestro saw. Kept of a run that passed
       # too: a screenshot is the one place the app's faces and its two themes are seen.
