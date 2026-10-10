@@ -9,12 +9,14 @@ import { useState } from 'react'
 import { inHousehold } from '../app/paths.ts'
 import { answering, json, problem, testClient } from '../api/testing.ts'
 import type { Household } from '../household/data.ts'
+import type { SessionState } from '../session/context.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { expectAccessible } from '../test/a11y.ts'
 import { households } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Text } from '../ui/Text.tsx'
+import { useOwn } from './household.ts'
 import { changesAtOnce, HouseholdBars } from './HouseholdBars.tsx'
 import { SyncFixture, type Sync } from './ReplicaProvider.tsx'
 import { standIn, type StandIn } from './standIn.ts'
@@ -57,10 +59,13 @@ function Drawn({ stand, first }: { readonly stand: StandIn; readonly first: Stan
     setStands((was) => ({ ...was, ...next }))
   }
   const sync: Sync = { replica: { phase: 'open', ...stand.opened }, ...stands }
+  // What the bars read too: a test waits for it, and then moves what they are drawn by.
+  const read = useOwn(id) !== undefined
   return (
     <SyncFixture value={sync}>
       <HouseholdBars household={id} />
       <Text testID="under">{households.own.name}</Text>
+      {read ? <Text testID="read">{households.own.name}</Text> : null}
     </SyncFixture>
   )
 }
@@ -70,6 +75,8 @@ interface BarsOptions extends Partial<Stands> {
   readonly at?: string
   /** What the server answers for the household. Left out, the household. */
   readonly answer?: () => Response
+  /** Who is signed in. Left out, the fixtures' member. */
+  readonly state?: SessionState
 }
 
 async function bars({
@@ -78,19 +85,22 @@ async function bars({
   writes = true,
   at = inHousehold.home(id),
   answer,
+  state,
 }: BarsOptions = {}) {
   mockAt.path = at
   const stand = standIn({ registry })
   const api = answering({ [`GET /households/${id}`]: answer ?? (() => json(200, home(writes))) })
   await render(
-    <SessionFixture api={testClient(api.transport)}>
+    <SessionFixture api={testClient(api.transport)} {...(state === undefined ? {} : { state })}>
       <Drawn stand={stand} first={{ online, receiving }} />
     </SessionFixture>,
   )
-  // Whatever stands there, the household has been read by then.
-  await waitFor(() => {
-    expect(api.asked).toHaveLength(1)
-  })
+  // Whatever stands there from here on, the household had been read first, where it can be.
+  if (answer === undefined && state === undefined) {
+    await waitFor(() => {
+      expect(screen.getByTestId('read')).toBeOnTheScreen()
+    })
+  }
   return { stand, api }
 }
 
@@ -175,8 +185,49 @@ describe('the bar above a household’s screens', () => {
   })
 
   it('has no bar of its own for a household that could not be read, or that is not the member’s', async () => {
-    await bars({ online: false, answer: () => problem(404, 'not_found') })
+    const { api } = await bars({ online: false, answer: () => problem(404, 'not_found') })
+    await waitFor(() => {
+      expect(api.asked).toHaveLength(1)
+    })
     expect(bar()).toBeNull()
+  })
+
+  it('has none for anybody who is not signed in, and asks the server nothing for them', async () => {
+    const { api, stand } = await bars({ online: false, state: { status: 'visitor' } })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(bar()).toBeNull()
+    expect(api.asked).toEqual([])
+    expect(stand.asked).toEqual([])
+  })
+
+  it('reads a bar that was there before the household was first drawn in its place too', async () => {
+    const announce = jest.spyOn(announcer, 'announce').mockImplementation(() => undefined)
+    let answer: (response: Response) => void = () => undefined
+    mockAt.path = inHousehold.home(id)
+    const stand = standIn({ registry })
+    const api = answering({
+      [`GET /households/${id}`]: () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve
+        }),
+    })
+    await render(
+      <SessionFixture api={testClient(api.transport)}>
+        <Drawn stand={stand} first={{ online: false, receiving: null }} />
+      </SessionFixture>,
+    )
+    await waitFor(() => {
+      expect(api.asked).toHaveLength(1)
+    })
+    expect(bar()).toBeNull()
+    await act(() => {
+      answer(json(200, home(true)))
+    })
+    await says(en['ui.offline.bar'])
+    // It came with the household, not after it: nothing arrived under the member.
+    expect(announce).not.toHaveBeenCalled()
   })
 })
 

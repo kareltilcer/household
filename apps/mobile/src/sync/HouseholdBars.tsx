@@ -19,9 +19,10 @@
 import { usePathname } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { inHousehold } from '../app/paths.ts'
-import { useHousehold, writes } from '../household/data.ts'
+import { writes } from '../household/data.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { OfflineBar } from '../ui/OfflineBar.tsx'
+import { useOwn } from './household.ts'
 import { useReplica, useSync } from './ReplicaProvider.tsx'
 
 export interface HouseholdBarsProps {
@@ -63,11 +64,11 @@ export function HouseholdBars({ household }: HouseholdBarsProps) {
   const t = useTranslate()
   const { online, receiving } = useSync()
   const replica = useReplica()
-  const read = useHousehold(household)
+  const own = useOwn(household)
   const pathname = usePathname()
-  // Not known until the household is read: a household that could not be read, and an address
-  // that opens none, have no bar of their own.
-  const takesWrites = read.status === 'read' ? writes(read.household) : null
+  // Not known until the household is read as its member's: a household that could not be read,
+  // and an address that opens none, have no bar of their own.
+  const takesWrites = own === undefined ? null : writes(own.household)
   useEffect(() => {
     if (takesWrites === true) replica?.resume()
   }, [replica, takesWrites])

@@ -24,8 +24,8 @@ import {
   type ReactNode,
 } from 'react'
 import { useProblems } from '../api/ApiProvider.tsx'
-import { useHousehold } from '../household/data.ts'
 import { useSession } from '../session/context.ts'
+import { useOwn } from './household.ts'
 import { useOnline } from './online.ts'
 import { openHouseholdReplica, type Opened } from './open.ts'
 
@@ -87,12 +87,12 @@ const opening: ReplicaState = { phase: 'opening' }
 
 export function ReplicaProvider({ household, children, open }: ReplicaProviderProps) {
   const problems = useProblems()
-  const { state: session, credential } = useSession()
+  const { credential } = useSession()
   const online = useOnline()
-  const read = useHousehold(household)
-  const member = session.status === 'member' ? session.me.id.toLowerCase() : null
-  // The member's, by the server's word or by what the device kept of it.
-  const theirs = member !== null && read.status === 'read' ? household.toLowerCase() : null
+  // A member's, of a household that is theirs (household.ts): nothing is opened otherwise.
+  const own = useOwn(household)
+  const member = own?.member ?? null
+  const theirs = own === undefined ? null : household.toLowerCase()
   const of = member === null || theirs === null ? null : `${member}/${theirs}`
 
   const [held, setHeld] = useState<Held | null>(null)

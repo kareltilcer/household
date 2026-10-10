@@ -21,7 +21,7 @@ import { useLocalSearchParams } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
-import { useHousehold, type Household } from '../household/data.ts'
+import type { Household } from '../household/data.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { announce, focusOn } from '../ui/announce.ts'
 import { Button } from '../ui/Button.tsx'
@@ -40,6 +40,7 @@ import {
   type Reading,
   type Words,
 } from './describe.ts'
+import { useOwn } from './household.ts'
 import { KeptLoser, overrode } from './KeptLoser.tsx'
 import { useInbox, useReplica, useSync, type ReplicaState } from './ReplicaProvider.tsx'
 import { Resolver } from './Resolver.tsx'
@@ -308,10 +309,10 @@ function Held({ household }: { readonly household: Household }) {
 export function Inbox() {
   const t = useTranslate()
   const { household } = useLocalSearchParams<{ household: string }>()
-  const held = useHousehold(household)
+  const own = useOwn(household)
   return (
     <Screen testID="route:sync" title={t('sync.inbox.title')}>
-      {held.status === 'read' ? <Held household={held.household} /> : null}
+      {own === undefined ? null : <Held household={own.household} />}
     </Screen>
   )
 }

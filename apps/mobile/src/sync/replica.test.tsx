@@ -5,9 +5,10 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useQueryClient } from '@tanstack/react-query'
 import { act, screen, userEvent, waitFor } from '@testing-library/react-native'
 import { useState } from 'react'
-import { answering, json, problem, testClient } from '../api/testing.ts'
+import { answering, json, problem, testClient, unanswered } from '../api/testing.ts'
 import type { Household } from '../household/data.ts'
 import type { SessionState } from '../session/context.ts'
 import { SessionFixture } from '../session/fixture.tsx'
@@ -143,13 +144,73 @@ describe('a household’s replica', () => {
     expect(opener.mock.calls).toEqual([[ids.member, home.id]])
   })
 
-  it('is opened for nobody but a member', async () => {
-    const { opener, api } = await drawn({ state: { status: 'visitor' } })
+  it('is opened for nobody but a member, and asks the server nothing for anybody else', async () => {
+    for (const status of ['visitor', 'unknown', 'unreachable'] as const) {
+      const { opener, api, view } = await drawn({ state: { status } })
+      // Long enough for a request to have left, had one been made.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      expect([status, api.asked]).toEqual([status, []])
+      expect(opener).not.toHaveBeenCalled()
+      expect(says('phase')).toHaveTextContent('opening', { exact: true })
+      await view.unmount()
+    }
+  })
+
+  it('is opened of a household the device kept where the server cannot be asked, and of none the server says is not theirs', async () => {
+    // Read once, and kept by the query client as the device keeps it; then the server is away,
+    // and then it answers that the household is not the member's any more.
+    let answer: () => Response | Promise<Response> = () => json(200, home)
+    const stand = standIn({ registry })
+    const opener = jest.fn<OpenReplica>(() => Promise.resolve(stand.opened))
+    const api = answering({ [`GET /households/${home.id}`]: () => answer() })
+    function Twice() {
+      const [shown, setShown] = useState(true)
+      const queries = useQueryClient()
+      return (
+        <>
+          {shown ? (
+            <ReplicaProvider household={home.id} open={opener}>
+              <Probe />
+            </ReplicaProvider>
+          ) : null}
+          <Button
+            testID="toggle"
+            onPress={() => {
+              if (!shown) void queries.invalidateQueries()
+              setShown(!shown)
+            }}
+          >
+            {households.own.name}
+          </Button>
+        </>
+      )
+    }
+    await render(
+      <SessionFixture api={testClient(api.transport)}>
+        <Twice />
+      </SessionFixture>,
+    )
+    await comesTo('phase', 'open')
+    await userEvent.press(says('toggle'))
+    answer = unanswered
+    await userEvent.press(says('toggle'))
+    // Asked again and not answered: what was kept says whose it is.
+    await comesTo('phase', 'open')
+    expect(opener).toHaveBeenCalledTimes(2)
+
+    await userEvent.press(says('toggle'))
+    answer = () => problem(404, 'not_found')
+    await userEvent.press(says('toggle'))
+    // A kept answer stands in for a server that cannot be asked, never for one that answered.
     await waitFor(() => {
-      expect(api.sent(`GET /households/${home.id}`)).toHaveLength(1)
+      expect(api.sent(`GET /households/${home.id}`)).toHaveLength(3)
     })
-    expect(opener).not.toHaveBeenCalled()
-    expect(says('phase')).toHaveTextContent('opening', { exact: true })
+    await comesTo('phase', 'opening')
+    await waitFor(() => {
+      expect(stand.asked.filter((asked) => asked === 'close')).toHaveLength(3)
+    })
   })
 
   it('is not opened of a household the server says is not theirs, nor of an address that names none', async () => {
