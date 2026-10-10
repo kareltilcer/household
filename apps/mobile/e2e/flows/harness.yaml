@@ -1,0 +1,46 @@
+# The twelve-state harness opens on a device, and a cell of each kind is there (plan item 28,
+# D-154): a skeleton, the teaching empty state, the body, a message in the body's place, each
+# under the `testID` its cell carries, `<body>:<state>:<theme>`, with the scale held at 200 %.
+# That every one of the 192 cells is drawn as its treatment says, and passes the accessibility
+# rules, is the harness's own Jest test: this reads that the screen draws at all on a device,
+# at twice the text, in both themes.
+#
+# Written ahead of the harness, against the names its cells were promised under: `awaiting`
+# keeps it out of every run until the harness is merged and the tag is taken off.
+appId: com.kareltilcer.household.dev
+tags:
+  - awaiting
+---
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'route:.*'
+    timeout: 60000
+- openLink: household-dev:///dev/harness
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:harness'
+    timeout: 30000
+# The first body, the list's, in the order the states are drawn in (src/ui/states.ts).
+- scrollUntilVisible:
+    element:
+      id: 'list:loading:light'
+    direction: DOWN
+    timeout: 60000
+- scrollUntilVisible:
+    element:
+      id: 'list:empty:light'
+    direction: DOWN
+    timeout: 60000
+- scrollUntilVisible:
+    element:
+      id: 'list:populated:light'
+    direction: DOWN
+    timeout: 60000
+- takeScreenshot: harness-populated
+- scrollUntilVisible:
+    element:
+      id: 'list:error:dark'
+    direction: DOWN
+    timeout: 60000
+- takeScreenshot: harness-error
