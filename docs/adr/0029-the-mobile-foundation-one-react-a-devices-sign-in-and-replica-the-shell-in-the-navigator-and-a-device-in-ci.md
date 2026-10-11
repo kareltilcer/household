@@ -373,7 +373,10 @@ which carries what
 was kept and never the pair. Where the vault would not say what it holds, nothing is removed.
 **And the device's own HTTP cache holds nothing of what the API answers** *(read on both
 platforms; what each cache stores is recalled of OkHttp and of `URLCache`, whose sources are
-not in the repository; run on no device)*. The client that `expo/fetch` asks through keeps a
+not in the repository; run on Android alone, where CI's seventeenth run read the emulator's
+cache after a member's reads and found no file in it but the cache's own journal, an answer
+kept there having been seen on no device; iOS's `URLCache` is read by no run)*. The client
+that `expo/fetch` asks through keeps a
 cache on disk by itself: on Android React Native's OkHttp client, ten megabytes under the
 app's cache directory (`OkHttpClientProvider.kt`, which `ExpoFetchModule.kt` builds its client
 from), and on iOS the default session's shared `URLCache` (`ExpoFetchModule.swift`). Each
@@ -664,7 +667,9 @@ one side and, on Android with three buttons, their band at the other; on a phone
 long a sheet's edge was inside such a side from some 150 % of the text and a toast's a little
 sooner, each as wide as the screen from 180 % and 160 %, and each stood under what is there by
 all but its own padding *(read: the insets are the device's word for what it keeps, and the
-arithmetic is the tokens'; seen on no device)*. The toasts on screen go with their member when a
+arithmetic is the tokens'; seen on no device: CI's seventeenth run turned one on its side under
+each, on both platforms, and took a screenshot of each (`sides`), which nobody has read for an
+edge under what is at a side)*. The toasts on screen go with their member when a
 sign-in ends (`onForget`): one names a row of theirs, and its Undo writes to their replica.
 **While a
 screen reader is on, no toast's dwell runs** (D-188): a toast stays until its Undo or its
@@ -743,7 +748,8 @@ its row (`mark`), a drag that begins on a stepper's count (`stepper`), a stepper
 twice the text (`sheet`), a select's choices opened with a field's keyboard up (`keyboard`), a
 toast with Undo at twice the text (`toast`), a tab bar whose room changes under it
 (`turned`), a sheet, a dialog and a toast with the device turned on its side (`sides`,
-written after the fifth review round and run on no device yet), and what the app's own
+written after the fifth review round, which CI's seventeenth run passed on both platforms),
+and what the app's own
 formatters write on a device's `Intl` (`formats`). That
 last holds each sample to who writes it (`src/dev/engine/checks.ts`): a number, an amount and
 a size, which FormatJS writes on every device, to the very string Node writes, and a date,
@@ -1163,17 +1169,20 @@ platform.
   decides it beside its Appearance screen, where a member first chooses a theme that is not
   the device's. A device that navigates by gestures draws no band, and the buttons are legible
   on it either way.
-- **Mended as read, and proven on no device: on Android a drag that began on a stepper's count
-  did not scroll the page.** Seen as where a flow's scroll stopped, in two flows of the fourth
-  run, the count under the middle of the screen, where iOS scrolled the same page to its end.
+- **Mended as read, and the mend shown on the emulator since: on Android a drag that began on
+  a stepper's count did not scroll the page.** Seen as where a flow's scroll stopped, in two
+  flows of the fourth run, the count under the middle of the screen, where iOS scrolled the
+  same page to its end.
   Read in React Native's source: its Android field shuts its parents out of a touch as the
   finger comes down, and lets them back in at the first move only if it can scroll no way
   itself (`ReactEditText.kt`), and `textAlign: 'center'` is the field's horizontal gravity
   (`ReactTextInputManager.kt`). Recalled of Android's own `TextView`, whose source is not in
   the repository, and run on nothing: a field of one line answers that it can scroll sideways
   unless that gravity is the start's. So the count is no longer centred on Android, and is
-  still on iOS (`src/ui/Stepper.tsx`). The flow line that would show it: a swipe that begins
-  on the count, and an assertion of what is below the fold.
+  still on iOS (`src/ui/Stepper.tsx`). A flow of its own shows it since (`stepper`): a swipe
+  that begins on the count, and the select that stood above it gone by the top, which the
+  emulator passed in the thirteenth run and in the seventeenth. Why the page goes with the
+  finger now is as it was read, and no run says.
 - **Mended twice as read, the first mend seen not to hold and the second seen to: at 200 % on
   a phone a list row's title was left a few letters' width.** Seen in the
   fifth run's `harness-conflicted.png`: a glyph a line, cut at the right. The cause was not
@@ -1408,14 +1417,18 @@ platform.
   decided nowhere: **item 29**, whose screens first draw one on a device, puts it to the
   product's rules, for both clients, a link that answers otherwise being the object store's
   `ResponseCacheControl` to sign.
-- **The emulator's HTTP cache is read by the run, which no run has made yet.** That the API's
-  header keeps it empty is held on the server and read of the two clients. The emulator job
-  asks the device as root for the files under the app's `cache/http-cache`, and fails on one
-  that is not the cache's own journal (`e2e/run.ts`, `--cache`; `e2e/cache.ts`): where the
-  kept read's check leaves it, signed in with its account and household read, and not after
-  the suite, each of whose flows starts the app with nothing kept, the cache among it; and
-  from the script that runs the flows, the emulator being gone with that step. iOS's
-  `URLCache` is read by no run: the simulator's job has no server to be answered by.
+- **The emulator's HTTP cache is read by the run, which CI's seventeenth run (38178021709)
+  was the first to make.** That the API's header keeps it empty is held on the server and
+  read of the two clients. The emulator job asks the device as root for the files under the
+  app's `cache/http-cache`, and fails on one that is not the cache's own journal
+  (`e2e/run.ts`, `--cache`; `e2e/cache.ts`): where the kept read's check leaves it, signed in
+  with its account and household read, and not after the suite, each of whose flows starts
+  the app with nothing kept, the cache among it; and from the script that runs the flows,
+  the emulator being gone with that step. In that run the emulator's `su` answered as root,
+  the folder was where React Native's source says, and it held no file but the cache's own
+  journal: Android's cache with no answer in it is what a device has shown, an answer that an
+  unmended API left there having been seen on none. iOS's `URLCache` is read by no run: the
+  simulator's job has no server to be answered by.
 - `expo-localization`'s `supportedLocales`, by which the operating system offers the app's
   language in its own settings, is not set: the UI language is the member's (PRD 03 §9), and
   whether the system's setting may choose it is undecided.
@@ -1432,10 +1445,12 @@ platform.
   would then follow; `expo/fetch` taking a file by its place; a patched `braces`, `node-forge`
   or a `query-string` that takes the patched `decode-uri-component`; a hosted runner on which
   a flow can answer the system's own dialog.
-- **Run on a device, as of CI's eighth run (38126916736, 2026-10-11, on `cb26a93`), the first
-  to pass whole, every job.** This bullet says what that run and the seven before it showed,
-  and nothing later: it is brought up to date from the last green run before the pull request
-  is marked ready. That run was of the tree before the first review round's fixes (`fc4e1df`).
+- **Run on a device, as of CI's seventeenth run (38178021709, 2026-10-11, on `3cbad74`), the
+  third to pass whole, every job, and the last of the code as it stands.** The sixth review
+  round changed nothing, and nothing was written after that run but words, these and three
+  comments. This bullet says what that run and the sixteen before it showed. The first to
+  pass whole was the eighth (38126916736, 2026-10-11, on `cb26a93`), of the tree before the
+  first review round's fixes (`fc4e1df`).
   What that round changed was first on a device in the tenth run (38131404522, on `d5e4788`),
   which was not green: `harness` failed on both platforms for the list row (above), `sign-out`
   on the emulator for the keyboard that stayed up (the seam item 29 takes, below), and
@@ -1470,9 +1485,25 @@ platform.
   `shell`, with the two panes one tree, `turned`, and `formats` with its date held to its
   fields. On the emulator the two flows of the kept read's check passed and all twenty-one of
   the suite, `turned` and `formats` among them, two of them, `harness` and `link`, at a second
-  asking after the driver had gone, as in the runs before. What the fifth round changed, a
-  sheet and the toasts kept clear of a device's sides, has been on no device: the flow that
-  turns one on its side (`sides`) was written after that run, and has run on none.
+  asking after the driver had gone, as in the runs before. What the fifth review round changed
+  (`b8922e0`), the API's `no-store` and a sheet and the toasts kept clear of a device's sides,
+  was first on a device in the seventeenth run (38178021709, on `3cbad74`), **which passed
+  whole, every job, as the eighth and the sixteenth had**, with the two checks written for
+  that round: the flow that turns a device on its side (`sides`) and the reading of the
+  emulator's HTTP cache. All seventeen of the simulator's flows passed, `sides` among them: a
+  sheet and a dialog turned where they stood and a toast raised on a device on its side, each
+  at twice the text, each found drawn and taken as a screenshot. On the emulator the two flows
+  of the kept read's check passed; then the run read the device's HTTP cache where that check
+  left it, and its log says the folder held no file but the cache's own journal; then all
+  twenty-two of the suite passed, five of them, `replica`, `launch`, `harness`, `link` and
+  `sides`, at a second asking after the driver had gone, as in the runs before. After the
+  flows the server named the device, the emulator on Android at `0.1.0`, and the household's
+  replica as a client of `mobile/0.1.0`, and the built APK asked for eight permissions, each
+  with its reason. What that run did not show of those two mends is said where each is:
+  iOS's `URLCache` is read by nothing, an answer kept in either platform's cache was seen on no
+  device, and the three screenshots have been read by nobody for an edge of a sheet, a dialog
+  or a toast under the camera's housing or the buttons' band, the flow asking only that each
+  is drawn.
   In the eighth run, on the iOS simulator all eight of its
   flows passed: the app opens at sign-in with nothing kept; the engine screen's checks hold on
   Hermes, the vectors' 87 format cases and 8 match cases under the polyfills, the five families
@@ -1555,4 +1586,6 @@ platform.
   tokens say, and Android's weight of a face whose one file is another weight. What CI's
   screenshots did show is above: the band behind Android's navigation buttons, and a list
   row's title at 200 % as it stood before the row was mended, which no screenshot has shown
-  since.
+  since. The three that `sides` takes of a sheet, a dialog and a toast on a device on its
+  side were taken on both platforms in the seventeenth run, and nobody has opened its
+  artifacts to read them for an edge under the camera's housing or the buttons' band.

@@ -261,9 +261,10 @@ any ICU. What a device wrote another way and was let is drawn under the line
   tried on a device: the count is a single line with its text centred, which Android's text
   field takes for one that scrolls sideways, and such a field keeps the touch. If that is it,
   it is a defect of the control and not of the flows, which a member's thumb meets as well: so
-  the count is no longer centred on Android (`apps/mobile/src/ui/Stepper.tsx`), and no flow has
-  swiped from one since. The line that would show it is a swipe that begins on the count, and
-  an assertion of what is below the fold.
+  the count is no longer centred on Android (`apps/mobile/src/ui/Stepper.tsx`), and a flow of
+  its own swipes from one since (`stepper`): a swipe that begins on the count, and the select
+  that stood above it gone by the top, which the emulator passed in CI's thirteenth run and in
+  its seventeenth.
 - **Scrolled to once it is there, and waited for where it stands.** `scrollUntilVisible` swipes
   for as long as it has not found its element, one that has not come yet as one that is further
   down: so it is for a thing that is drawn already. What a screen draws later, a replica opened
@@ -318,7 +319,9 @@ any ICU. What a device wrote another way and was let is drawn under the line
   (`waitForAnimationToEnd`), which a screenshot read for the device's insets needs, are most
   of a toast's five seconds: `sides` turns the device with a dialog up and has the dialog's
   answer raise the toast *(written from the lesson above and from Maestro 2.11.0's source,
-  which has both commands and counts a turned screen in its presses; run on no device yet)*.
+  which has both commands and counts a turned screen in its presses; CI's seventeenth run,
+  38178021709, passed it on both platforms, the toast found on a device on its side, on the
+  emulator at a second asking after the driver had gone)*.
 - **A limit is set by the slowest run seen, with room.** A wait can pass after its limit, where
   the one look under way when the limit came returns with the screen: whichever flow a
   simulator runs first starts the app for the first time, and its wait for sign-in took 73
@@ -354,8 +357,9 @@ there*, which after a member's reads would mean the cache is kept somewhere else
 was read of it. It is no step of the job's after the flows: the emulator goes with the step
 that ran them, and every flow of the suite starts the app with nothing kept, its cache among
 it, so what a device holds after the suite is what its last flow left *(where the folder is
-was read in React Native's source, and what OkHttp writes in it is recalled; that the
-emulator's `su` answers so has been seen in no run yet)*.
+was read in React Native's source, and what OkHttp writes in it is recalled; CI's seventeenth
+run, 38178021709, showed the folder there and the emulator's `su` answering as root, its log
+saying the first of the two: no file but the cache's own journal)*.
 
 **The way to a dev screen is by presses, and not by a link.** The sign-in screen has a control that
 leads to the dev sign-in form (`sign-in:dev`), and every dev screen leads to their index

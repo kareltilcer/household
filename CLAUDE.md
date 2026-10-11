@@ -794,6 +794,9 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   the root router, or a handler that sets the header, is kept on a device past its member's
   sign-out ([D-197](docs/prd/09-decisions.md),
   [ADR 0029](docs/adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md)).
+  CI's Android job reads the emulator's HTTP cache after a member's reads
+  (`apps/mobile/e2e/run.ts --cache`, `apps/mobile/e2e/cache.ts`), so a handler that sets its
+  own header on a route those reads ask fails there, and iOS's `URLCache` is read by no run.
   What the object store answers is not the API's: an object is `private` and its reader's to
   keep ([ADR 0015](docs/adr/0015-files-object-storage-the-meter-and-pictures.md)).
 - **Migrations** are goose, one numbered block per module, forward-only and
