@@ -334,9 +334,13 @@ The query client is one member's at a time: its keys are the web's, without the 
 what it kept is restored under the member whose sign-in is in use, and an account it holds is
 taken for the one signed in only where its id is theirs. Its keep is the app's own, over
 `dehydrate` and `hydrate` (`src/api/keep.ts`), for as long as its member's sign-in and for one
-version of the app: what this build kept is read back however old it is, the account, the
-households and a household's own answer being what the shell and the replica open on with no
-connection (PRD 03 §2.1), and what another build kept is dropped. What outlives a sign-in is
+shape, not for one build: what was kept is read back however old it is and whichever build
+wrote it, the account, the households and a household's own answer being what the shell and
+the replica open on with no connection (PRD 03 §2.1), and what was kept under another number
+(`keptShape`) is dropped. The number is raised only by the pull request after which the app
+can no longer draw what an earlier one kept, and never by a release, in the manner of the
+web's version (D-158): a read is the contract's own answer, which a later build of the same
+major reads as it reads an older server's. What outlives a sign-in is
 the device's and no member's content: the display modes, the language, a member's arrangement
 of their modules (D-155), which household they were last in, their own choice to turn
 notifications off on this device, the installation's own id, and the address of the screen a
@@ -740,7 +744,7 @@ platform.
 | Nothing drawn until the vault is read | The router's stack must be mounted to be told where to go, and the splash is held already for the display's own reads. The session is *unknown* until then |
 | The member in every query key | Every screen's key would carry it, and the web's keys would stop being the app's. The cache is one member's at a time, and emptied when its member is forgotten |
 | TanStack's own persister | Its throttle writes a cache back after it was removed, and its restore rejects where storage refuses: the web's own reasons (ADR 0025) |
-| What another build kept, read back | A build may keep a read otherwise, a key's meaning or an answer's shape, and what is restored is drawn before any answer can correct it, with a connection as without. The first start after an update reads from the server (Consequences) |
+| The kept reads tied to the build that wrote them, as the web's are (D-161), and dropped by the next | What the tie was for is drift: a build may keep a read otherwise than the one before it, a key's meaning or an answer's shape, and what is restored is drawn before any answer can correct it, with a connection as without. But it drops every read at every update, and the first start after one would need a connection: a member whose phone updated the app overnight would open it with none to *could not be read* and no replica, on the client whose promise is that reads work offline (PRD 03 §2.1). A number answers the drift where it arises: `keptShape` is raised by the pull request that changes what is kept, and a read is the contract's own answer, which a later build of the same major reads as it reads an older server's |
 | The query client emptied in the providers' own cleanup | React runs a removed tree's cleanups parent first: the readers let go after the emptying, and each set a day's timer on a read the cache no longer held. It is emptied by a component that stands after everything that reads |
 | The device believed on `isInternetReachable`; *unknown* taken for offline | Where the platform cannot say, NetInfo asks a host of Google's. Every read at a cold start would wait for NetInfo's first answer, and a bar would be drawn for a state nobody reported. A network with nothing behind it is a request's own failure to say |
 | The offline bar hearing the device by a listener of its own, beside the query client's; a lint that keeps NetInfo to one file; the device asked once more as that file loads | Two stores of one fact, and the query client's is the one that holds a read back, so it is the one the bar must not disagree with: the bar reads what the query client was told. The lint's one rule of restricted imports is spent on `Text` for the same files, where a second block would replace it, so a test of the sources names the file. NetInfo hands a new listener the state it has *(read)* |
@@ -882,10 +886,12 @@ platform.
   hand first, or the dev screens' variable is read from the bundle before it
   ([runbook](../runbooks/mobile-builds.md)). Before an export or `expo start` outside turbo,
   `pnpm exec turbo run gen`.
-- What the app kept of what it read is one build's: **the first start after the app was updated
-  reads from the server**. With no connection that start draws *could not be read*, and the
-  replica stays shut, a household being read as its member's before it is opened, until one
-  start has had a connection.
+- What the app kept of what it read is one shape's and no build's: **a pull request that
+  changes what a kept read is, a key's meaning or what is stored of an answer, raises
+  `keptShape`** (`src/api/keep.ts`), and nothing else does. The first start after such a
+  change, and after no other update, reads from the server: with no connection that start
+  draws *could not be read*, and the replica stays shut, a household being read as its
+  member's before it is opened, until one start has had a connection.
 - A region's own conventions are not on a device: `de-AT`, `de-CH` and `en-GB` count and group
   as their language does, where the web formats them with the browser's whole CLDR. What a date
   prints on a device is its operating system's.
