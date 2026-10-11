@@ -1,0 +1,73 @@
+# A sync mark that arrives after its row, at twice the text on a phone (02-components §3, §4.2;
+# src/ui/ListRow.tsx): it goes under the avatar and the words, at the row's own edge, as a
+# row's action does (row.yaml), and is not squeezed in beside them. It is the second case of
+# one defect: a row laid out with one part and given its second later, as a write's mark is.
+#
+# The page of primitives holds such a row (`primitives:only:arriving`,
+# src/dev/primitives/status): a press on its avatar gives it a mark that waits, and the two
+# names read here are the avatar's, which begins the row, and the mark's own. The dev toolbar
+# holds the scale, set before anything is scrolled (toast.yaml says why).
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devPrimitives'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'dev-index:devPrimitives'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:primitives'
+    timeout: 30000
+- tapOn:
+    id: 'dev-toolbar:scale'
+- assertVisible:
+    id: 'dev-toolbar:scale'
+    text: '.*100'
+- tapOn:
+    id: 'dev-toolbar:scale'
+- assertVisible:
+    id: 'dev-toolbar:scale'
+    text: '.*200'
+- scrollUntilVisible:
+    element:
+      id: 'primitives:only:arriving'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- tapOn:
+    id: 'primitives:only:arriving'
+# The light half's row, with no mark yet: laid out as a row of one part.
+- scrollUntilVisible:
+    element:
+      id: 'arriving:whose'
+      index: 0
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- assertNotVisible:
+    id: 'status:pending'
+- tapOn:
+    id: 'arriving:whose'
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: 'status:pending'
+    timeout: 15000
+- takeScreenshot: mark-arrived-200
+# Under, and not beside: a mark that has gone under the words begins where the row does, as
+# the avatar does, and one squeezed in beside them stands to the avatar's right (row.yaml
+# says why this is the line, and `below` only its company).
+- assertNotVisible:
+    id: 'status:pending'
+    rightOf:
+      id: 'arriving:whose'
+- assertVisible:
+    id: 'status:pending'
+    below:
+      id: 'arriving:whose'

@@ -5,8 +5,8 @@
 import { statusGlyphs, type StatusId } from '@household/icons'
 import type { Theme } from '@household/tokens/native'
 import { useState, type ReactNode } from 'react'
-import { View } from 'react-native'
-import { ThemeScope, useTheme } from '../../../display/DisplayProvider.tsx'
+import { Pressable, View } from 'react-native'
+import { ThemeScope, useTarget, useTheme } from '../../../display/DisplayProvider.tsx'
 import { Badge } from '../../../ui/Badge.tsx'
 import { Banner, type BannerTone } from '../../../ui/Banner.tsx'
 import { Button } from '../../../ui/Button.tsx'
@@ -35,6 +35,7 @@ export const statusParts = [
   'hold',
   'parts',
   'metric',
+  'arriving',
 ] as const
 
 type StatusPart = (typeof statusParts)[number]
@@ -130,6 +131,51 @@ function Chore({
         </Row>
       }
     />
+  )
+}
+
+/**
+ * A row with no action, whose sync mark arrives after it at a press, as a write's does: the
+ * row is laid out once with one part and then given a second. At twice the text on a phone the
+ * mark is to go under the avatar and the words as an action does, which the end-to-end flow
+ * reads off two names, the avatar's here and the mark's own (`status:pending`): the row names
+ * neither end itself, and its words are one thing to assistive technology.
+ *
+ * The press is the avatar's: one name is then both what the flow presses and what it measures
+ * the mark from, and nothing else stands in the row's part of the page to be scrolled past.
+ */
+function ArrivingMark() {
+  const sample = useSample()
+  const target = useTarget()
+  const [marked, setMarked] = useState(false)
+  return (
+    <List label={sample('Meters')}>
+      <ListRow
+        title={sample('Electricity, cellar meter')}
+        secondary={sample('18 402 kWh · read 3 March by Petr')}
+        avatar={
+          <Pressable
+            testID="arriving:whose"
+            accessibilityRole="button"
+            onPress={() => {
+              setMarked((was) => !was)
+            }}
+            style={{
+              minWidth: target,
+              minHeight: target,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Avatar initials="P" tone={2} />
+            {/* A word of its own under the face: a control that is a face alone takes its
+                name from the register of such controls, and this is none of them. */}
+            <Text step="caption">{sample(marked ? 'Unmark' : 'Mark')}</Text>
+          </Pressable>
+        }
+        mark={marked ? 'pending' : undefined}
+      />
+    </List>
   )
 }
 
@@ -263,6 +309,10 @@ export function StatusSection() {
           action={<Button>{sample('Add a reading')}</Button>}
         />
         <MetricTile label={sample('Gas, this period')} value="0" unit="m³" />
+      </Part>
+
+      <Part id="arriving" name={sample('A mark that arrives after its row')}>
+        <ArrivingMark />
       </Part>
     </>
   )

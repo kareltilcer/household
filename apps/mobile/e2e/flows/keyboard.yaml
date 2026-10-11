@@ -1,0 +1,67 @@
+# The keyboard and an overlay (src/ui/Select.tsx, src/ui/Menu.tsx): with a field's keyboard up,
+# a press on a select's trigger puts the keyboard away as it opens the choices, which stand
+# in a sheet at the foot of the screen, where the keys were. Kept as a screenshot for a person:
+# no name the two platforms share says whether a keyboard is up.
+#
+# The fields of the page of primitives (`primitives:only:controls`). The password's field is
+# the one just above the first select; it is dragged to the head of the screen, slowly, so
+# that the page stays where the finger leaves it, and both then stand above where the keys
+# come up.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devPrimitives'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'dev-index:devPrimitives'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:primitives'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: 'primitives:only:controls'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'primitives:only:controls'
+- scrollUntilVisible:
+    element:
+      id: 'controls:light:password'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- swipe:
+    from:
+      id: 'controls:light:password'
+    direction: UP
+    duration: 2500
+- assertVisible:
+    id: 'controls:light:password'
+- assertVisible:
+    id: 'controls:light:select'
+# The keyboard up, for the password.
+- tapOn:
+    id: 'controls:light:password'
+- takeScreenshot: keyboard-up
+# And the select's trigger pressed with it up: the choices, and no keys over them.
+- tapOn:
+    id: 'controls:light:select'
+- extendedWaitUntil:
+    visible:
+      id: 'controls:light:select:choices:surface'
+    timeout: 15000
+- takeScreenshot: select-over-keyboard
+# A choice is in reach: pressed, the sheet goes and the field says it.
+- tapOn:
+    id: 'controls:light:select:night'
+- extendedWaitUntil:
+    notVisible:
+      id: 'controls:light:select:choices:surface'
+    timeout: 15000
