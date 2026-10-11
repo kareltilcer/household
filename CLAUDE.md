@@ -435,6 +435,13 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   computes what a `flexBasis` gives once, at the element's first layout, and keeps it
   whatever its style says later (read in Yoga and in React Native's renderer, and seen in
   CI's tenth run, where a row first laid out at a text scale of one broke no line at two).
+  What the rule cannot see is a `flex` given to an element that was first laid out without
+  one: by the same guard it keeps the basis of its earlier layout (read in Yoga, run on no
+  device). An element whose style has `flex` under a condition is keyed by the condition,
+  and so drawn anew when the condition changes, as a slot of the tab bar is between a
+  tablet's bar and a phone's (`src/shell/TabBar.tsx`) and a flow chart's two sides are
+  between one column and two (`src/ui/charts/Charts.tsx`), which `src/shell/TabBar.test.tsx`
+  and `src/ui/data.test.tsx` hold.
   What is said aloud goes through `src/ui/announce.ts`, the one file that calls
   `AccessibilityInfo` ([D-188](docs/prd/09-decisions.md)), and a `Banner` that announces
   says what arrives only where its screen is the one in front (`useInFront`,
@@ -446,9 +453,12 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   offline bar, which keep the language they were last drawn in, and a hold-to-complete,
   which says its phase's change and never its word's, say nothing again for it
   (`src/ui/Banner.tsx`, `src/ui/OfflineBar.tsx`, `src/ui/HoldToComplete.tsx`). What takes a
-  screen's place and opens none says itself as it arrives: *could not be read* (`Unread`,
-  `src/session/guards.tsx`), *please update* (`src/update/UpdateRequired.tsx`) and the
-  screen where a route failed to draw (`RouteError`, `src/app/Root.tsx`). And a guard holds
+  screen's place and opens none says itself as it arrives, once, and not again for a change
+  of language (`useSaidOnArrival`, `src/ui/Screen.tsx`): *could not be read* (`Unread`,
+  `src/session/guards.tsx`), which is said only where the screen it stands in the place of
+  is the one in front, as its guard or the household's frame tells it
+  (`src/shell/HouseholdFrame.tsx`); *please update* (`src/update/UpdateRequired.tsx`); and
+  the screen where a route failed to draw (`RouteError`, `src/app/Root.tsx`). And a guard holds
   a visitor's address only while its own screen is in front (`Signed`,
   `src/session/guards.tsx`): `usePathname()` is the whole app's word, and a household
   mounted underneath another screen would hold that screen's address for its own. A route
@@ -491,7 +501,10 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   push token's note and the replicas' notes do. By that the session removes, as the app
   starts and before anything is read back, what is kept of anybody the vault holds no
   sign-in of (`forgetOthers`): a removal the app was closed in the middle of, a keystore
-  that lost a pair, a restore from a backup. A vault that will not say what it holds rejects
+  that lost a pair, a restore from a backup. The note of a push registration goes with a
+  removal the server took, or with the sign-in (`forgetPush`, `src/push/registration.ts`):
+  removed where the server was not told, a turning-off after a sign-out that failed asked
+  the server nothing. A vault that will not say what it holds rejects
   (`src/session/vault.ts`): who is signed in is then *could not be read*, in the device's
   own words and with *Try again*, which reads the vault again (`Unreachable`,
   `src/session/guards.tsx`), and on its silence nothing is removed and nothing written,
@@ -506,9 +519,14 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   (`src/api/keep.ts`), for one shape (`keptShape`) and not for one build, as the last answer
   each read was given: a re-read that got no answer, or that the server failed, takes
   nothing off the device, only the API's own `404` does (`isKept`, `src/api/query.ts`), and
-  the cache lets go of no read for its age (`gcTime: Infinity`). A rule of the web's that
-  counts on a connection, or on a page being loaded again, is not copied to the device. A
-  write through the query client spreads `askedNow`
+  the cache lets go of no read for its age (`gcTime: Infinity`). The `404` stands from then
+  on: the query client lets go of what such a read held, and removes what is filed under its
+  key (`letGo`, beside it), so a re-read that then fails another way puts nothing back, on the
+  screen or on the device; and `useHousehold` holds the household *not available* until an
+  answer that is no `404` (`src/household/data.ts`). A store that would not be read back as
+  the app started is not written over for the rest of that run (`src/api/keep.ts`). A rule of
+  the web's that counts on a connection, or on a page being loaded again, is not copied to the
+  device. A write through the query client spreads `askedNow`
   (`src/api/query.ts`): `src/api/askedNow.test.ts` reads the sources of the session, push, a
   household's own answer, the links, *please update* and the dev sign-in, and fails a
   `useMutation` there that does not begin with it. `src/api/query.ts` is also the one source
@@ -518,8 +536,9 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   read that waits for a connection never disagree. `src/sync/open.ts` is the one source file
   that imports `@household/sync`'s values, which `src/sync/open.test.ts` holds, and the one
   that opens a replica: once on the device however many hold it, in a file named for its member
-  and its household (`src/sync/databases.ts`), whose removal is noted step by step and taken up
-  again at the next start. `ReplicaProvider` (`src/sync/ReplicaProvider.tsx`) asks it for one
+  and its household (`src/sync/databases.ts`), whose removal is noted as far as it came, once
+  both of its steps were tried, and taken up again at the next start. `ReplicaProvider`
+  (`src/sync/ReplicaProvider.tsx`) asks it for one
   only for a member, of a household read as theirs. A household's screens stand in a tab
   navigator with the guard, the replica's provider and the frame inside its `layout`
   (`src/shell/HouseholdLayout.tsx`), and a household is a route of a stack of its own
@@ -553,7 +572,12 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   whatever field was being typed in, and so does the press that sends the dev sign-in form and
   leads to another screen, while its field is still mounted (`src/dev/signin/index.tsx`): on
   Android a keyboard whose field leaves with its screen stays or goes by a race (CI's tenth
-  run), and stands over the next screen until something puts it away. A word only the mobile app
+  run), and stands over the next screen until something puts it away. A press on a control
+  takes no focus from a field on a device (`keyboardShouldPersistTaps="handled"`,
+  `src/ui/Screen.tsx`, `src/ui/Dialog.tsx`), so a control that shows what is typed apart
+  from its value gives its owner at each key what leaving the field would settle to, as
+  the stepper does (`src/ui/Stepper.tsx`), and never only as the field is left: a form
+  reads its values at the press. A word only the mobile app
   draws is a key under `device.`, which is in no part (`packages/i18n/src/parts.ts`), and the app
   imports `@household/i18n`'s own entry, all five catalogs ([D-195](docs/prd/09-decisions.md)). A
   permission a build asks for is a line of `build/asked.ts` with its reason, and one every build
