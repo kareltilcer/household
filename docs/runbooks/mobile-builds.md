@@ -171,14 +171,21 @@ plutil -p Household.app/Info.plist | grep -E 'UsageDescription|NSBonjourServices
 Nothing on a developer's machine need be able to launch the app, so CI is where it is seen on a
 device. The jobs run only when the app can have changed: `mobile-changes` reads the diff, and the
 three others are skipped unless it names `apps/mobile/`, `packages/`, the lockfile, the workspace's
-settings, the root `package.json` or the workflow itself. The app's unit tests are Jest's and run in
-the `typescript` job, whatever changed.
+settings, the root `package.json` or the workflow itself. They are skipped only where that job
+said so: where it failed and said nothing, they run, so that a filter that broke is not read as
+nothing having changed. The app's unit tests are Jest's and run in the `typescript` job, whatever
+changed.
 
 | Job | Runner | What it does | The first run took |
 |---|---|---|---|
 | `mobile` | Linux | `export` and `check`: the production bundles of both platforms, under their budget, with no dev screen and no stand-in | 1 min |
 | `mobile-android` | Linux, KVM | writes the Android project, builds a release APK for `x86_64`, starts the development services and the API, makes a member, boots an emulator at API 29, runs the flows, asks the server for the member's devices and for the household's clients, and holds the build's permissions to their reasons | 13 min: the build 9, with nothing cached; the services and the API under one; the emulator's boot and three flows two |
 | `mobile-ios` | `macos-26` | writes the iOS project, installs the pods, builds a release app for a simulator of its own, runs the flows, and reads the built `Info.plist` | the pods 1 min, the build 8, Maestro's driver and the app's first start 1 |
+
+What a build downloads, Gradle's dependencies and CocoaPods', is restored at the job's start and
+kept in a step of its own as soon as the build, or the pods' installation, has passed, whatever
+the flows come to after it: the one action that does both keeps nothing of a job that failed,
+and a run of failing flows downloaded everything each time.
 
 **The build the flows walk** is the development variant, as a release build with its JavaScript in
 it, made with `EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS=1`: the dev screens are in it, which is what a
@@ -193,16 +200,17 @@ job of its own.
 | Flow | Reads | Runs on |
 |---|---|---|
 | `launch` | with nobody signed in, the app opens at sign-in | both |
-| `engine` | the engine screen's checks all hold on Hermes itself: the i18n vectors, the fonts, the random source, the client's name | both |
+| `engine` | the engine screen's checks all hold on Hermes itself: the i18n vectors, the fonts, the random source, the client's name, and the built-ins as `src/dev/engine/builtins.ts` lists them, none of what it says a device lacks and all of what it says one has | both |
 | `theme` | the theme changes at a press | both |
-| `harness` | a cell of each kind of the twelve-state harness, at 200 % text, in both themes | both |
-| `primitives` | a sheet opens and closes; a menu's item opens a confirmation | both |
+| `harness` | a cell of each kind of the twelve-state harness, at 200 % text, in both themes; a row's action under its avatar and words, and not beside them; the row in conflict whole in a screenshot | both |
+| `primitives` | a sheet opens and closes; a menu's item opens a confirmation; a toast with Undo at 200 % text, in a screenshot; a drag that begins on a stepper's count takes the page with it | both |
 | `hold` | hold to complete: let go early, and held | both |
 | `shell` | a tab bar's slot opens its place and says so, Add is a sheet over it; a module is hidden from its row's menu; one pane at a phone's width and two at a tablet's; *not available* leads home | both |
 | `resolvers` | a change that was not accepted is given up: its sheet, the confirmation inside it, both gone and a toast | both |
 | `link` | a link opens the app at its address | Android |
 | `stack` | a member signs in against the real server, in their household's frame over its tab bar, and is signed in still after a restart. The job then asks the server for the account's devices (`e2e:stack devices`) | Android, with the stack |
 | `sign-out` | the bar's Today and More each open their place, and More's sign-out leads back to sign-in | Android, with the stack |
+| `held` | a link into a household, opened with nobody signed in, is held, and signing in through the dev form leads to it: the household's More | Android, with the stack |
 | `replica` | the member's replica opens and receives, with nothing in its inbox, and reports itself; with the connection taken away the device says so and the household's bar comes, and goes when it is back. The job then asks the server for the household's clients (`e2e:stack clients`, D-178) | Android, with the stack |
 
 Three tags keep a flow out of a run: `awaiting`, on a flow written ahead of its screens, which
@@ -313,8 +321,14 @@ build has no screen to draw an error on, and an exception nothing caught ends it
   its JavaScript ends it on both, so read it on Android.
 - **Jest's engine is not a device's.** That crash was `[…].toSorted(…)`: Node has it, the
   Hermes a build compiles for has not, and every test passed. `apps/mobile/e2e/engine.test.ts`
-  reads what a device's bundle is made of for the built-ins Hermes is known to lack, and says
-  where its list comes from; a new one met on a device is added there.
+  reads what a device's bundle is made of for the built-ins Hermes is known to lack. The list
+  is `apps/mobile/src/dev/engine/builtins.ts`, which says where each name was read, and it is
+  used a second time on a device: the engine screen asks the engine itself, and its line
+  fails where the engine has gained one the list says it lacks, or lacks one the list says it
+  has (`Promise.withResolvers`, which is Hermes's own at this version, and `structuredClone`,
+  `AbortSignal.timeout` and `AbortSignal.any`, which Expo's runtime installs as the app
+  starts). A new one met on a device is added there, and both React Native's move and
+  Expo's are when to read the list again.
 - **On iOS a crash takes Maestro's driver with it, some minutes later.** Xcode hands the
   driver the crash's report when it is written, a minute and a half after the crash in the
   fifth run and nearly three in the sixth, and the driver falls over reading it
