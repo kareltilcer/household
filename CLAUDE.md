@@ -439,9 +439,19 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   one: by the same guard it keeps the basis of its earlier layout (read in Yoga, run on no
   device). An element whose style has `flex` under a condition is keyed by the condition,
   and so drawn anew when the condition changes, as a slot of the tab bar is between a
-  tablet's bar and a phone's (`src/shell/TabBar.tsx`) and a flow chart's two sides are
-  between one column and two (`src/ui/charts/Charts.tsx`), which `src/shell/TabBar.test.tsx`
-  and `src/ui/data.test.tsx` hold.
+  tablet's bar and a phone's (`src/shell/TabBar.tsx`); and so is a container whose
+  direction is conditional over children that have a `flex`, though their own style never
+  changes: in a column of no height of its own, a page that scrolls, such a child is
+  measured and its height kept as its basis, which the row then keeps (read in Yoga, run on
+  no device). A flow chart's two sides are drawn anew between one column and two by a key
+  on their container, which is both cases at once (`src/ui/charts/Charts.tsx`);
+  `src/shell/TabBar.test.tsx` and `src/ui/data.test.tsx` hold the two. What the room draws
+  one way or another, and that holds something, is one tree in both, as the two panes are
+  (`src/shell/Panes.tsx`): the room turns under what is drawn, a phone on its side being
+  wide enough for two panes, and an element that stands in another tree after the turn is
+  built again, with whatever it held lost, where a list was scrolled to and what was half
+  typed, which `src/shell/Panes.test.tsx` holds; a key costs its element the same, which
+  for a slot of the bar is a focus that was on it.
   What is said aloud goes through `src/ui/announce.ts`, the one file that calls
   `AccessibilityInfo` ([D-188](docs/prd/09-decisions.md)), and a `Banner` that announces
   says what arrives only where its screen is the one in front (`useInFront`,
@@ -504,7 +514,10 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   that lost a pair, a restore from a backup. The note of a push registration goes with a
   removal the server took, or with the sign-in (`forgetPush`, `src/push/registration.ts`):
   removed where the server was not told, a turning-off after a sign-out that failed asked
-  the server nothing. A vault that will not say what it holds rejects
+  the server nothing. Nor are notifications turned off where the device would not say
+  whether it holds a registration (`unsubscribePush`): the note is read from the device
+  itself there, as the choice is where a device is registered again (`renewPush`). A vault
+  that will not say what it holds rejects
   (`src/session/vault.ts`): who is signed in is then *could not be read*, in the device's
   own words and with *Try again*, which reads the vault again (`Unreachable`,
   `src/session/guards.tsx`), and on its silence nothing is removed and nothing written,
@@ -524,7 +537,12 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   key (`letGo`, beside it), so a re-read that then fails another way puts nothing back, on the
   screen or on the device; and `useHousehold` holds the household *not available* until an
   answer that is no `404` (`src/household/data.ts`). A store that would not be read back as
-  the app started is not written over for the rest of that run (`src/api/keep.ts`). A rule of
+  the app started is not written over for the rest of that run (`src/api/keep.ts`). Every
+  read is kept so, and held for as long as its member's sign-in, unless it says
+  `meta: { persist: false }`, and then it names a `gcTime` of its own (`QueryNotes`,
+  `src/api/query.ts`), as the read of a device's own push state does
+  (`src/push/usePush.ts`): a read keyed by what a member types, or by a page, says so, each
+  key being an entry of its own. A rule of
   the web's that counts on a connection, or on a page being loaded again, is not copied to the
   device. A write through the query client spreads `askedNow`
   (`src/api/query.ts`): `src/api/askedNow.test.ts` reads the sources of the session, push, a
@@ -533,7 +551,16 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   file that imports NetInfo, which a test of the sources holds (`src/api/api.test.tsx`): it believes the
   device only where it says it has no connection (`watchConnection`) and tells the query
   client, and a screen reads the query client's word (`useOnline`), so the offline bar and a
-  read that waits for a connection never disagree. `src/sync/open.ts` is the one source file
+  read that waits for a connection never disagree. And it turns the library's own check of
+  whether the internet can be reached off before it listens (`reachabilityShouldRun`): left
+  as it comes, NetInfo asks a host of Google's as soon as anything listens, and each minute
+  after while it is answered, on iOS, whose native half does not say, whether or not
+  anything reads its answer (read in 12.0.1; `src/api/netinfo.test.ts` runs the library's
+  own JavaScript, with and without). A library that asks a host of its own by itself is
+  configured not to where the app starts to use it; the one left is expo-notifications,
+  which keeps the device's token with Expo's service once a token was asked for, and which
+  item 30 decides with the first project (ADR 0029, *Consequences*). `src/sync/open.ts` is
+  the one source file
   that imports `@household/sync`'s values, which `src/sync/open.test.ts` holds, and the one
   that opens a replica: once on the device however many hold it, in a file named for its member
   and its household (`src/sync/databases.ts`), whose removal is noted as far as it came, once
@@ -577,7 +604,10 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   `src/ui/Screen.tsx`, `src/ui/Dialog.tsx`), so a control that shows what is typed apart
   from its value gives its owner at each key what leaving the field would settle to, as
   the stepper does (`src/ui/Stepper.tsx`), and never only as the field is left: a form
-  reads its values at the press. A word only the mobile app
+  reads its values at the press. It gives nothing again as the field is left: another
+  control of its form may have set the number since, by a press that left no field. And a
+  key gives its number where it is another than the one its owner shows or than the one
+  the typing last came to. A word only the mobile app
   draws is a key under `device.`, which is in no part (`packages/i18n/src/parts.ts`), and the app
   imports `@household/i18n`'s own entry, all five catalogs ([D-195](docs/prd/09-decisions.md)). A
   permission a build asks for is a line of `build/asked.ts` with its reason, and one every build
