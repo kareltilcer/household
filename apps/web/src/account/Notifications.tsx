@@ -28,7 +28,7 @@
 //   working while a subscription is paused.
 import type { components } from '@household/api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
@@ -242,18 +242,33 @@ function Settings({
   const [refusal, setRefusal] = useState<string | null>(null)
   const [refusals, setRefusals] = useState(0)
   // The change a press has just made, held by the screen itself until the query client holds
-  // it. React puts a switch back, as its press ends, to what was last drawn, and the query
-  // client tells a screen of what it keeps by a timer, which a browser runs only after the
-  // frame that answers the press: drawn from what is kept alone, a pressed switch stood as it
-  // was for that frame, and a second press on it in that frame sent the first one's change again.
+  // it. What is kept is written once a read on its way is cancelled, after the press's event
+  // has ended, and the query client tells a screen of what it keeps later still, by a timer,
+  // which a browser runs only after the frame that answers the press; React puts a switch
+  // back, as its press ends, to what was last drawn. Drawn from what is kept alone, a pressed
+  // switch stood as it was for that frame, and a second press on it in that frame sent the
+  // first one's change again.
   const [pressed, setPressed] = useState<Change | null>(null)
+  // How many changes are on their way: a switch takes another while one is, sent beside it.
+  const flying = useRef(0)
+  // What the server last said it holds: what was kept as the first of the changes now on their
+  // way was made, and then the answer to each of them it took.
+  const served = useRef<Preferences | undefined>(undefined)
+  // Whether a change was refused since the server was last read.
+  const unread = useRef(false)
   const save = useMutation({
     ...askedNow,
     mutationFn: async (change: Change) =>
       unwrap(await api.PATCH('/me/notification-preferences', { params: { query }, body: change })),
-    onMutate: (change: Change) => {
+    onMutate: async (change: Change) => {
       setRefusal(null)
-      const before = queries.getQueryData<Preferences>(key)
+      flying.current += 1
+      // The first of the changes on their way: what is kept is what the server holds.
+      const first = flying.current === 1
+      // A read on its way was asked before this change: its answer would be drawn over it, and
+      // would stay drawn where it came after the change's own.
+      await queries.cancelQueries({ queryKey: key, exact: true })
+      if (first) served.current = queries.getQueryData<Preferences>(key)
       // Shown as chosen while it is asked: a switch that waited for the answer would feel stuck.
       queries.setQueryData<Preferences>(key, (was) =>
         was === undefined ? was : changed(was, change),
@@ -261,18 +276,28 @@ function Settings({
       // Kept now, and read there by the draw this asks for: the screen's own hold is put away,
       // unless a later press has taken its place.
       setPressed((held) => (held === change ? null : held))
-      return { before }
     },
     onSuccess: (saved) => {
+      served.current = saved
       queries.setQueryData(key, saved)
     },
-    onError: (error, _change, context) => {
-      // Put back: what the screen shows is what the server holds. It is asked again too, since
-      // two changes made a moment apart are each put back to what was there before them.
-      if (context?.before !== undefined) queries.setQueryData(key, context.before)
-      void queries.invalidateQueries({ queryKey: key })
+    onError: (error) => {
+      // Put back: what the screen shows is what the server last said it holds, and never what
+      // was kept as this change was made, which holds whatever a change still on its way had
+      // only chosen: two refused one after the other left the first one's choice drawn as saved.
+      if (served.current !== undefined) queries.setQueryData(key, served.current)
+      unread.current = true
       setRefusal(isRefusedAsSent(error) ? t('account.refused') : say(error))
       setRefusals((count) => count + 1)
+    },
+    onSettled: () => {
+      flying.current -= 1
+      // A change that got no answer may have been taken all the same, so the server is read
+      // again after a refusal: once none is on its way, and not before, since a read asked
+      // while one still is would be answered as that one lands, and drawn over it.
+      if (flying.current > 0 || !unread.current) return
+      unread.current = false
+      void queries.invalidateQueries({ queryKey: key })
     },
   })
 

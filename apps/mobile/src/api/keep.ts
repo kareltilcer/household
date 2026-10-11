@@ -3,6 +3,15 @@
 // keeps each one's apart, and removed with their sign-in however it ends (D-161's twin on a
 // device). A device that will not store keeps nothing, and the app reads from the server.
 //
+// It is kept for as long as its member's sign-in, and read back however old it is: the account,
+// the member's households and a household's own answer are what the shell and the replica open
+// on (session/SessionProvider.tsx, sync/ReplicaProvider.tsx), and a member who last had the app
+// open two days ago opens it with no connection as one who had it open an hour ago does (PRD 03
+// §2.1: reads work offline, days offline among them). What is restored is stale, and asked for
+// again as soon as there is a connection; the server's own answer, a `404` among them, stands
+// over it. The day the web keeps a read for (apps/web/src/api/query.ts) is a browser's, which
+// is no offline surface.
+//
 // Its own, on the query client's `dehydrate` and `hydrate`, and not TanStack's persister: a
 // removal drops the write that was waiting and every write after it, where a throttled write
 // would put a member's reads back after they were removed, as at a sign-out; and a store that
@@ -10,14 +19,26 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { dehydrate, hydrate, type DehydratedState, type QueryClient } from '@tanstack/react-query'
 import { clientName } from './client.ts'
-import { cacheMaxAge, isKept } from './query.ts'
+import { isKept } from './query.ts'
 
 /** How often the reads are written, at most: a burst of changes is one write of the last state. */
 export const writeEvery = 1000
 
+/** What every member's reads are kept under, before their id. */
+const keptUnder = 'household.queries.'
+
 /** Where `member`'s reads are kept. An id is written in either case, and is one member's. */
 export function keepKey(member: string): string {
-  return `household.queries.${member.toLowerCase()}`
+  return `${keptUnder}${member.toLowerCase()}`
+}
+
+/**
+ * The members this device keeps reads of, by what they are kept under: what the session goes
+ * by as the app starts, to remove those of anybody it holds no sign-in of (session/forget.ts).
+ */
+export async function keptMembers(): Promise<string[]> {
+  const keys = await AsyncStorage.getAllKeys()
+  return keys.filter((key) => key.startsWith(keptUnder)).map((key) => key.slice(keptUnder.length))
 }
 
 /** What is stored: the reads, when they were written, and the build that wrote them. */
@@ -40,9 +61,9 @@ function isStored(value: unknown): value is Stored {
 
 export interface Keep {
   /**
-   * Puts what the device kept into `queries`: what was read within the day, by this build. A
-   * newer build may read the contract differently, so what an older one kept is dropped rather
-   * than shown.
+   * Puts what the device kept into `queries`: what this build wrote, however long ago. Another
+   * build may keep a read otherwise, so what one kept is dropped by the next rather than shown:
+   * the first start after an update reads from the server.
    */
   readonly restore: (queries: QueryClient) => Promise<void>
   /** Writes `queries` as it changes, at most once a second, until the function it returns is called. */
@@ -99,7 +120,7 @@ export function createKeep(
         return
       }
       if (removed || !isStored(stored)) return
-      if (stored.build !== build || now() - stored.at > cacheMaxAge) return
+      if (stored.build !== build) return
       hydrate(queries, stored.state)
     },
     watch: (queries) => {

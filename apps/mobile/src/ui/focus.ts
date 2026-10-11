@@ -2,7 +2,10 @@
 // switch's. A touch gives none, so nothing is drawn for a finger. It is one ring for every
 // control, 2 px in the focus token: set off from the control by its own width, or drawn inside
 // it where the control fills its row, a tab's slot or a row of More, and an outline outside it
-// would be cut by what stands beside it.
+// would be cut by what stands beside it. On the one ground the focus token has no declared pair
+// with, the inverse surface a toast is drawn on, the ring is in that ground's own ink, as the
+// web's is.
+import type { ColorName } from '@household/tokens/native'
 import { useState } from 'react'
 import type { ViewStyle } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
@@ -15,7 +18,10 @@ export interface FocusRing {
   readonly onBlur: () => void
 }
 
-export function useFocusRing(place: 'outside' | 'inside' = 'outside'): FocusRing {
+export function useFocusRing(
+  place: 'outside' | 'inside' = 'outside',
+  ink: ColorName = 'focus',
+): FocusRing {
   const theme = useTheme()
   const [focused, setFocused] = useState(false)
   return {
@@ -24,7 +30,7 @@ export function useFocusRing(place: 'outside' | 'inside' = 'outside'): FocusRing
           outlineWidth: 2,
           outlineStyle: 'solid',
           outlineOffset: place === 'inside' ? -2 : 2,
-          outlineColor: theme.color.focus,
+          outlineColor: theme.color[ink],
         }
       : {},
     onFocus: () => {

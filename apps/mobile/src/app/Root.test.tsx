@@ -5,16 +5,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { catalogs } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
 import { act, render, screen, userEvent, waitFor } from '@testing-library/react-native'
+import { renderRouter } from 'expo-router/testing-library'
 import * as SplashScreen from 'expo-splash-screen'
+import { View } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import * as keep from '../display/keep.ts'
 import { storageKey as displayKey, type DisplayPreferences } from '../display/modes.ts'
-import { useDisplay, useTheme } from '../display/DisplayProvider.tsx'
+import { DisplayProvider, useDisplay, useTheme } from '../display/DisplayProvider.tsx'
 import { useI18n } from '../i18n/I18nProvider.tsx'
 import { storageKey as localeKey } from '../i18n/locale.ts'
-import { expectAccessible } from '../test/a11y.ts'
+import { elementsOf, expectAccessible } from '../test/a11y.ts'
+import { root } from '../test/render.tsx'
 import { Text } from '../ui/Text.tsx'
-import { Providers, RouteError } from './Root.tsx'
+import { Providers, RouteError, Screens } from './Root.tsx'
 
 jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn(() => Promise.resolve(true)),
@@ -89,6 +92,30 @@ describe('the root layout', () => {
     await waitFor(() => {
       expect(screen.getByTestId('probe')).toHaveTextContent(/^light system (en|cs|sk|de|pl) /)
     })
+  })
+})
+
+describe('the root’s stack', () => {
+  // What the navigator hands the platform's own stack for a screen: `stackAnimation` is how
+  // one screen takes another's place, and is left out where the platform's own is to be.
+  it.each([
+    { how: 'as the platform does where nothing asks for less motion', motion: 'system' },
+    { how: 'at once where motion is reduced', motion: 'reduced', transition: 'none' },
+  ] as const)('has one screen take another’s place $how', async ({ motion, ...over }) => {
+    const transition = 'transition' in over ? over.transition : undefined
+    function Layout() {
+      return (
+        <DisplayProvider preferences={{ theme: 'light', motion }}>
+          <Screens />
+        </DisplayProvider>
+      )
+    }
+    await renderRouter({ _layout: Layout, index: () => <View testID="first" /> })
+    await waitFor(() => {
+      expect(screen.getByTestId('first')).toBeOnTheScreen()
+    })
+    const stack = elementsOf(root()).filter((element) => element.type === 'RNSScreen')
+    expect(stack.map((element): unknown => element.props.stackAnimation)).toEqual([transition])
   })
 })
 

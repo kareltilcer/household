@@ -21,7 +21,7 @@ import { problemOf, type ApiClient } from '@household/api'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useProblems } from '../api/ApiProvider.tsx'
-import { createKeep, removeKept, type Keep } from '../api/keep.ts'
+import { createKeep, keptMembers, removeKept, type Keep } from '../api/keep.ts'
 import { unwrap } from '../api/problem.ts'
 import { couldNotBeRead } from '../api/query.ts'
 import { useI18n } from '../i18n/I18nProvider.tsx'
@@ -36,7 +36,7 @@ import {
   type SessionState,
   type SignedIn,
 } from './context.ts'
-import { forget, onForget } from './forget.ts'
+import { forget, forgetOthers, onForget } from './forget.ts'
 import { describeDevice } from './installation.ts'
 import type { TokenStore } from './tokens.ts'
 
@@ -97,7 +97,7 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
         own.stop()
         queries.clear()
         await removing
-      }),
+      }, keptMembers),
     [queries],
   )
 
@@ -113,7 +113,18 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
   const starting = useRef<Promise<void> | null>(null)
   const start = useCallback(() => {
     starting.current ??= (async () => {
-      const [active] = await Promise.all([tokens.start(), restoreDestination()])
+      const [active] = await Promise.all([
+        // A vault that would not say whose sign-in it holds: nobody's, for this run.
+        tokens.start().catch(() => undefined),
+        restoreDestination(),
+      ])
+      if (active === undefined) return
+      // What the device keeps of anybody it holds no sign-in of goes first, before anything is
+      // read back or opened (D-161's twin): a run that was closed between a pair's removal and
+      // the rest, a keystore that lost a pair, a device restored from a backup, which carries
+      // what was kept and never the pair. Not where the vault would not say: what it holds then
+      // is not known, and nothing is removed on its silence.
+      await forgetOthers(tokens.members())
       if (active !== null) await keepFor(active).restore(queries)
     })()
     return starting.current
@@ -195,6 +206,13 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
       // first: its pair, and with it everything else.
       const before = tokens.member()
       if (before !== null && before !== id) {
+        // And it is ended at the server, while the first one's token can still say whose it is:
+        // left alive there, it is a sign-in no device holds, which never lapses (D-99) and which
+        // the server goes on sending notifications to, on the device another member now uses.
+        // The new sign-in is made already, so whatever this comes to changes nothing here.
+        await api()
+          .POST('/auth/logout')
+          .catch(() => undefined)
         await tokens.remove(before)
         await forgetNext(before)
       }
@@ -217,8 +235,11 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
     // start registers the device again.
     await forgetPush(client, id)
     const answer = await client.POST('/auth/logout')
-    // A sign-in the server no longer knows has ended already: what was asked for is so.
-    if (answer.response.status !== 401) {
+    // A sign-in the server no longer knows has ended already: what was asked for is so. That
+    // is a `401` whose renewal the server refused, which removed the pair (tokens.ts). A `401`
+    // that left the pair where it was is a token that lapsed and a renewal that failed for
+    // another reason, a server in trouble: the sign-in lives there still, and so here.
+    if (answer.response.status !== 401 || tokens.member() === id) {
       // Asked outside a query or a mutation, so what it was refused with is told here.
       const refusal = problemOf(answer)
       if (refusal !== undefined) problems.report(refusal)

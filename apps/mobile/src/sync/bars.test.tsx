@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { inHousehold } from '../app/paths.ts'
 import { answering, json, testClient } from '../api/testing.ts'
 import type { Household } from '../household/data.ts'
+import { useI18n } from '../i18n/I18nProvider.tsx'
 import { SessionFixture } from '../session/fixture.tsx'
 import { HouseholdFrame } from '../shell/HouseholdFrame.tsx'
 import { expectAccessible } from '../test/a11y.ts'
@@ -22,13 +23,13 @@ import { ReplicaProvider, SyncFixture, type Sync } from './ReplicaProvider.tsx'
 import { standIn, type StandIn } from './standIn.ts'
 import { registry } from './sync.fixtures.ts'
 
-/** Where the router says the app is, as a test moves it. */
-const mockAt = { path: '/' }
+/** Where the router says the app is, and whether this household is the one in front, as a test says. */
+const mockAt = { path: '/', front: true }
 
 // The router's own: where the app is, and what the frame's other parts ask of it.
 jest.mock('expo-router', () => ({
   usePathname: () => mockAt.path,
-  useIsFocused: () => true,
+  useIsFocused: () => mockAt.front,
   router: { navigate: jest.fn(), replace: jest.fn() },
   Redirect: () => null,
 }))
@@ -98,6 +99,7 @@ async function says(sentence: string): Promise<void> {
 
 beforeEach(async () => {
   await AsyncStorage.clear()
+  mockAt.front = true
 })
 
 afterEach(() => {
@@ -271,6 +273,58 @@ describe('what the bar says aloud', () => {
     })
     await says(en['ui.offline.bar'])
     expect(announce.mock.calls).toEqual([[en['sync.not_receiving']], [en['ui.offline.bar']]])
+  })
+
+  // A household another was opened over stays mounted underneath with bars of its own, and the
+  // connection goes for both at once: said by each, the sentence is said twice.
+  it('is nothing under a household that is not the one in front, nor for what stands there when its member comes back', async () => {
+    const announce = jest.spyOn(announcer, 'announce').mockImplementation(() => undefined)
+    mockAt.front = false
+    await bars()
+    await act(() => {
+      move({ online: false })
+    })
+    await says(en['ui.offline.bar'])
+    expect(announce).not.toHaveBeenCalled()
+    mockAt.front = true
+    await act(() => {
+      move({ online: false })
+    })
+    expect(announce).not.toHaveBeenCalled()
+    // From then on it is the one in front, and what arrives is said.
+    await act(() => {
+      move({ online: true, receiving: false })
+    })
+    await says(en['sync.not_receiving'])
+    expect(announce.mock.calls).toEqual([[en['sync.not_receiving']]])
+  })
+
+  // The account's language is learned after the household is drawn: the same sentence in it is
+  // no sentence that arrived.
+  it('is nothing for the sentence that stood there, drawn in another language', async () => {
+    const announce = jest.spyOn(announcer, 'announce').mockImplementation(() => undefined)
+    let follow: (tag: string) => void = () => undefined
+    function Follows() {
+      follow = useI18n().followAccount
+      return null
+    }
+    mockAt.path = inHousehold.home(id)
+    await render(
+      <>
+        <Follows />
+        <Drawn
+          stand={standIn({ registry })}
+          first={{ online: false, receiving: true }}
+          household={home(true)}
+        />
+      </>,
+    )
+    await says(en['ui.offline.bar'])
+    await act(() => {
+      follow('cs')
+    })
+    await says(catalogs.cs['ui.offline.bar'])
+    expect(announce).not.toHaveBeenCalled()
   })
 })
 

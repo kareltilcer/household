@@ -13,6 +13,11 @@ const member = ids.member
 const home = households.own.id
 const row = '0198c0de-0000-7000-8000-00000000d001'
 const pdf = new TextEncoder().encode('%PDF-1.7')
+/**
+ * Where the queue was told `row`'s file waits, in a container the app no longer has: iOS gives
+ * an app's container another path when the app is updated, or restored from a backup.
+ */
+const moved = `file:///var/mobile/Containers/Data/Application/0A1B2C3D-0000-4000-8000-00000000000A/Documents/replicas/${member}/${home}/${row}`
 
 /** Nothing of the upload goes through the `fetch` it is handed: one that is called fails the test. */
 const unused: typeof globalThis.fetch = () => {
@@ -56,6 +61,22 @@ describe('where a replica’s files wait', () => {
     await storage.deleteFile(place)
     expect(await storage.fileExists(place)).toBe(false)
     await expect(storage.deleteFile(place)).resolves.toBeUndefined()
+  })
+
+  it('finds a file by its name where its replica’s files are now, whatever place the queue kept for it', async () => {
+    const directory = filesOf(member, home)
+    const storage = fileStorage(directory)
+    await storage.saveFile(storage.getLocalUri(row), pdf.buffer)
+    // The place as the queue noted it before the app's container was given another path.
+    expect(await storage.fileExists(moved)).toBe(true)
+    expect(new Uint8Array(await storage.readFile(moved))).toEqual(pdf)
+    await storage.deleteFile(moved)
+    expect(new File(directory, row).exists).toBe(false)
+    // And what is kept by that place is kept here.
+    await storage.saveFile(moved, pdf.buffer)
+    expect(new File(directory, row).exists).toBe(true)
+    // A name that is no file's here is no file, wherever it is said to be.
+    expect(await storage.fileExists(moved.replace(row, ids.otherMember))).toBe(false)
   })
 
   it('is emptied whole, and made again when it is next asked for', async () => {
@@ -102,7 +123,12 @@ describe('a file that is sent', () => {
     const problems = createProblemHub()
     problems.subscribe((problem) => told.push(problem))
     const file = { uri, contentType: 'application/pdf', fileName: 'r.pdf' }
-    return { upload, told, file, send: uploadByUri({ problems }) }
+    return {
+      upload,
+      told,
+      file,
+      send: uploadByUri({ problems, directory: filesOf(member, home) }),
+    }
   }
 
   const url = 'https://api.household.test/api/v1/households/h/documents/d/content'
@@ -132,6 +158,16 @@ describe('a file that is sent', () => {
     expect(response.ok).toBe(true)
     expect(response.status).toBe(201)
     expect(await response.json()).toEqual({})
+  })
+
+  it('is sent from where it waits now, by its name, whatever place the queue kept for it', async () => {
+    const { upload, send, file } = await stored(() =>
+      Promise.resolve({ status: 201, headers: {}, body: '{}' }),
+    )
+    expect(moved).not.toBe(file.uri)
+    await send(url, 'access-a', { ...file, uri: moved }, unused)
+    expect(upload).toHaveBeenCalledTimes(1)
+    expect(upload.mock.contexts[0]).toMatchObject({ uri: file.uri })
   })
 
   it('hands a refusal back whole: its status, its headers and the problem it carries', async () => {

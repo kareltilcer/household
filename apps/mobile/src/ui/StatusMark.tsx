@@ -7,7 +7,7 @@
 // the web's (apps/web/src/ui/StatusMark.tsx).
 import { controls, statusGlyphs, type StatusId } from '@household/icons'
 import { thresholds } from '@household/tokens'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type Ref } from 'react'
 import { Pressable, View } from 'react-native'
 import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
 import { useFocusRing } from './focus.ts'
@@ -147,9 +147,14 @@ export interface SyncMarkProps {
    * first drew the state, and a row drawn again in the middle of a long sync waits it out again.
    */
   readonly since?: number | undefined
+  /**
+   * The control, where the mark is one: what the sheet it opened gives the focus back to. A
+   * mark that stays words opens nothing, and holds nothing.
+   */
+  readonly ref?: Ref<View> | undefined
 }
 
-export function SyncMark({ state, words = 'inline', onOpen, name, since }: SyncMarkProps) {
+export function SyncMark({ state, words = 'inline', onOpen, name, since, ref }: SyncMarkProps) {
   const t = useTranslate()
   const theme = useTheme()
   const target = useTarget()
@@ -167,6 +172,7 @@ export function SyncMark({ state, words = 'inline', onOpen, name, since }: SyncM
       : t(controls.sync_state.labelKey, { state: word })
   return (
     <Pressable
+      ref={ref}
       testID={markOf(state)}
       accessibilityRole="button"
       accessibilityLabel={label}

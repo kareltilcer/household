@@ -1,8 +1,9 @@
 // The app's data layer for what is read from the server and is no part of a replica (06-clients,
 // PL-4): TanStack Query, by the web's rules. The account, the member's households and a
-// household's own answer are read through it, and kept on the device for a day (keep.ts), so
-// that the app opens with no connection at the household it was last in. A module's own rows
-// are the replica's, which is the offline surface: nothing here stands in for it.
+// household's own answer are read through it, and kept on the device for as long as their
+// member's sign-in (keep.ts), so that the app opens with no connection at the household it was
+// last in, however long ago that was. A module's own rows are the replica's, which is the
+// offline surface: nothing here stands in for it.
 import type { ApiProblem, UnreadableProblem } from '@household/api'
 import NetInfo from '@react-native-community/netinfo'
 import {
@@ -19,7 +20,7 @@ import { useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
 import { isRetryable, problemIn } from './problem.ts'
 
-/** How long a read is kept on this device, and so how long the cache holds one unobserved. */
+/** How long the cache holds a read that nothing on screen reads: what is written is what it holds. */
 export const cacheMaxAge = 24 * 60 * 60 * 1000
 
 export interface QueryClientOptions {

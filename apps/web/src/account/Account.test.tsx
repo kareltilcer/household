@@ -3,8 +3,9 @@
 // none of.
 import { catalogs } from '@household/i18n'
 import { clientParts } from '@household/i18n/lazy'
+import { defaultScheduler, notifyManager } from '@tanstack/react-query'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { storageKey } from '../display/modes.ts'
 import { dropCatalogs, fetchCatalog, holdCatalog } from '../i18n/catalogs.ts'
 import {
@@ -16,6 +17,7 @@ import {
   origin,
   problem,
   tilcerovi,
+  untold,
   type Server,
 } from './testing.tsx'
 
@@ -27,6 +29,11 @@ vi.mock(import('../i18n/catalogs.ts'), async (original) => {
 })
 
 const title = 'Your account'
+
+// A test that held the query client's word back (`untold`) leaves it as it found it.
+afterEach(() => {
+  notifyManager.setScheduler(defaultScheduler)
+})
 
 async function account(server: Server = createServer()) {
   const opened = open('/account', server)
@@ -582,6 +589,42 @@ describe('the account screen', () => {
     )
     expect(zone).toHaveValue('Europe/Prague')
   })
+
+  // A choice is answered in the press. Its save says what was chosen, but the query client
+  // tells a screen of a save by a timer, and React puts a select back, as its event ends, to
+  // what was last drawn: drawn from the save alone, a choice stood as the account's old one
+  // for a frame.
+  it.each([
+    ['Timezone', 'Europe/Vienna'],
+    ['First day of the week', '1'],
+  ])(
+    'draws a choice of %s in the press itself, before the query client tells the screen of its save',
+    async (name, value) => {
+      const server = createServer()
+      server.on('PATCH /me', async (request) => {
+        server.me = { ...server.me, ...((await request.json()) as object) }
+        return Response.json(server.me)
+      })
+      await account(server)
+      const control = screen.getByRole('combobox', { name })
+      const tell = untold()
+      fireEvent.change(control, { target: { value } })
+      expect(control).toHaveValue(value)
+      // Nor is it put back once its save is on its way, nor as that is answered: until the
+      // screen is told, the account it is drawn from is the one from before the choice.
+      await waitFor(() => {
+        expect(server.to('PATCH /me')).toHaveLength(1)
+      })
+      await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+      expect(control).toHaveValue(value)
+      // And told, the screen draws the account, which holds it.
+      tell()
+      await waitFor(() => {
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      })
+      expect(screen.getByRole('combobox', { name })).toHaveValue(value)
+    },
+  )
 
   it('lists the member’s households with their role in each, and leads to each and to leaving it', async () => {
     const server = createServer()

@@ -97,11 +97,25 @@ export function Providers({ children }: { readonly children: ReactNode }) {
   )
 }
 
+/**
+ * The router's stack. Each screen draws its own title, or the shell's bar does: the navigator
+ * draws none. And where motion is reduced, by the member's choice or the device's, one screen
+ * takes another's place at once: a transition is then an instant change, never a slower one
+ * (01-foundations §7), as a sheet's is (ui/Dialog.tsx).
+ */
+export function Screens() {
+  const { reducedMotion } = useDisplay()
+  return (
+    <Stack
+      screenOptions={{ headerShown: false, ...(reducedMotion ? { animation: 'none' } : {}) }}
+    />
+  )
+}
+
 export function Root() {
   return (
     <Providers>
-      {/* Each screen draws its own title, or the shell's bar does: the navigator draws none. */}
-      <Stack screenOptions={{ headerShown: false }} />
+      <Screens />
     </Providers>
   )
 }

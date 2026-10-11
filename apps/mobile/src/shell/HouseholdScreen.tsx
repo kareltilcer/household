@@ -36,7 +36,7 @@ export function HouseholdScreen({ title, back = false, testID, children }: House
   const beside = useBesideList()
   // Read again each time the screen comes to the front: a screen opened by a link has nothing
   // behind it, and the same screen opened from More a moment later has.
-  useIsFocused()
+  const inFront = useIsFocused()
   const leads = back && !beside && router.canGoBack()
   return (
     <View testID={testID} style={{ flex: 1, backgroundColor: theme.color.surface }}>
@@ -51,7 +51,11 @@ export function HouseholdScreen({ title, back = false, testID, children }: House
             : undefined
         }
       />
-      <Screen edges={sides}>{children}</Screen>
+      {/* And what arrives on it out of sight, in a tab that is not the open one or under
+          another household, is said to nobody (ui/Banner.tsx). */}
+      <Screen edges={sides} inFront={inFront}>
+        {children}
+      </Screen>
     </View>
   )
 }

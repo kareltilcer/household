@@ -17,6 +17,7 @@
 // It also remembers the household as the one its member was last in on this device, which is
 // where the app opens next (D-162), and reads their arrangement of its modules, so that no
 // screen under it has either to wait for.
+import { useIsFocused } from 'expo-router'
 import { useEffect, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -50,9 +51,12 @@ function Opened({ household, arrangement, arrange, children }: OpenedProps) {
   const insets = useSafeAreaInsets()
   const me = useMe()
   const { id } = household
+  // The one in front: a household another was opened over stays mounted underneath, and is the
+  // one its member is in again once they go back to it, which mounts nothing.
+  const inFront = useIsFocused()
   useEffect(() => {
-    rememberHousehold(me.id, id)
-  }, [me.id, id])
+    if (inFront) rememberHousehold(me.id, id)
+  }, [me.id, id, inFront])
   return (
     <HouseholdProvider household={household} arrangement={arrangement} arrange={arrange}>
       <View

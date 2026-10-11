@@ -16,7 +16,8 @@
 // The shell's frame draws it above the screens (shell/HouseholdFrame.tsx), and item 29's one
 // entitlement banner under it. And the replica is told here when the household writes again,
 // so that what it held for a household that did not is sent (ADR 0019).
-import { usePathname } from 'expo-router'
+import type { MessageKey } from '@household/i18n'
+import { useIsFocused, usePathname } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { inHousehold } from '../app/paths.ts'
 import { writes, type Household } from '../household/data.ts'
@@ -53,8 +54,8 @@ export function changesAtOnce(pathname: string, household: string): boolean {
   return isUnder(pathname, `${home}/settings`) || isUnder(pathname, `${home}/leave`)
 }
 
-/** What the bar says, or null where there is no bar. */
-type Sentence = string | null
+/** Which sentence the bar says, by its key, or null where there is no bar. */
+type Sentence = MessageKey | null
 
 /** What stood above a household's screens when it was first drawn, and whether that has changed since. */
 interface Stood {
@@ -76,24 +77,31 @@ export function HouseholdBars({ household }: HouseholdBarsProps) {
 
   const sentence: Sentence = !online
     ? changesAtOnce(pathname, id)
-      ? t('device.sync.offline.settings')
+      ? 'device.sync.offline.settings'
       : takesWrites
-        ? t('ui.offline.bar')
-        : t('device.sync.offline.reading')
+        ? 'ui.offline.bar'
+        : 'device.sync.offline.reading'
     : receiving === false
       ? takesWrites
-        ? t('sync.not_receiving')
-        : t('shell.not_receiving.reading')
+        ? 'sync.not_receiving'
+        : 'shell.not_receiving.reading'
       : null
 
   // A bar that stood here when the household was first drawn is read in its place. One that
   // arrives later, and a sentence that takes another's place, is said: nothing moved the focus
-  // to it.
+  // to it. Which sentence it is, and not its words: the same one in another language, the
+  // account's once it is known, has not changed.
+  //
+  // And said by the household in front alone. One that another was opened over stays mounted
+  // underneath with its own bars, and the connection goes for both at once: what changes under
+  // a household that is not looked at is what stands there when its member comes back to it.
+  const inFront = useIsFocused()
   const [stood, setStood] = useState<Stood>({ household: id, sentence, moved: false })
   let moved = false
-  if (stood.household !== id) setStood({ household: id, sentence, moved: false })
-  else if (!stood.moved && stood.sentence !== sentence) setStood({ ...stood, moved: true })
+  if (stood.household !== id || (!inFront && (stood.moved || stood.sentence !== sentence))) {
+    setStood({ household: id, sentence, moved: false })
+  } else if (!stood.moved && stood.sentence !== sentence) setStood({ ...stood, moved: true })
   else moved = stood.moved
 
-  return sentence === null ? null : <OfflineBar sentence={sentence} announce={moved} />
+  return sentence === null ? null : <OfflineBar sentence={t(sentence)} announce={moved} />
 }

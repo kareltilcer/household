@@ -12,6 +12,12 @@
 //   removed and whoever listens is told (`onEnded`): the session, which removes everything else
 //   the device kept of its member (forget.ts). One that could not reach the server, or was
 //   refused for now, ends nothing.
+// - A request is answered by its own sign-in alone. One that left under a member's token and
+//   was refused after another member's became the one in use is given no token of theirs to be
+//   sent again with: it would be the first member's request, made as the second.
+// - A pair the keystore would not take is held in memory and written again as a token is next
+//   asked for: a keychain shut while the device is locked takes it once it is not, and until
+//   it has, the app closed would start again on a refresh token that is used up.
 //
 // The vault is laid out for several sign-ins on one device, each under its member, with one of
 // them the one in use: a shared tablet signs several profiles in (D-104), which plan item 29
@@ -40,7 +46,11 @@ export interface TokenStoreOptions {
 }
 
 export interface TokenStore extends Bearer {
-  /** Reads what the device holds: the member whose sign-in is in use, or null for nobody's. */
+  /**
+   * Reads what the device holds: the member whose sign-in is in use, or null for nobody's. It
+   * rejects where the vault would not say what it holds: nobody is signed in for this run, and
+   * what the vault held it holds still.
+   */
   readonly start: () => Promise<string | null>
   /** The member whose sign-in is in use, as last read or set. */
   readonly member: () => string | null
@@ -124,11 +134,19 @@ export function createTokenStore({
   let installation: Promise<string> | undefined
   let renewing: Promise<string | undefined> | null = null
   const listeners = new Set<(member: string) => void>()
+  /**
+   * The access tokens the sign-in in use has been signed with in this run: a request refused on
+   * one of them was its own. Emptied when another member's becomes the one in use.
+   */
+  const own = new Set<string>()
+  /** Whether the pair in memory is one the vault would not take. */
+  let unkept = false
+  /** The pair's writes, one after another: an earlier one never lands over a later one. */
+  let writing: Promise<void> = Promise.resolve()
 
   /**
    * Keeps `value`, where the device will keep it. One that will not goes on with what it holds
-   * in memory: the sign-in works until the app is closed, and nothing here can make a keystore
-   * that refuses hold it for longer.
+   * in memory: the sign-in works for as long as the app runs.
    */
   const store = async (key: string, value: string) => {
     try {
@@ -141,11 +159,31 @@ export function createTokenStore({
   const storeIndex = () =>
     store(vaultKeys.signIns, JSON.stringify({ active: index.active, members: index.members }))
 
-  const storePair = (member: string, held: Pair) =>
-    store(
-      vaultKeys.signIn(member),
-      JSON.stringify({ access: held.access, refresh: held.refresh, expires_at: held.expiresAt }),
-    )
+  /**
+   * Writes the pair in use, as it is held when its turn comes. Where the vault will not take
+   * it, it is written again as a token is next asked for (`current`).
+   */
+  const storePair = () => {
+    writing = writing.then(async () => {
+      const member = index.active
+      const held = pair
+      if (member === null || held === null) return
+      try {
+        await vault.set(
+          vaultKeys.signIn(member),
+          JSON.stringify({
+            access: held.access,
+            refresh: held.refresh,
+            expires_at: held.expiresAt,
+          }),
+        )
+        unkept = false
+      } catch {
+        unkept = true
+      }
+    })
+    return writing
+  }
 
   const drop = async (member: string) => {
     const id = member.toLowerCase()
@@ -153,7 +191,13 @@ export function createTokenStore({
       active: index.active === id ? null : index.active,
       members: index.members.filter((each) => each !== id),
     }
-    if (index.active === null) pair = null
+    if (index.active === null) {
+      pair = null
+      unkept = false
+      own.clear()
+    }
+    // A write of the pair that is on its way lands first, and not over its removal.
+    await writing
     await vault.remove(vaultKeys.signIn(id))
     await storeIndex()
   }
@@ -179,7 +223,8 @@ export function createTokenStore({
       refresh: answer.tokens.refresh_token,
       expiresAt: now() + answer.tokens.expires_in * 1000,
     }
-    await storePair(member, pair)
+    own.add(pair.access)
+    await storePair()
     return pair.access
   }
 
@@ -192,19 +237,29 @@ export function createTokenStore({
 
   return {
     start: async () => {
-      index = readIndex(await vault.get(vaultKeys.signIns))
-      pair =
-        index.active === null ? null : readPair(await vault.get(vaultKeys.signIn(index.active)))
+      try {
+        index = readIndex(await vault.get(vaultKeys.signIns))
+        pair =
+          index.active === null ? null : readPair(await vault.get(vaultKeys.signIn(index.active)))
+      } catch (error) {
+        // A vault that will not say what it holds, a keychain that is shut for now, holds what
+        // it held: nothing of it is removed on its silence.
+        index = { active: null, members: [] }
+        pair = null
+        throw error
+      }
       // A member the device names and holds no pair for, as after a keystore was reset, is
       // signed in to nothing.
       if (index.active !== null && pair === null) await drop(index.active)
+      if (pair !== null) own.add(pair.access)
       return index.active
     },
     member: () => index.active,
     members: () => index.members,
     device: () => {
       installation ??= (async () => {
-        const kept = await vault.get(vaultKeys.device)
+        // A vault that will not say names no installation: one is made, as on a device new to it.
+        const kept = await vault.get(vaultKeys.device).catch(() => null)
         if (kept !== null && isUuid(kept)) return kept
         const made = newId()
         await store(vaultKeys.device, made)
@@ -219,8 +274,11 @@ export function createTokenStore({
         refresh: tokens.refresh_token,
         expiresAt: now() + tokens.expires_in * 1000,
       }
+      // Another member's tokens are no part of this sign-in.
+      if (index.active !== id) own.clear()
+      own.add(pair.access)
       index = { active: id, members: [...index.members.filter((each) => each !== id), id] }
-      await storePair(id, pair)
+      await storePair()
       await storeIndex()
     },
     remove: drop,
@@ -232,6 +290,7 @@ export function createTokenStore({
     },
     current: async () => {
       if (pair === null) return undefined
+      if (unkept) void storePair()
       if (pair.expiresAt - now() > renewBefore) return pair.access
       const held = pair.access
       try {
@@ -243,6 +302,9 @@ export function createTokenStore({
       }
     },
     renew: (used) => {
+      // A request another sign-in sent, the one in use until a moment ago: nothing of this one's
+      // answers for it, and its own refusal stands.
+      if (!own.has(used)) return Promise.resolve(undefined)
       // Renewed already, by a request that was refused a moment sooner: that pair is the answer.
       if (pair !== null && pair.access !== used) return Promise.resolve(pair.access)
       return renewOnce()

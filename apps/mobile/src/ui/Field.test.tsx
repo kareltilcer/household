@@ -3,9 +3,16 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { catalogs } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
-import { screen, userEvent } from '@testing-library/react-native'
+import { fireEvent, screen, userEvent } from '@testing-library/react-native'
 import { createRef } from 'react'
-import { Platform, StyleSheet, type StyleProp, type TextInput, type TextStyle } from 'react-native'
+import {
+  Platform,
+  StyleSheet,
+  type StyleProp,
+  type TextInput,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native'
 import { expectAccessible, isDrawing, violations } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
 import { sample } from './controls.fixtures.ts'
@@ -154,6 +161,23 @@ describe('a password field', () => {
     await render(<PasswordField label={sample.password} error={sample.low} />, { scale: 2 })
     expect(screen.getByLabelText(sample.password).props.accessibilityHint).toBe(sample.low)
     expectAccessible()
+  })
+
+  it('shows where a keyboard’s focus is on its toggle, as on any other control', async () => {
+    await render(<PasswordField label={sample.password} />)
+    const ring = () =>
+      StyleSheet.flatten(
+        screen.getByRole('switch', { name: show }).props.style as StyleProp<ViewStyle>,
+      )
+    expect(ring().outlineWidth).toBeUndefined()
+    await fireEvent(screen.getByRole('switch', { name: show }), 'focus')
+    expect(ring()).toMatchObject({
+      outlineWidth: 2,
+      outlineOffset: 2,
+      outlineColor: nativeThemes.light.color.focus,
+    })
+    await fireEvent(screen.getByRole('switch', { name: show }), 'blur')
+    expect(ring().outlineWidth).toBeUndefined()
   })
 })
 

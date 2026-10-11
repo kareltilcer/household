@@ -25,7 +25,7 @@
 // gone from the screen, whatever its owner says meanwhile: told to leave while the modal it
 // presented is still leaving, iOS may keep it where it is.
 import { router } from 'expo-router'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
@@ -63,6 +63,9 @@ export function RejectedSheet({
   // Whether the confirmation is on the screen still: from when it is opened until the platform
   // says it has gone.
   const [covered, setCovered] = useState(false)
+  // What the confirmation is opened from, and gives the focus back to when it is kept after
+  // all: Android's modal gives it back to nothing by itself (ui/Dialog.tsx).
+  const discard = useRef<View>(null)
   const rejection = rejectionOf(outcome.code)
   const reading = useMemo(
     () => read(outcome, replica.registry, describers, words, setting.household),
@@ -123,6 +126,7 @@ export function RejectedSheet({
         </Button>
       )}
       <Button
+        ref={discard}
         testID="resolver:discard"
         variant="ghost"
         idle={busy !== null}
@@ -169,8 +173,10 @@ export function RejectedSheet({
       {setting.writes || rejection.held ? null : (
         <Banner tone="warning">{t('sync.rejected.readonly')}</Banner>
       )}
-      <Versions versions={versions} />
+      {/* What a decision came to, above what it was about: under the versions it is under the
+          fold at 200 % text, while the control it explains has gone from the sheet's foot. */}
       <TroubleBanner trouble={trouble} />
+      <Versions versions={versions} />
       <Dialog
         testID="resolver:confirm"
         open={confirming}
@@ -180,6 +186,7 @@ export function RejectedSheet({
         onClosed={() => {
           setCovered(false)
         }}
+        opener={discard}
         title={t('sync.discard.title', { name })}
         description={t('sync.discard.body')}
         actions={

@@ -253,6 +253,43 @@ describe('who is signed in', () => {
   })
 })
 
+// D-161's twin: what a device keeps is its member's whether or not the app was running when
+// their sign-in went.
+describe('what the device kept of a member it holds no sign-in of', () => {
+  it('is removed as the app starts: a run closed before it was removed, a device restored from a backup', async () => {
+    await keptFrom()
+    await start({}, {})
+    await who('visitor')
+    await waitFor(() => {
+      expect(forgotten).toHaveBeenCalledWith(ids.member)
+    })
+    expect(await AsyncStorage.getItem(keepKey(ids.member))).toBeNull()
+  })
+
+  it('is left where the device holds their sign-in', async () => {
+    await keptFrom()
+    await start(holding(ids.member, 'a'), { 'GET /me': unanswered })
+    await who(`member ${ids.member}`)
+    expect(forgotten).not.toHaveBeenCalled()
+    expect(await AsyncStorage.getItem(keepKey(ids.member))).not.toBeNull()
+  })
+
+  // A keychain shut for now holds what it held: nothing is removed on its silence.
+  it('is left where the vault would not say whose sign-in it holds', async () => {
+    await keptFrom()
+    const vault = memoryVault(holding(ids.member, 'a'))
+    jest.spyOn(vault, 'get').mockRejectedValue(new Error('the keychain is shut'))
+    await render(
+      <SessionProviders services={serving({ vault, api: answering({}) })}>
+        <Probe />
+      </SessionProviders>,
+    )
+    await who('visitor')
+    expect(forgotten).not.toHaveBeenCalled()
+    expect(await AsyncStorage.getItem(keepKey(ids.member))).not.toBeNull()
+  })
+})
+
 describe('a sign-in the server answered', () => {
   it('signs its member in at once: the pair is kept under them, and nothing more is asked', async () => {
     const { api, vault } = await start({}, {})
@@ -285,9 +322,15 @@ describe('a sign-in the server answered', () => {
   // D-161's twin: what a device kept is its member's, and not the next one's to find.
   it('of another member removes what the device kept of the first, before it keeps anything of theirs', async () => {
     await keptFrom()
-    const { vault } = await start(holding(ids.member, 'a'), { 'GET /me': () => json(200, eva) })
-    await who(`member ${ids.member}`)
     const order: string[] = []
+    const { api, vault } = await start(holding(ids.member, 'a'), {
+      'GET /me': () => json(200, eva),
+      'POST /auth/logout': () => {
+        order.push('ended at the server')
+        return empty()
+      },
+    })
+    await who(`member ${ids.member}`)
     forgotten.mockImplementation((member) => {
       order.push(`forgot ${member}`)
       order.push(
@@ -298,14 +341,29 @@ describe('a sign-in the server answered', () => {
     })
     await act(() => the().signedIn({ user: jiri, tokens: pair('b') }))
     await who(`member ${ids.otherMember}`)
-    // The first one's pair was gone already, and the second's not yet kept.
-    expect(order).toEqual([`forgot ${ids.member}`, 'holds '])
+    // The first one's sign-in was ended at the server while its token could still say whose it
+    // is: left alive, the server would go on sending its member's notifications to this device.
+    // Then its pair was gone, and the second's not yet kept.
+    expect(order).toEqual(['ended at the server', `forgot ${ids.member}`, 'holds '])
+    expect(api.sent('POST /auth/logout')[0]?.headers.get('Authorization')).toBe('Bearer access-a')
     expect(vault.held()[vaultKeys.signIn(ids.member)]).toBeUndefined()
     expect(await AsyncStorage.getItem(keepKey(ids.member))).toBeNull()
     expect(JSON.parse(vault.held()[vaultKeys.signIns] ?? '')).toEqual({
       active: ids.otherMember,
       members: [ids.otherMember],
     })
+  })
+
+  it('of another member is taken though the first one’s could not be ended at the server', async () => {
+    const { vault } = await start(holding(ids.member, 'a'), {
+      'GET /me': () => json(200, eva),
+      'POST /auth/logout': unanswered,
+    })
+    await who(`member ${ids.member}`)
+    await act(() => the().signedIn({ user: jiri, tokens: pair('b') }))
+    await who(`member ${ids.otherMember}`)
+    expect(vault.held()[vaultKeys.signIn(ids.member)]).toBeUndefined()
+    expect(forgotten).toHaveBeenCalledWith(ids.member)
   })
 
   it('names its device: the installation’s own id, made once', async () => {
@@ -381,6 +439,27 @@ describe('signing out', () => {
         .catch((error: unknown) => error)
     })
     expect(failure).toBeInstanceOf(TypeError)
+    expect(screen.getByTestId('who')).toHaveTextContent(`member ${ids.member}`)
+    expect(screen.getByTestId('notes')).toHaveTextContent(/^ended false left false/)
+    expect(vault.held()[vaultKeys.signIn(ids.member)]).toBeDefined()
+    expect(await AsyncStorage.getItem(keepKey(ids.member))).not.toBeNull()
+    expect(forgotten).not.toHaveBeenCalled()
+  })
+
+  // A token that lapsed is refused `401` with no word of the sign-in, and a renewal that then
+  // fails for another reason has not ended it: the server never heard of the sign-out.
+  it('leaves its member signed in where a lapsed token could not be renewed for now', async () => {
+    const { vault } = await signedIn({
+      'POST /auth/logout': () => problem(401, 'unauthenticated'),
+      'POST /auth/token': () => problem(500, 'internal'),
+    })
+    let failure: unknown
+    await act(async () => {
+      failure = await the()
+        .signOut()
+        .catch((error: unknown) => error)
+    })
+    expect(failure).toBeInstanceOf(Error)
     expect(screen.getByTestId('who')).toHaveTextContent(`member ${ids.member}`)
     expect(screen.getByTestId('notes')).toHaveTextContent(/^ended false left false/)
     expect(vault.held()[vaultKeys.signIn(ids.member)]).toBeDefined()

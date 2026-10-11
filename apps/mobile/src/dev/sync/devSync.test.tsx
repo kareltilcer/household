@@ -33,6 +33,7 @@ import { cellId, cellThemes, inboxCases, inboxStates, rowCases, rowStates, texts
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
   usePathname: () => '/dev/sync',
+  useIsFocused: () => true,
 }))
 
 /** What the sync service says of the one real replica this file opens, and who listens. */

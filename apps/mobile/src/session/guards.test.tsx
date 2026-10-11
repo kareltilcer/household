@@ -214,7 +214,7 @@ describe('what could not be read', () => {
     const retry = jest.fn()
     await render(<Unread title={title} body={body} retry={retry} />)
     expect(said).toHaveBeenCalledTimes(1)
-    expect(said).toHaveBeenCalledWith(`${title} ${body}`)
+    expect(said).toHaveBeenCalledWith(`${title}\n${body}`)
     expect(screen.getByRole('header', { name: title })).toBeOnTheScreen()
     await userEvent.press(screen.getByRole('button', { name: catalogs.en['ui.retry'] }))
     expect(retry).toHaveBeenCalledTimes(1)

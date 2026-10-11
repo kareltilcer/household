@@ -8,7 +8,8 @@ import { controls } from '@household/icons'
 import { catalogs } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
 import { fireEvent, screen, userEvent, within } from '@testing-library/react-native'
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import { createRef, useState } from 'react'
+import { StyleSheet, type StyleProp, type View, type ViewStyle } from 'react-native'
 import type { TestInstance } from 'test-renderer'
 import {
   drawingsOf,
@@ -208,6 +209,139 @@ describe('a list row', () => {
     )
     expect(screen.queryByRole('button')).toBeNull()
   })
+
+  // Yoga counts the one child of a row that both grows and shrinks as nothing wide when it
+  // breaks the row's lines: with the mark and the action as the words' plain neighbours the
+  // row never wrapped, and at 200 % the title was left a letter's width (ListRow.tsx).
+  it('is two parts that wrap: the avatar with the words, and the mark with the action, which may shrink', async () => {
+    await render(
+      <List testID="list" label={words.meters}>
+        <ListRow
+          title={words.electricity}
+          secondary={words.read}
+          avatar={<Avatar initials="P" tone={2} />}
+          mark="conflict"
+          onOpenMark={() => undefined}
+          trailing={<Button variant="ghost">{words.open}</Button>}
+        />
+      </List>,
+      { scale: 2 },
+    )
+    const [row] = byRole(screen.getByTestId('list'), 'listitem')
+    const [lead, tail, ...rest] = (row as TestInstance).children as TestInstance[]
+    expect(rest).toEqual([])
+    // The words say how much room they are to have before anything goes under them.
+    expect(styleOf(lead as TestInstance)).toMatchObject({
+      flexDirection: 'row',
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: 320,
+    })
+    // The avatar is beside the words, in their part: never on a line of its own above them.
+    expect(textOf(lead as TestInstance)).toBe(`${words.electricity} ${words.read}`)
+    expect(
+      within(lead as TestInstance).getByText('P', { includeHiddenElements: true }),
+    ).toBeTruthy()
+    // What makes the words' room count: a second part, which may shrink.
+    expect(styleOf(tail as TestInstance)).toMatchObject({
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      flexShrink: 1,
+    })
+    expect(within(tail as TestInstance).getAllByRole('button')).toHaveLength(2)
+    expectAccessible()
+  })
+
+  it('draws no second part where it has neither a mark nor an action', async () => {
+    await render(
+      <List testID="list" label={words.meters}>
+        <ListRow title={words.electricity} avatar={<Avatar initials="P" tone={2} />} />
+        <ListRow title={words.gas} trailing={false} />
+      </List>,
+    )
+    for (const row of byRole(screen.getByTestId('list'), 'listitem')) {
+      expect(row.children).toHaveLength(1)
+    }
+  })
+
+  it('draws what stands under it on a line of its own, as wide as the row, apart from its action', async () => {
+    await render(
+      <List testID="list" label={words.meters}>
+        <ListRow
+          title={words.electricity}
+          trailing={<Button variant="ghost">{words.open}</Button>}
+          under={<Button>{words.add}</Button>}
+        />
+      </List>,
+    )
+    const [row] = byRole(screen.getByTestId('list'), 'listitem')
+    const [, tail, under] = (row as TestInstance).children as TestInstance[]
+    expect(within(tail as TestInstance).getAllByRole('button')).toHaveLength(1)
+    expect(styleOf(under as TestInstance)).toMatchObject({ flexBasis: '100%', flexGrow: 1 })
+    expect(within(under as TestInstance).getByRole('button', { name: words.add })).toBeTruthy()
+    expectAccessible()
+  })
+
+  it('gives its mark’s control to whoever asks for it, to give the focus back to', async () => {
+    const mark = createRef<View>()
+    await render(
+      <List label={words.meters}>
+        <ListRow
+          title={words.electricity}
+          mark="rejected"
+          markRef={mark}
+          onOpenMark={() => undefined}
+        />
+      </List>,
+    )
+    expect(mark.current?.props).toMatchObject({ testID: statusTestID('rejected') })
+  })
+})
+
+describe('a list', () => {
+  /** A row that holds something of its own: how often its action was pressed. */
+  function Counted({ title }: { readonly title: string }) {
+    const [pressed, setPressed] = useState(0)
+    return (
+      <ListRow
+        title={title}
+        secondary={String(pressed)}
+        trailing={
+          <Button
+            testID={title}
+            variant="ghost"
+            onPress={() => {
+              setPressed(pressed + 1)
+            }}
+          >
+            {words.open}
+          </Button>
+        }
+      />
+    )
+  }
+
+  // Known by its place, a row after one that left would be drawn anew: the inbox's open banner
+  // would close, a decision under way be lost, and a screen reader's focus go.
+  it('keeps a row as it is when the row before it leaves', async () => {
+    const view = await render(
+      <List testID="list" label={words.meters}>
+        <Counted key="first" title={words.electricity} />
+        <Counted key="second" title={words.gas} />
+      </List>,
+    )
+    await userEvent.press(screen.getByTestId(words.gas))
+    const read = () => byRole(screen.getByTestId('list'), 'listitem').map(textOf)
+    expect(read()).toEqual([`${words.electricity} 0 ${words.open}`, `${words.gas} 1 ${words.open}`])
+    await view.rerender(
+      <List testID="list" label={words.meters}>
+        <Counted key="second" title={words.gas} />
+      </List>,
+    )
+    expect(read()).toEqual([`${words.gas} 1 ${words.open}`])
+    // And the first row of a list has no rule over it, whichever row it was before.
+    expect(screen.getByTestId('list').children).toHaveLength(1)
+  })
 })
 
 describe('a module chip, an avatar, a portrait and a badge', () => {
@@ -304,6 +438,18 @@ describe('a key–value block', () => {
       StyleSheet.flatten(screen.getByText(value).props.style as StyleProp<ViewStyle>)
     expect(face(words.plate)).toMatchObject({ fontFamily: nativeThemes.light.type.num.fontFamily })
     expect(face(words.day)).toMatchObject({ fontFamily: nativeThemes.light.type.body.fontFamily })
+    expectAccessible()
+  })
+
+  // A kept version's banner tells its member to copy what they still need (`sync.kept.hint`).
+  it('draws a value as words that can be selected, and a label and a missing value as words that cannot', async () => {
+    await render(<KeyValue pairs={pairs} />)
+    expect(screen.getByText(words.plate).props.selectable).toBe(true)
+    expect(screen.getByText(words.day).props.selectable).toBe(true)
+    expect(screen.getByText(words.registration).props.selectable).toBeUndefined()
+    for (const missing of screen.getAllByText(`— ${none}`)) {
+      expect(missing.props.selectable).toBeUndefined()
+    }
     expectAccessible()
   })
 
@@ -679,6 +825,28 @@ describe('a composition', () => {
       'Overhead (derived) 1.3 GB 32%',
     ])
   })
+
+  it('gives a label its room before its figures go under it, together, at 200 % text', async () => {
+    await render(<Composition caption={words.storage} segments={segments} total={words.used} />, {
+      scale: 2,
+    })
+    for (const row of byRole(screen.getByTestId('chart:composition'), 'listitem')) {
+      const [label, figures, ...rest] = row.children as TestInstance[]
+      expect(rest).toEqual([])
+      expect(styleOf(row)).toMatchObject({ flexWrap: 'wrap' })
+      // The colour stands with its label, and the label says how much room the two are to have.
+      expect(styleOf(label as TestInstance)).toMatchObject({
+        flexGrow: 1,
+        flexShrink: 1,
+        flexBasis: 256,
+      })
+      expect((label as TestInstance).children).toHaveLength(2)
+      // The figures may shrink, which is what makes the label's room count (ListRow.tsx).
+      expect(styleOf(figures as TestInstance)).toMatchObject({ flexWrap: 'wrap', flexShrink: 1 })
+      expect((figures as TestInstance).children).toHaveLength(2)
+    }
+    expectAccessible()
+  })
 })
 
 describe('a flow', () => {
@@ -745,6 +913,21 @@ describe('a flow', () => {
     await fireEvent(screen.getByTestId('chart:flow'), 'layout', laid(896))
     expect(sides()).toBe('row')
     expectAccessible()
+  })
+
+  it('gives a label its room before its figure goes under it, at 200 % text', async () => {
+    await render(flow, { scale: 2 })
+    for (const row of byRole(screen.getByTestId('chart:flow'), 'listitem')) {
+      const [label, figure] = row.children as TestInstance[]
+      expect(styleOf(row)).toMatchObject({ flexWrap: 'wrap' })
+      expect(styleOf(label as TestInstance)).toMatchObject({
+        flexGrow: 1,
+        flexShrink: 1,
+        flexBasis: 256,
+      })
+      // The figure may shrink, which is what makes the label's room count (ListRow.tsx).
+      expect(styleOf(figure as TestInstance)).toMatchObject({ flexShrink: 1 })
+    }
   })
 
   it('lists two of one name apart, as it lists two segments of one name', async () => {

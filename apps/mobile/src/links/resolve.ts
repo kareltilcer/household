@@ -90,8 +90,11 @@ export function hasScreen(address: string): boolean {
 /** What `address` comes to for whoever `standing` says is here. */
 export function resolve(address: unknown, standing: Standing): Arrival {
   if (typeof address !== 'string' || !isOwnPath(address)) return { kind: 'nothing' }
-  if (standing.visitor) return { kind: 'held', path: address }
   const household = householdOf(address)
+  // Held only where it leads into a household, which is all a member's alone: the sign-in's own
+  // address, held, is where a member who has just signed in would be sent from the sign-in
+  // screen, which is itself, without end; and any other is a screen a visitor may open.
+  if (standing.visitor && household !== null) return { kind: 'held', path: address }
   if (household !== null && standing.shown !== null && household !== standing.shown.toLowerCase()) {
     return { kind: 'switched', path: address, from: standing.shown.toLowerCase(), to: household }
   }

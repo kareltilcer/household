@@ -97,6 +97,10 @@ describe('the controls’ section', () => {
   it.each(themes)(
     'takes a choice, a step and a press by the `testID`s the end-to-end flow presses, in the %s theme',
     async (theme) => {
+      // A select tells its owner of a choice once its sheet has gone, which the platform says
+      // as it is closed everywhere but on iOS.
+      jest.replaceProperty(Platform, 'OS', 'android')
+      jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
       await render(<ControlsSection />)
       const id = (part: string) => `controls:${theme}:${part}`
       await press(id('select'))

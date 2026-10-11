@@ -1,9 +1,10 @@
 // The stepper's rules (the web's `controls.test.tsx`, "a stepper", is their twin): what its
 // buttons do, what typing gives its owner and when, and what it holds once it is left.
-import { describe, expect, it, jest } from '@jest/globals'
+import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { createTranslator } from '@household/i18n'
 import { fireEvent, screen, userEvent } from '@testing-library/react-native'
 import { useState } from 'react'
+import { Platform, StyleSheet, type StyleProp, type TextStyle } from 'react-native'
 import { expectAccessible, violations } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
 import { sample } from './controls.fixtures.ts'
@@ -54,6 +55,10 @@ async function retype(text: string): Promise<void> {
 }
 
 const leave = () => fireEvent(field(), 'blur')
+
+afterEach(() => {
+  jest.restoreAllMocks()
+})
 
 describe('a stepper', () => {
   it('steps by its buttons, each named for what it does to what', async () => {
@@ -230,5 +235,18 @@ describe('a stepper', () => {
     await retype('-3')
     await leave()
     expect(shows()).toBe('-3')
+  })
+
+  // On Android a field of one line that is centred keeps the touch that begins on it from the
+  // page it stands on, which then does not scroll (Stepper.tsx says what of that is read).
+  it('centres its count on iOS, and leaves it at its start on Android', async () => {
+    const aligned = () => StyleSheet.flatten(field().props.style as StyleProp<TextStyle>).textAlign
+    const view = await render(<Count start={2} />)
+    expect(aligned()).toBe('center')
+    await view.unmount()
+    jest.replaceProperty(Platform, 'OS', 'android')
+    await render(<Count start={2} />)
+    expect(aligned()).toBeUndefined()
+    expectAccessible()
   })
 })

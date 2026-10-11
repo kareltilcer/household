@@ -46,10 +46,11 @@ export const clientParts: readonly Part[] = Object.keys(parts) as Part[]
 export const serverSegments = ['activity', 'admin', 'email', 'notification'] as const
 
 /**
- * The first segment of the keys that are the mobile app's alone: its words where a shared key's
- * are true only of a browser (*this browser*, *reload the page*). It is in no part, so no client
- * that fetches a language in parts downloads one of them. The mobile app fetches nothing: it
- * holds every catalog whole, in its bundle (the package's own entry, D-36).
+ * The first segment of the keys that are the mobile app's alone (D-195): every word only it
+ * draws, the twin of a shared key that is true only of a browser (*this browser*, *reload the
+ * page*) and a word the web has no place for at all (its tab bar's More). It is in no part, so
+ * no client that fetches a language in parts downloads one of them. The mobile app fetches
+ * nothing: it holds every catalog whole, in its bundle (the package's own entry, D-36).
  */
 export const deviceSegments = ['device'] as const
 

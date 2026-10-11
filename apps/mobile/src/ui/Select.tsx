@@ -7,7 +7,13 @@
 // sheet is marked, and its owner is told of a choice only when a member makes one. No first
 // option is taken without a word, so a required field does not pass on a choice nobody made
 // (D-172). The placeholder is no option, and cannot be chosen back.
-import { useState, type Ref } from 'react'
+//
+// Its owner is told of a choice once the sheet has gone and the focus is back on the field,
+// and not as the choice is pressed, as a menu's item acts (ui/Menu.tsx) and for its reason:
+// what a choice sets off may open another modal, which iOS refuses while this one is still
+// leaving, and whatever it moves the focus to would have the focus taken back by the sheet as
+// it goes. Until then the field reads what it read.
+import { useRef, useState, type Ref } from 'react'
 import { Pressable, View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
 import { useFocusRing } from './focus.ts'
@@ -57,6 +63,8 @@ export function Select({
 }: SelectProps) {
   const theme = useTheme()
   const [open, setOpen] = useState(false)
+  /** The choice that was pressed, until the sheet has gone. */
+  const picked = useRef<SelectOption | null>(null)
   const focus = useFocusRing()
   const invalid = error !== undefined
   const control = useControlStyle({
@@ -117,6 +125,11 @@ export function Select({
             }}
             title={label}
             opener={opener}
+            onClosed={() => {
+              const option = picked.current
+              picked.current = null
+              if (option !== null) onChange(option.value)
+            }}
           >
             <View accessibilityRole="radiogroup" accessibilityLabel={label}>
               {options.map((option) => (
@@ -126,9 +139,9 @@ export function Select({
                   label={option.label}
                   checked={option === chosen}
                   onPress={() => {
-                    setOpen(false)
                     // Chosen again, it is what it was: its owner is told of a change.
-                    if (option !== chosen) onChange(option.value)
+                    picked.current = option === chosen ? null : option
+                    setOpen(false)
                   }}
                 />
               ))}

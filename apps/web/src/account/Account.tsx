@@ -423,11 +423,17 @@ function DatesAndTimes({ me }: { readonly me: Me }) {
     () => weekdays.map((day) => ({ value: String(day), label: dayName(format.locale, day) })),
     [format.locale],
   )
-  // While a choice is being saved the control says what was chosen; refused, it is put back.
-  const zone = saveZone.isPending ? (saveZone.variables.timezone ?? null) : own
-  const firstDay = saveDay.isPending
-    ? (saveDay.variables.first_day_of_week ?? null)
-    : (me.first_day_of_week ?? null)
+  // What a press chose, held by the screen from the press itself and drawn for as long as its
+  // save is on its way; refused, the control is put back. The save says the same, but the query
+  // client tells a screen of a save by a timer, which a browser runs only after the frame that
+  // answers the press, and React puts a select back, as its event ends, to what was last drawn:
+  // read off the save alone, a choice stood as the account's old one for that frame. It is the
+  // save's own state that lets go of it, and no callback of the save's: one would draw at once,
+  // from the account as it was, before this screen is told of the one the save was answered with.
+  const [zoneChosen, setZoneChosen] = useState<string | null>(null)
+  const [dayChosen, setDayChosen] = useState<number | null>(null)
+  const zone = saveZone.isPending ? zoneChosen : own
+  const firstDay = saveDay.isPending ? dayChosen : (me.first_day_of_week ?? null)
   return (
     <Section title={t('account.dates.title')}>
       <div className={styles.form}>
@@ -441,7 +447,9 @@ function DatesAndTimes({ me }: { readonly me: Me }) {
           ]}
           onChange={(event) => {
             const next = event.currentTarget.value
-            saveZone.mutate({ timezone: next === '' ? null : next })
+            const timezone = next === '' ? null : next
+            setZoneChosen(timezone)
+            saveZone.mutate({ timezone })
           }}
         />
         {/* The control is put back, and holds the focus: why is said under it, as it arrives. */}
@@ -456,7 +464,9 @@ function DatesAndTimes({ me }: { readonly me: Me }) {
           options={[{ value: '', label: t('account.dates.first_day.locale') }, ...days]}
           onChange={(event) => {
             const next = event.currentTarget.value
-            saveDay.mutate({ first_day_of_week: next === '' ? null : Number(next) })
+            const day = next === '' ? null : Number(next)
+            setDayChosen(day)
+            saveDay.mutate({ first_day_of_week: day })
           }}
         />
         {saveDay.isError ? (

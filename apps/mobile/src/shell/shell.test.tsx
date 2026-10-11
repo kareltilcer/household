@@ -182,6 +182,19 @@ describe('the app bar', () => {
     expectAccessible()
   })
 
+  it('shows where a keyboard’s focus is on the household’s name, where it is a control', async () => {
+    await render(<HouseholdName name={households.own.name} onSwitch={() => undefined} />)
+    const ring = () =>
+      StyleSheet.flatten(
+        screen.getByTestId('app-bar:household').props.style as StyleProp<ViewStyle>,
+      )
+    expect(ring().outlineWidth).toBeUndefined()
+    await fireEvent(screen.getByTestId('app-bar:household'), 'focus')
+    expect(ring()).toMatchObject({ outlineWidth: 2, outlineOffset: 2 })
+    await fireEvent(screen.getByTestId('app-bar:household'), 'blur')
+    expect(ring().outlineWidth).toBeUndefined()
+  })
+
   it('draws the way back only where it is given one', async () => {
     const onBack = jest.fn()
     await render(<AppBar title={words.title} household={households.own.name} onBack={onBack} />)

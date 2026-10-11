@@ -18,7 +18,7 @@ import { render } from '../test/render.tsx'
 import { sourcesIn } from '../test/sources.ts'
 import { Text } from '../ui/Text.tsx'
 import { clientName, namedFetch, setting } from './client.ts'
-import { createKeep, keepKey, writeEvery } from './keep.ts'
+import { createKeep, keepKey, keptMembers, writeEvery } from './keep.ts'
 import { ApiProblemError, isRetryable, problemIn, retryAt, unwrap } from './problem.ts'
 import { createProblemHub, type Problem } from './problems.ts'
 import { useProblemText } from './problemText.ts'
@@ -324,7 +324,7 @@ describe('what the device keeps of what was read', () => {
     stop()
   })
 
-  it('reads back nothing another build wrote, nothing older than a day, and nothing that is no cache', async () => {
+  it('reads back nothing another build wrote, and nothing that is no cache', async () => {
     const client = queryClient()
     const kept = createKeep(ids.member, { build: 'mobile/0.0.9', now: () => 1000 })
     const stop = kept.watch(client)
@@ -336,23 +336,32 @@ describe('what the device keeps of what was read', () => {
     await createKeep(ids.member, { build: 'mobile/0.1.0', now: () => 2000 }).restore(newer)
     expect(newer.getQueryData(['households'])).toBeUndefined()
 
-    const later = queryClient()
-    await createKeep(ids.member, {
-      build: 'mobile/0.0.9',
-      now: () => 1000 + cacheMaxAge + 1,
-    }).restore(later)
-    expect(later.getQueryData(['households'])).toBeUndefined()
-
-    const inTime = queryClient()
-    await createKeep(ids.member, { build: 'mobile/0.0.9', now: () => 1000 + cacheMaxAge }).restore(
-      inTime,
-    )
-    expect(inTime.getQueryData(['households'])).toEqual([{ id: ids.household }])
-
     await AsyncStorage.setItem(key, '{"not": "a cache"')
     const broken = queryClient()
     await expect(createKeep(ids.member).restore(broken)).resolves.toBeUndefined()
     expect(broken.getQueryCache().getAll()).toEqual([])
+  })
+
+  // The app opens on these reads with no connection (PRD 03 §2.1): a member who last had it
+  // open a week ago opens it as one who had it open an hour ago does.
+  it('reads back what its member kept however long ago, for as long as their sign-in', async () => {
+    const client = queryClient()
+    const kept = createKeep(ids.member, { now: () => 1000 })
+    const stop = kept.watch(client)
+    client.setQueryData(['households'], [{ id: ids.household }])
+    await kept.flush()
+    stop()
+
+    const later = queryClient()
+    await createKeep(ids.member, { now: () => 1000 + 7 * cacheMaxAge }).restore(later)
+    expect(later.getQueryData(['households'])).toEqual([{ id: ids.household }])
+  })
+
+  it('says whom it keeps reads of, by what they are kept under', async () => {
+    await AsyncStorage.setItem(keepKey(ids.member), '{}')
+    await AsyncStorage.setItem(keepKey(ids.otherMember.toUpperCase()), '{}')
+    await AsyncStorage.setItem('household.display', '{}')
+    expect((await keptMembers()).sort()).toEqual([ids.member, ids.otherMember].sort())
   })
 
   it('is one member’s: another reads back nothing of it', async () => {

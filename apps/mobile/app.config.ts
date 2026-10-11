@@ -218,8 +218,8 @@ export default function config(): ExpoConfig {
       [
         'expo-build-properties',
         {
-          // 06-clients: iOS 16 and Android 10 at the least. Expo SDK 57 builds for no iOS
-          // before 16.4, so that is the minimum until the PRD or the SDK moves.
+          // 06-clients, D-185: iOS 16.4 and Android 10 at the least. Expo SDK 57 builds for no
+          // iOS before 16.4, which is where the floor stands until the SDK moves.
           ios: { deploymentTarget: '16.4' },
           android: {
             minSdkVersion: 29,
@@ -247,6 +247,14 @@ export default function config(): ExpoConfig {
       // The keychain is not opened behind Face ID, so no build asks for it (FR-PR1).
       ['expo-secure-store', { faceIDPermission: false }],
       'expo-notifications',
+      // The dev client's plugin gives every build a scheme of its own making beside the app's,
+      // `exp+` and the slug, by which a developer's machine opens a development build. The
+      // three variants share the slug, so left to itself each would answer it, a store's build
+      // among them: named here, where it is otherwise applied unasked, to be told that only a
+      // development build does. What else it writes, the dev launcher's reason for the local
+      // network and the build phase that takes that out of a release build, it writes
+      // whatever it is told.
+      ['expo-dev-client', { addGeneratedScheme: variant === 'development' }],
     ],
     extra,
   }

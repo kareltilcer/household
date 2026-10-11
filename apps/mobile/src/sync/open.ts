@@ -30,6 +30,7 @@ import type { Session } from '../session/context.ts'
 import { onForget } from '../session/forget.ts'
 import {
   claimReplica,
+  keptReplicas,
   markLeaving,
   removeLeft,
   replicaDatabase,
@@ -115,7 +116,7 @@ interface Shared {
   claimed: boolean
   /** Whether its member's sign-in has ended: it is opened for nobody from then on. */
   gone: boolean
-  /** Its closing, once the last holder let go or it was emptied. */
+  /** Its closing, once the last holder let go or it was closed to be emptied. */
   closed: Promise<void> | undefined
 }
 
@@ -166,18 +167,15 @@ const removal: Removal = {
     const name = replicaDatabase(member, household)
     const open = doomed.get(name)
     doomed.delete(name)
-    // One that was open here is emptied where it is, and closed under whoever still holds it.
-    // One still waiting for its note opens nothing (`start`), and is nothing to wait for.
-    const replica = open?.claimed === true ? await open.replica.catch(() => undefined) : undefined
-    if (open !== undefined && replica !== undefined) {
-      try {
-        await replica.wipe()
-      } finally {
-        await close(name, open)
-      }
-      return
-    }
-    // Not open: opened to be emptied, for nobody, and asking nothing of the server.
+    // One that was open here is closed, under whoever still holds it, and never emptied through:
+    // what its own wipe answers says nothing of what it holds. Its last holder may have closed
+    // it first, as a sign-out's screen does on its way out, and a closed database refuses the
+    // wipe; and the library may have begun to discard it itself, on the refusal that ended the
+    // sign-in, after which its wipe answers at once whatever became of the first. One still
+    // waiting for its note opens nothing (`start`), and is not waited for: it waits on the
+    // notes' own queue, which this is a step of.
+    if (open?.claimed === true) await close(name, open)
+    // Opened to be emptied, for nobody, and asking nothing of the server.
     const closed = await openReplica({
       dbFilename: name,
       household,
@@ -191,8 +189,13 @@ const removal: Removal = {
     }
   },
   remove: (member, household) => {
-    deleteDatabase(replicaDatabase(member, household))
-    removeFiles(member, household)
+    try {
+      deleteDatabase(replicaDatabase(member, household))
+    } finally {
+      // Whatever became of the database's file: the files that waited are a member's own, and
+      // do not stay because a deletion beside them failed.
+      removeFiles(member, household)
+    }
     return Promise.resolve()
   },
 }
@@ -206,23 +209,44 @@ async function start(
   // said to be kept that never was, until that member's sign-in ended here again.
   if (one().gone) throw new Error('the sign-in this replica was opened under has ended')
   if (!(await claimReplica(member, household, removal))) {
-    throw new Error('what an ended sign-in left of this replica could not be removed')
+    // Either way it is not opened: it would hold what an ended sign-in left, or be a replica
+    // that nothing notes, and so that nothing would remove.
+    throw new Error(
+      'this replica is not opened: what an ended sign-in left of it could not be removed, or the device would not keep the note that it is kept',
+    )
   }
   one().claimed = true
   // And one that ended while the note waited its turn: the note is marked as leaving after it,
   // in turn, and removed as every other of its member's is (databases.ts).
   if (one().gone) throw new Error('the sign-in this replica was opened under has ended')
+  // The sign-in the library is handed is its member's own, for as long as it is theirs. The
+  // session's reads whichever sign-in is in use on the device, and another member may sign in
+  // before this replica has been emptied: it would be handed their token, and send what its
+  // member had not sent as theirs. Asked before the session is and again once it has answered,
+  // since a renewal asks the server meanwhile: the forgetter below says `gone` at once, before
+  // another member's pair is kept.
+  const session = credential(ended)
+  const own = async <Answer>(ask: () => Promise<Answer>): Promise<Answer> => {
+    if (one().gone) throw ended()
+    const answer = await ask()
+    if (one().gone) throw ended()
+    return answer
+  }
+  const files = filesOf(member, household)
   const replica = await openReplica({
     dbFilename: replicaDatabase(member, household),
     household,
     apiUrl: api ?? apiUrl(),
-    credential: credential(ended),
+    credential: {
+      current: () => own(() => session.current()),
+      renew: () => own(() => session.renew()),
+    },
     fetch: namedFetch({ problems }),
     attachments: {
-      storage: fileStorage(filesOf(member, household)),
+      storage: fileStorage(files),
       // No module's route takes a file yet: the first is the proof module's (plan item 30).
       uploadUrl: () => null,
-      transport: { byUri: uploadByUri({ problems }) },
+      transport: { byUri: uploadByUri({ problems, directory: files }) },
     },
   })
   // Once, however many come to hold it. Connecting is the replica's to keep trying: a sync
@@ -278,17 +302,21 @@ export async function openHouseholdReplica(options: OpenOptions): Promise<Opened
 // what the device keeps of a member goes with their sign-in, however that ended (FR-ID7). The
 // session waits for the note that each is leaving, and not for the removal: a sign-out's screen
 // is not held up by a file, and a file that could not be removed now is removed at the next
-// start, from the note.
-onForget(async (member) => {
-  const id = member.toLowerCase()
-  for (const [name, one] of shared) {
-    if (one.member !== id) continue
-    // From now on it is nobody's to open or to join: whoever asks next opens it anew, emptied.
-    one.gone = true
-    shared.delete(name)
-    doomed.set(name, one)
-  }
-  await markLeaving(id)
-  void removeLeft(removal)
-})
+// start, from the note. And said with it, whose replicas the device keeps, by its notes: the
+// session removes, as the app starts, those of a member it holds no sign-in of (forget.ts).
+onForget(
+  async (member) => {
+    const id = member.toLowerCase()
+    for (const [name, one] of shared) {
+      if (one.member !== id) continue
+      // From now on it is nobody's to open or to join: whoever asks next opens it anew, emptied.
+      one.gone = true
+      shared.delete(name)
+      doomed.set(name, one)
+    }
+    await markLeaving(id)
+    void removeLeft(removal)
+  },
+  async () => (await keptReplicas()).map((kept) => kept.member),
+)
 void removeLeft(removal)

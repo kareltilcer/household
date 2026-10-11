@@ -18,7 +18,7 @@ import { useState, type ReactNode } from 'react'
 import { Platform } from 'react-native'
 import { paths } from '../app/paths.ts'
 import { createFormatters } from '../i18n/format.ts'
-import { expectAccessible } from '../test/a11y.ts'
+import { elementsOf, expectAccessible } from '../test/a11y.ts'
 import { render, type DrawOptions } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { KeptLoser } from './KeptLoser.tsx'
@@ -101,6 +101,12 @@ async function resolving(outcome: RecordedOutcome, options: HeldOptions = {}, dr
 
 const sheet = () => screen.getByTestId('resolver:surface')
 const version = (index: number) => screen.getByTestId(`sync:version:${String(index)}`)
+
+/** Whether what `first` names is drawn in the sheet before what `second` names: above it. */
+function drawnBefore(first: string, second: string): boolean {
+  const order = elementsOf(sheet()).map((element): unknown => element.props.testID)
+  return order.includes(first) && order.indexOf(first) < order.indexOf(second)
+}
 const toasts = () => screen.queryAllByTestId('toast')
 
 /** The platform that says a modal has gone as it is closed. */
@@ -179,6 +185,8 @@ describe('the conflict resolver', () => {
     // On a device it is this device that no longer holds it.
     expect(en['device.sync.retry.nothing']).toContain('this device')
     expect(announce).toHaveBeenCalledWith(en['device.sync.retry.nothing'])
+    // Above the versions: under them it is under the fold at 200 % text, the answer gone.
+    expect(drawnBefore('sync:trouble:nothing', 'sync:version:0')).toBe(true)
     expect(closes).toBe(0)
     expect(stand.asked).toEqual([`retry:${conflict.mutation_id}`])
     // Absent, and not disabled: the member's version cannot be sent again.
@@ -416,6 +424,8 @@ describe('a change that was not accepted', () => {
     await resolving(rejectionWith('forbidden'), { retry: () => false })
     await userEvent.press(screen.getByTestId('resolver:retry'))
     expect(await screen.findByTestId('sync:trouble:nothing')).toBeOnTheScreen()
+    // Above what the member entered: under it, it is under the fold at 200 % text.
+    expect(drawnBefore('sync:trouble:nothing', 'sync:version:0')).toBe(true)
     expect(screen.queryByTestId('resolver:retry')).toBeNull()
     expect(screen.getByTestId('resolver:discard')).toBeOnTheScreen()
     expect(closes).toBe(0)
@@ -423,6 +433,7 @@ describe('a change that was not accepted', () => {
 
   it('discards only after a confirmation that names the change, drawn inside the sheet', async () => {
     asAndroid()
+    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
     const stand = await resolving(rejectionWith('forbidden'))
     await userEvent.press(screen.getByRole('button', { name: en['sync.rejected.discard'] }))
     expect(stand.asked).toEqual([])
@@ -442,10 +453,17 @@ describe('a change that was not accepted', () => {
     expectAccessible()
 
     // Kept: the confirmation leaves, the sheet stays, and nothing was asked.
+    focus.mockClear()
     await userEvent.press(screen.getByTestId('resolver:confirm:keep'))
     expect(screen.queryByTestId('resolver:confirm:surface')).toBeNull()
     expect(sheet()).toBeOnTheScreen()
     expect(stand.asked).toEqual([])
+    // And the focus is given back to what the confirmation was opened from, which Android's
+    // modal does not do by itself.
+    expect(focus).toHaveBeenCalledTimes(1)
+    expect({ ...focus.mock.lastCall?.[0].current?.props }).toMatchObject({
+      testID: 'resolver:discard',
+    })
 
     await userEvent.press(screen.getByTestId('resolver:discard'))
     await userEvent.press(screen.getByTestId('resolver:confirm:discard'))

@@ -313,6 +313,8 @@ export function PasswordField({ label, help, error, required, ...rest }: Passwor
   const theme = useTheme()
   const target = useTarget()
   const [shown, setShown] = useState(false)
+  // A keyboard's focus, or a switch's, on *Show*: a touch gives none.
+  const focus = useFocusRing()
   return (
     <Field label={label} help={help} error={error} required={required} typed>
       {(wiring) => (
@@ -333,6 +335,8 @@ export function PasswordField({ label, help, error, required, ...rest }: Passwor
             onPress={() => {
               setShown((now) => !now)
             }}
+            onFocus={focus.onFocus}
+            onBlur={focus.onBlur}
             style={{
               minHeight: target,
               minWidth: target,
@@ -344,6 +348,7 @@ export function PasswordField({ label, help, error, required, ...rest }: Passwor
               borderRadius: theme.radii['radius-control'],
               // On: the password is shown. Said by more than its ground, by its weight.
               backgroundColor: shown ? theme.color['surface-sunken'] : 'transparent',
+              ...focus.ring,
             }}
           >
             <Text weight={shown ? 600 : 400}>{t('ui.password.show')}</Text>

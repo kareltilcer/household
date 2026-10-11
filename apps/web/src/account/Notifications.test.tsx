@@ -1,7 +1,7 @@
 // Notifications (F-20): what this browser says and is asked, against stand-ins for the parts of
 // a browser jsdom has none of, and the preferences as they are read, changed and refused.
 import { defaultScheduler, notifyManager } from '@tanstack/react-query'
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { pushStandIns, serverKey, type Browser, type PushStandIns } from '../push/testing.ts'
 import { bytesOf } from '../push/worker.ts'
@@ -444,6 +444,127 @@ describe('the preferences', () => {
     await user.click(screen.getByRole('switch', { name: 'Notifications from Household' }))
     expect(await screen.findByText(/^We couldn’t reach Household\./)).toBeInTheDocument()
     expect(screen.getByRole('switch', { name: 'Notifications from Household' })).toBeChecked()
+  })
+
+  // Each is put back to what the server last said it holds. Put back to what was kept as it
+  // was made, the second of two went back to the first one's choice, which the server never
+  // took: a switch left drawn as saved, and with no connection nothing reads the server again
+  // to say otherwise.
+  it('put two changes that could not reach the server back to what it holds', async () => {
+    const server = createServer()
+    withPreferences(server)
+    const { user } = await notifications(server)
+    // Neither is answered until both are on their way, and then in the order they were made.
+    let lose: () => void = () => undefined
+    const lost = new Promise<void>((resolve) => {
+      lose = resolve
+    })
+    server.on('PATCH /me/notification-preferences', async () => {
+      await lost
+      throw new TypeError('offline')
+    })
+    server.on('GET /me/notification-preferences', () => Promise.reject(new TypeError('offline')))
+    await user.click(screen.getByRole('switch', { name: 'The weekly digest' }))
+    await user.click(screen.getByRole('switch', { name: 'Reminders I subscribed to' }))
+    await waitFor(() => {
+      expect(server.to('PATCH /me/notification-preferences')).toHaveLength(2)
+    })
+    expect(screen.getByRole('switch', { name: 'The weekly digest' })).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Reminders I subscribed to' })).not.toBeChecked()
+    lose()
+    expect(await screen.findByText(/^We couldn’t reach Household\./)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: 'Reminders I subscribed to' })).toBeChecked()
+    })
+    expect(screen.getByRole('switch', { name: 'The weekly digest' })).toBeChecked()
+    // And it is read again once neither is on its way, which here fails as they did.
+    await waitFor(() => {
+      expect(server.to('GET /me/notification-preferences').length).toBeGreaterThan(1)
+    })
+    expect(screen.getByRole('switch', { name: 'The weekly digest' })).toBeChecked()
+  })
+
+  // A read on its way when a switch is pressed was asked before the change, and answers with
+  // what the server held then. Drawn, the switch went back under its member, and stayed so
+  // where that answer came after the change's own.
+  it('are not drawn over by the answer to a read asked before the press', async () => {
+    const server = createServer()
+    withPreferences(server)
+    const { user } = await notifications(server)
+    // The page is looked at again and reads again: this read is not answered yet.
+    let answer: () => void = () => undefined
+    server.on(
+      'GET /me/notification-preferences',
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = () => {
+            resolve(Response.json(everythingOn))
+          }
+        }),
+    )
+    act(() => {
+      window.dispatchEvent(new Event('visibilitychange'))
+    })
+    await waitFor(() => {
+      expect(server.to('GET /me/notification-preferences')).toHaveLength(2)
+    })
+    await user.click(screen.getByRole('switch', { name: 'The weekly digest' }))
+    await waitFor(() => {
+      expect(server.to('PATCH /me/notification-preferences')).toHaveLength(1)
+    })
+    expect(screen.getByRole('switch', { name: 'The weekly digest' })).not.toBeChecked()
+    // Answered now, with the digest on, as the server held it when the read was asked.
+    answer()
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(screen.getByRole('switch', { name: 'The weekly digest' })).not.toBeChecked()
+    expect(screen.queryByText('Not saved')).not.toBeInTheDocument()
+  })
+
+  // A refused change is no reason to read the server while another is still on its way: that
+  // read would be answered as the other lands, and drawn over it. It is read once none is.
+  it('are read again after a refusal once no change is on its way, and not before', async () => {
+    const server = createServer()
+    const held = withPreferences(server)
+    const { user } = await notifications(server)
+    // Neither is answered until the test says: the first is refused, the second taken.
+    const answers: (() => void)[] = []
+    server.on(
+      'PATCH /me/notification-preferences',
+      () =>
+        new Promise<Response>((resolve) => {
+          const refused = answers.length === 0
+          answers.push(() => {
+            if (refused) {
+              resolve(invalid('/categories/digest'))
+              return
+            }
+            const taken: Held = {
+              ...everythingOn,
+              categories: { ...everythingOn.categories, reminders: false },
+            }
+            held.set('', taken)
+            resolve(Response.json(taken))
+          })
+        }),
+    )
+    await user.click(screen.getByRole('switch', { name: 'The weekly digest' }))
+    await user.click(screen.getByRole('switch', { name: 'Reminders I subscribed to' }))
+    await waitFor(() => {
+      expect(answers).toHaveLength(2)
+    })
+    answers[0]?.()
+    // Put back, with the other still on its way and nothing read meanwhile.
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: 'The weekly digest' })).toBeChecked()
+    })
+    expect(server.to('GET /me/notification-preferences')).toHaveLength(1)
+    answers[1]?.()
+    await waitFor(() => {
+      expect(server.to('GET /me/notification-preferences')).toHaveLength(2)
+    })
+    expect(await screen.findByText('Not saved')).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'The weekly digest' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Reminders I subscribed to' })).not.toBeChecked()
   })
 
   it('say they did not load, and that nothing changed', async () => {

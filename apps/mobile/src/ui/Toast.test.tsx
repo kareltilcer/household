@@ -8,8 +8,11 @@ import { nativeThemes } from '@household/tokens/native'
 import { act, fireEvent, screen } from '@testing-library/react-native'
 import { useState } from 'react'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
-import { elementsOf, expectAccessible, nameOf, takesPress } from '../test/a11y.ts'
-import { render } from '../test/render.tsx'
+import type { TestInstance } from 'test-renderer'
+import { forget } from '../session/forget.ts'
+import { elementsOf, expectAccessible, nameOf, takesPress, textOf } from '../test/a11y.ts'
+import { ids } from '../test/fixtures.ts'
+import { render, styleOf } from '../test/render.tsx'
 import * as announcer from './announce.ts'
 import { Button } from './Button.tsx'
 import { sample } from './controls.fixtures.ts'
@@ -207,6 +210,75 @@ describe('a toast', () => {
       expectAccessible()
     },
   )
+
+  // As the sentence's plain neighbours the controls left it what they did not take: at 200 % on
+  // a phone, in German, nothing (Toast.tsx). Jest lays nothing out; this holds what is declared.
+  it('wraps at 200 %: its sentence asks for its room, and its controls go under it together', async () => {
+    await render(<Raise undo={() => undefined} />, { scale: 2, locale: 'de' })
+    await raise()
+    const toast = screen.getByTestId('toast')
+    expect(styleOf(toast)).toMatchObject({
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'flex-end',
+    })
+    const [sentence, held, ...rest] = toast.children as TestInstance[]
+    expect(rest).toEqual([])
+    expect(styleOf(sentence as TestInstance)).toMatchObject({
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: 192,
+    })
+    expect(textOf(sentence as TestInstance)).toBe(sample.cleared)
+    // A second part that may shrink is what makes the sentence's room count (ListRow.tsx).
+    expect(styleOf(held as TestInstance)).toMatchObject({ flexDirection: 'row', flexShrink: 1 })
+    expect(
+      elementsOf(held as TestInstance)
+        .filter(takesPress)
+        .map(nameOf),
+    ).toEqual([catalogs.de['ui.toast.undo'], catalogs.de[controls.dismiss.labelKey]])
+    expectAccessible()
+  })
+
+  it('draws the focus on each of its controls, in its own ink: the focus token has no pair on its ground', async () => {
+    await render(<Raise undo={() => undefined} />)
+    await raise()
+    for (const name of [undoWord, dismiss]) {
+      const control = () => screen.getByRole('button', { name })
+      expect(styleOf(control()).outlineWidth).toBeUndefined()
+      await fireEvent(control(), 'focus')
+      expect(styleOf(control())).toMatchObject({
+        outlineWidth: 2,
+        outlineColor: nativeThemes.light.color['text-inverse'],
+      })
+      await fireEvent(control(), 'blur')
+      expect(styleOf(control()).outlineWidth).toBeUndefined()
+    }
+  })
+
+  // A toast stands above the router: nothing else takes it away when a sign-in ends, and its
+  // Undo would write to the last member's replica for whoever pressed it.
+  it('goes with its member: none is shown, and nothing can be taken back, once they are forgotten', async () => {
+    const undo = jest.fn()
+    await render(
+      <>
+        <Raise undo={undo} />
+        <Raise message={sample.archived} />
+      </>,
+    )
+    await raise()
+    await raise(sample.archived)
+    expect(toasts()).toEqual([sample.cleared, sample.archived])
+    await act(async () => {
+      await forget(ids.member)
+    })
+    expect(toasts()).toEqual([])
+    expect(screen.queryByRole('button', { name: undoWord })).toBeNull()
+    expect(undo).not.toHaveBeenCalled()
+    // And a toast raised for whoever signs in next is shown as any is.
+    await raise(sample.archived)
+    expect(toasts()).toEqual([sample.archived])
+  })
 })
 
 describe('a toast and a modal', () => {

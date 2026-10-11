@@ -172,6 +172,9 @@ export function ConflictSheet({
       </View>
       <Text step="body-lg">{t('sync.conflict.question')}</Text>
       {setting.writes ? null : <Banner tone="warning">{t('device.sync.conflict.readonly')}</Banner>}
+      {/* What a decision came to, above what it was about: under the versions it is under the
+          fold at 200 % text, while the control it explains has gone from the sheet's foot. */}
+      <TroubleBanner trouble={trouble} />
       <Versions versions={versions} />
       {address === undefined || !setting.writes ? null : (
         <View style={{ alignItems: 'flex-start', gap: theme.space['space-1'] }}>
@@ -190,7 +193,6 @@ export function ConflictSheet({
           </Button>
         </View>
       )}
-      <TroubleBanner trouble={trouble} />
     </Sheet>
   )
 }

@@ -11,7 +11,7 @@
 //
 // Nothing here is written offline, and nothing here is a replica's: a module's rows are read
 // from the household's replica (sync/).
-import { isUuid, type ApiClient, type components } from '@household/api'
+import { isAbsent, isUuid, type ApiClient, type components } from '@household/api'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   queryOptions,
@@ -75,12 +75,20 @@ export function householdKey(household: string) {
   return ['households', household.toLowerCase()] as const
 }
 
-/** The households the member belongs to, a `suspended` one among them, in the server's order. */
+/**
+ * The households the member belongs to, a `suspended` one among them, in the server's order.
+ *
+ * A read of it that has begun is finished though its reader has gone, which is why it takes no
+ * signal: where the app opens goes by the list the device kept (app/Home.tsx) and leaves for a
+ * household at once, and a re-read given up as its reader left would never land. A household
+ * the kept list still names and the server no longer does, one its member left or was taken
+ * out of, would then be where the app opens for good, *not available* leading back to itself.
+ */
 export function useHouseholds(): UseQueryResult<HouseholdSummary[]> {
   const api = useApi()
   return useQuery({
     queryKey: householdsKey,
-    queryFn: async ({ signal }) => unwrap(await api.GET('/households', { signal })).items ?? [],
+    queryFn: async () => unwrap(await api.GET('/households')).items ?? [],
   })
 }
 
@@ -146,7 +154,10 @@ export function useHousehold(household: string): HouseholdRead {
   const member = state.status === 'member'
   const named = isUuid(household)
   const read = useQuery({ ...householdQuery(api, household), enabled: member && named })
-  const refused = problemIn(read.error)?.status === 404
+  // The API's own `404`, a problem with its code: whatever answers `404` in the API's place, a
+  // proxy that lost its upstream, has said nothing of the household, and is a read that failed.
+  const problem = problemIn(read.error)
+  const refused = problem !== undefined && isAbsent(problem)
   const [wasRefused, setWasRefused] = useState(false)
   const asking = read.data === undefined && read.status === 'pending'
   if (refused !== wasRefused && !asking) setWasRefused(refused)

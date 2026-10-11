@@ -5,18 +5,21 @@
 // contract is the web's (apps/web/src/ui/Banner.tsx).
 //
 // A device has no region that is read out as its words change, on both platforms alike: a banner
-// that arrives while its member is here says its words through the one announcer (announce.ts),
-// a failure at once and anything else once the screen reader has finished. So its sentence is a
-// string, which can be said, and what else stands under it is `detail`, which is not.
+// that arrives while its member is here says its words through the one announcer (announce.ts).
+// On iOS a failure is said at once, over what is being said, and anything else once the screen
+// reader has finished; on Android React Native passes no such option (read, announce.ts), so
+// each is said as any other is. So its sentence is a string, which can be said, and what else
+// stands under it is `detail`, which is not.
 import { controls } from '@household/icons'
 import type { ColorName } from '@household/tokens/native'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { announce as say, announceNow as sayNow } from './announce.ts'
 import { IconButton } from './Button.tsx'
 import { BaseIcon } from './Icon.tsx'
+import { useInFront } from './Screen.tsx'
 import { Text } from './Text.tsx'
 
 export type BannerTone = 'neutral' | 'info' | 'warning' | 'danger'
@@ -51,8 +54,9 @@ export interface BannerProps {
   readonly onDismiss?: (() => void) | undefined
   /**
    * Whether it is announced when it appears: a state that arrived while the member was here.
-   * One that was there when the screen opened is read in its place and is not announced. A
-   * failure is announced at once; any other tone once the screen reader has finished.
+   * One that was there when the screen opened is read in its place and is not announced. On
+   * iOS a failure is announced at once, and any other tone once the screen reader has
+   * finished; on Android each is announced as any other is (announce.ts).
    */
   readonly announce?: boolean
   readonly testID?: string
@@ -71,13 +75,25 @@ export function Banner({
   const t = useTranslate()
   const theme = useTheme()
   const urgent = tone === 'danger'
-  // What is said: the title, a pause, the sentence. The glyph only repeats the tone.
+  // What is said: the title, a line break, the sentence. That a screen reader pauses at the
+  // break is heard by nobody yet. The glyph only repeats the tone.
   const said = title === undefined ? children : `${title}\n${children}`
+  // Said by a screen that is in front alone. A tab's screen and a household another was opened
+  // over stay mounted, and what arrives on one out of sight is told to nobody: it stands there
+  // when its member comes back, and is read in its place as what stood at the start is.
+  const front = useInFront()
+  const stood = useRef<string | null>(null)
   useEffect(() => {
-    if (!announce) return
-    if (urgent) sayNow(said)
-    else say(said)
-  }, [announce, urgent, said])
+    if (!announce) {
+      stood.current = null
+      return
+    }
+    if (front && stood.current !== said) {
+      if (urgent) sayNow(said)
+      else say(said)
+    }
+    stood.current = said
+  }, [announce, urgent, said, front])
 
   return (
     <View

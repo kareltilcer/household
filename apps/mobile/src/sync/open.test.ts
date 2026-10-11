@@ -1,6 +1,6 @@
 // How a member's replica of a household is opened on a device, held and removed (ADR 0019,
 // FR-ID7): what the library is handed, that one file is one open replica however many hold it,
-// and that a sign-in which ended takes its member's replicas with it, wiped, closed and their
+// and that a sign-in which ended takes its member's replicas with it, closed, wiped and their
 // files deleted. The library's own opening and SQLite are stood in for: nothing on a developer's
 // machine opens a device's database, and a replica's behaviour is the conformance suite's.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
@@ -11,7 +11,7 @@ import { Directory, Paths } from 'expo-file-system'
 import { createProblemHub } from '../api/problems.ts'
 import { testApi } from '../api/testing.ts'
 import type { ReplicaCredential } from '../session/context.ts'
-import { forget } from '../session/forget.ts'
+import { forget, forgetOthers } from '../session/forget.ts'
 import { sourcesIn } from '../test/sources.ts'
 import { keptReplicas, replicaDatabase } from './databases.ts'
 import { filesOf, fileStorage } from './files.ts'
@@ -21,17 +21,17 @@ import { opened, openHouseholdReplica, type OpenOptions } from './open.ts'
 interface Fake {
   readonly options: NativeReplicaOptions
   readonly asked: string[]
-  /** Fails its wiping, where a test says. */
-  wipes: boolean
 }
 
 const mockOpened: Fake[] = []
 /** Whether the next connect is refused: a sync service that cannot be reached. */
 const mockConnect = { fails: false }
+/** Whether a wipe fails: a device with no room left, a file that is damaged. */
+const mockWipe = { fails: false }
 
 jest.mock('@household/sync/native', () => ({
   openReplica: (options: NativeReplicaOptions) => {
-    const fake: Fake = { options, asked: [], wipes: true }
+    const fake: Fake = { options, asked: [] }
     mockOpened.push(fake)
     return Promise.resolve({
       fake,
@@ -40,8 +40,11 @@ jest.mock('@household/sync/native', () => ({
         return mockConnect.fails ? Promise.reject(new Error('unreachable')) : Promise.resolve()
       },
       wipe: () => {
+        // As a real one does: a database that was closed takes no statement.
+        const closed = fake.asked.includes('close')
         fake.asked.push('wipe')
-        return fake.wipes ? Promise.resolve() : Promise.reject(new Error('the database is locked'))
+        if (closed) return Promise.reject(new Error('the database is closed'))
+        return mockWipe.fails ? Promise.reject(new Error('the disk is full')) : Promise.resolve()
       },
       close: () => {
         fake.asked.push('close')
@@ -108,6 +111,7 @@ beforeEach(async () => {
   mockFiles.asked.length = 0
   mockFiles.stuck = false
   mockConnect.fails = false
+  mockWipe.fails = false
 })
 
 afterEach(() => {
@@ -139,9 +143,51 @@ describe('a replica that is opened', () => {
         },
       }),
     )
-    expect(fakeOf(mine.replica).options.credential).toBe(credential)
+    const handed = fakeOf(mine.replica).options.credential
+    await expect(handed.current()).resolves.toBe('access-a')
+    await expect(handed.renew()).resolves.toBeUndefined()
     // What the replica tells its own revocation by: nothing else discards it.
     expect(ended?.()).toBeInstanceOf(Revoked)
+    await mine.close()
+  })
+
+  it('is handed that sign-in for as long as it is its member’s, and none once theirs has ended', async () => {
+    const who = pair()
+    // The session's reads whichever sign-in is in use on the device: once another member has
+    // signed in, theirs.
+    let token = 'access-a'
+    /** While it is set the session answers only once it settles: a renewal asks the server first. */
+    let renewing: Promise<void> | undefined
+    const session: ReplicaCredential = {
+      current: async () => {
+        await renewing
+        return token
+      },
+      renew: () => Promise.resolve(),
+    }
+    const mine = await openHouseholdReplica(options({ ...who, credential: () => session }))
+    const handed = fakeOf(mine.replica).options.credential
+    await expect(handed.current()).resolves.toBe('access-a')
+
+    // Asked while its member's sign-in is the one in use, and answered once another's is: the
+    // token is not this replica's to send.
+    let renewed: () => void = () => undefined
+    renewing = new Promise<void>((resolve) => {
+      renewed = resolve
+    })
+    const asked = handed.current()
+    await forget(who.member)
+    token = 'access-b'
+    renewed()
+    await expect(asked).rejects.toBeInstanceOf(Revoked)
+    // And asked after, it is told the same with the session not asked at all.
+    renewing = undefined
+    const current = jest.spyOn(session, 'current')
+    const renew = jest.spyOn(session, 'renew')
+    await expect(handed.current()).rejects.toBeInstanceOf(Revoked)
+    await expect(handed.renew()).rejects.toBeInstanceOf(Revoked)
+    expect(current).not.toHaveBeenCalled()
+    expect(renew).not.toHaveBeenCalled()
     await mine.close()
   })
 
@@ -257,7 +303,7 @@ describe('a replica that is held', () => {
 })
 
 describe('a sign-in that ended', () => {
-  it('takes its member’s open replica with it: wiped, closed, its file and its files deleted', async () => {
+  it('takes its member’s open replica with it: closed, emptied by one opened for nobody, its file and its files deleted', async () => {
     const who = pair()
     const name = replicaDatabase(who.member, who.household)
     const mine = await openHouseholdReplica(options(who))
@@ -268,13 +314,39 @@ describe('a sign-in that ended', () => {
     await forget(who.member.toUpperCase())
     // The session waited for the note alone: the removal goes on behind it.
     expect(await keptReplicas()).toEqual([])
-    expect(fakeOf(mine.replica).asked).toEqual(['connect', 'wipe', 'close'])
+    // Closed under its holder, and never asked to wipe itself: what that answers says nothing
+    // of a replica that was closed first, or that had begun to discard itself.
+    expect(fakeOf(mine.replica).asked).toEqual(['connect', 'close'])
+    expect(mockOpened).toHaveLength(2)
+    const [, emptied] = mockOpened
+    expect(emptied?.asked).toEqual(['wipe', 'close'])
+    expect(emptied?.options.dbFilename).toBe(name)
+    expect(emptied?.options.apiUrl).toBe('about:blank')
     expect(mockFiles.asked).toEqual([`PRAGMA wal_checkpoint(TRUNCATE):${name}`, `deleted:${name}`])
     expect(filesOf(who.member, who.household).exists).toBe(false)
     expect(new Directory(Paths.document, 'replicas', who.member).exists).toBe(false)
     // Whoever still held it lets go of a replica that is closed already.
     await mine.close()
-    expect(fakeOf(mine.replica).asked).toEqual(['connect', 'wipe', 'close'])
+    expect(fakeOf(mine.replica).asked).toEqual(['connect', 'close'])
+  })
+
+  it('takes a replica its holder let go of first, as a sign-out’s screen does on its way out', async () => {
+    const who = pair()
+    const name = replicaDatabase(who.member, who.household)
+    const mine = await openHouseholdReplica(options(who))
+    mockFiles.there.add(name)
+    // The sign-in ends, and the screen that held the replica leaves before the removal has
+    // come to it: a closed database takes no wipe.
+    const forgotten = forget(who.member)
+    await mine.close()
+    await forgotten
+    expect(await keptReplicas()).toEqual([])
+    expect(fakeOf(mine.replica).asked).toEqual(['connect', 'close'])
+    expect(mockOpened.map((each) => each.asked)).toEqual([
+      ['connect', 'close'],
+      ['wipe', 'close'],
+    ])
+    expect(mockFiles.asked).toContain(`deleted:${name}`)
   })
 
   it('takes a replica that is not open too: opened for nobody, wiped, closed and deleted', async () => {
@@ -295,6 +367,23 @@ describe('a sign-in that ended', () => {
     expect(emptied?.options.apiUrl).toBe('about:blank')
     await expect(emptied?.options.credential.current()).rejects.toBeInstanceOf(Revoked)
     expect(mockFiles.asked).toContain(`deleted:${name}`)
+  })
+
+  it('is found gone as the app starts, too: a replica noted for a member the device holds no sign-in of is removed', async () => {
+    // Noted by a run before this one, and nothing of it open: a device closed between its
+    // pair's removal and the rest, or one whose keystore lost a pair.
+    const [who, other] = [pair(), pair()]
+    await (await openHouseholdReplica(options(who))).close()
+    await (await openHouseholdReplica(options(other))).close()
+    mockFiles.there.add(replicaDatabase(who.member, who.household))
+    mockOpened.length = 0
+
+    await forgetOthers([other.member.toUpperCase()])
+    expect(await keptReplicas()).toEqual([other])
+    expect(mockOpened.map((each) => [each.options.dbFilename, each.asked])).toEqual([
+      [replicaDatabase(who.member, who.household), ['wipe', 'close']],
+    ])
+    expect(mockFiles.asked).toContain(`deleted:${replicaDatabase(who.member, who.household)}`)
   })
 
   it('leaves another member’s replicas as they are', async () => {
@@ -334,16 +423,70 @@ describe('a sign-in that ended', () => {
     await next.close()
   })
 
-  it('is not opened again by its member while what it left could not be wiped', async () => {
+  it('deletes the files that waited though the database’s file could not be deleted', async () => {
     const who = pair()
+    const name = replicaDatabase(who.member, who.household)
     const mine = await openHouseholdReplica(options(who))
-    fakeOf(mine.replica).wipes = false
+    mockFiles.there.add(name)
+    mockFiles.stuck = true
+    const storage = fileStorage(filesOf(who.member, who.household))
+    await storage.saveFile(storage.getLocalUri('row'), new Uint8Array([1, 2, 3]).buffer)
+    await forget(who.member)
+    // The failure is the removal's still: the database's file is noted as left to delete.
+    expect(await keptReplicas()).toEqual([{ ...who, leaving: true, emptied: true }])
+    expect(filesOf(who.member, who.household).exists).toBe(false)
+    await mine.close()
+  })
+
+  it('deletes a replica it could not wipe: a wipe that keeps failing does not keep the rows', async () => {
+    const who = pair()
+    const name = replicaDatabase(who.member, who.household)
+    const mine = await openHouseholdReplica(options(who))
+    mockFiles.there.add(name)
+    mockWipe.fails = true
+    await forget(who.member)
+    expect(await keptReplicas()).toEqual([])
+    expect(mockOpened[1]?.asked).toEqual(['wipe', 'close'])
+    expect(mockFiles.there.has(name)).toBe(false)
+    await mine.close()
+  })
+
+  it('is not opened again by its member while what it left could be neither wiped nor deleted', async () => {
+    const who = pair()
+    const name = replicaDatabase(who.member, who.household)
+    const mine = await openHouseholdReplica(options(who))
+    mockFiles.there.add(name)
+    mockWipe.fails = true
+    mockFiles.stuck = true
     await forget(who.member)
     expect(await keptReplicas()).toEqual([{ ...who, leaving: true }])
-    // Asked for again, it is wiped first, by a replica opened for nobody.
+    await mine.close()
+    // It holds what the ended sign-in left: nothing is opened on it, for as long as that is so.
+    mockOpened.length = 0
+    await expect(openHouseholdReplica(options(who))).rejects.toThrow(/is not opened/)
+    expect(mockOpened.map((each) => each.asked)).toEqual([['wipe', 'close']])
+    expect(mockFiles.there.has(name)).toBe(true)
+
+    // Asked for again once the device can, it is wiped first, by a replica opened for nobody.
+    mockWipe.fails = false
+    mockFiles.stuck = false
     mockOpened.length = 0
     const again = await openHouseholdReplica(options(who))
     expect(mockOpened.map((each) => each.asked)).toEqual([['wipe', 'close'], ['connect']])
+    expect(mockFiles.there.has(name)).toBe(false)
+    expect(await keptReplicas()).toEqual([who])
+    await again.close()
+  })
+
+  it('is not opened where the device would not keep the note that it is kept', async () => {
+    const who = pair()
+    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('database or disk is full'))
+    await expect(openHouseholdReplica(options(who))).rejects.toThrow(/is not opened/)
+    // Nothing was made that nothing would remove.
+    expect(mockOpened).toEqual([])
+    expect(await keptReplicas()).toEqual([])
+    // And asked once more, as the screen that says so offers, it is.
+    const again = await openHouseholdReplica(options(who))
     expect(await keptReplicas()).toEqual([who])
     await again.close()
   })

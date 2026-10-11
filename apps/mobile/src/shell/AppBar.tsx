@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { IconButton } from '../ui/Button.tsx'
+import { useFocusRing } from '../ui/focus.ts'
 import { BaseIcon } from '../ui/Icon.tsx'
 import { Text } from '../ui/Text.tsx'
 
@@ -34,6 +35,8 @@ export function HouseholdName({ name, onSwitch }: HouseholdNameProps) {
   const t = useTranslate()
   const theme = useTheme()
   const target = useTarget()
+  // A keyboard's focus, or a switch's, on the name where it is a control: a touch gives none.
+  const focus = useFocusRing()
   if (onSwitch === undefined) {
     return (
       <Text testID="app-bar:household" step="caption" color="text-muted" weight={600}>
@@ -48,6 +51,8 @@ export function HouseholdName({ name, onSwitch }: HouseholdNameProps) {
       // Its name holds the word that is drawn, the household's own (WCAG 2.5.3).
       accessibilityLabel={t(controls.switch_household.labelKey, { household: name })}
       onPress={onSwitch}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
       style={({ pressed }) => ({
         alignSelf: 'flex-start',
         minHeight: target,
@@ -57,6 +62,7 @@ export function HouseholdName({ name, onSwitch }: HouseholdNameProps) {
         gap: theme.space['space-05'],
         borderRadius: theme.radii['radius-control'],
         backgroundColor: pressed ? theme.color['surface-sunken'] : 'transparent',
+        ...focus.ring,
       })}
     >
       <Text step="caption" weight={600} style={{ flexShrink: 1 }}>

@@ -258,7 +258,7 @@ function problems(
       written(file).keys.flatMap((key) => {
         const part = partOf(key)
         if (part !== undefined && held.includes(part)) return []
-        const whose = part === undefined ? 'which is the server’s alone' : `of the part ${part}`
+        const whose = part === undefined ? 'which is in no part' : `of the part ${part}`
         return [`${where}: ${file} reads ${key}, ${whose}`]
       }),
     )
@@ -420,7 +420,7 @@ describe('a screen that reads a word its route does not fetch', () => {
         changed('household/Leave.tsx', "'household.leave.child'", "'email.verify_email.subject'"),
       ),
     ).toEqual([
-      'leave, whose route fetches app and household: household/Leave.tsx reads email.verify_email.subject, which is the server’s alone',
+      'leave, whose route fetches app and household: household/Leave.tsx reads email.verify_email.subject, which is in no part',
     ])
   })
 

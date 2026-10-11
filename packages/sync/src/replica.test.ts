@@ -1342,6 +1342,37 @@ describe('a replica', waits, () => {
     expect(existsSync(waiting?.local_uri ?? '')).toBe(false)
   })
 
+  it('keeps a file, bytes and all, that the API refuses for the build that sent it: an app too old is no file refused', async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    let now = Date.parse('2026-10-02T10:00:00Z')
+    // What the API answers every request of a build older than it serves, an upload among them.
+    let answer = (): Response => json(400, { code: 'update_required', minimum_version: '9.0.0' })
+    const { fetch, calls } = routes({ '/content': () => answer() })
+    const { replica } = await open({ fetch, storage, now: () => new Date(now) })
+    const sends = (): number => calls.filter((c) => c.url.endsWith('/content')).length
+    const scan = newId()
+    await arrive(replica, 'items', scan, { household_id: household, title: 'Scan', version: 1 })
+    await replica.attach('items', scan, {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'scan.pdf',
+    })
+    await replica.attachments().upload()
+    const [waiting] = await replica.attachments().list()
+    expect(waiting).toMatchObject({ id: scan, status: 'pending', attempts: 1, code: null })
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(true)
+    // Nor is it sent again at every run, each of which would send the whole file to be refused.
+    await replica.attachments().upload()
+    expect(sends()).toBe(1)
+    // Sent again by the app its member has updated to, it is taken.
+    answer = () => json(201, {})
+    now += stateRetryMs
+    await replica.attachments().upload()
+    expect(sends()).toBe(2)
+    expect(await replica.attachments().list()).toEqual([])
+  })
+
   it('sends a file from where it waits where its transport takes one by its URI, and reads none of it', async () => {
     const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
     dirs.push(storage)

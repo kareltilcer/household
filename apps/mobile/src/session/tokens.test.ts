@@ -140,6 +140,24 @@ describe('a sign-in the device was given', () => {
     expect(vault.held()[vaultKeys.signIn(ids.member)]).toBeUndefined()
   })
 
+  // A keychain that is shut for now holds what it held: read as holding nothing, a sign-in it
+  // still has would be taken for gone, and what the device kept of its member removed for it.
+  it('is nobody’s for this run where the vault will not say, and nothing of it is removed', async () => {
+    const first = device()
+    await first.tokens.keep(ids.member, pair('a'))
+    const { tokens, vault } = device(first.vault.held())
+    jest.spyOn(vault, 'get').mockRejectedValue(new Error('the keychain is shut'))
+    const remove = jest.spyOn(vault, 'remove')
+    await expect(tokens.start()).rejects.toThrow('the keychain is shut')
+    expect(tokens.member()).toBeNull()
+    expect(tokens.members()).toEqual([])
+    expect(await tokens.current()).toBeUndefined()
+    expect(remove).not.toHaveBeenCalled()
+    expect(vault.held()[vaultKeys.signIn(ids.member)]).toContain('refresh-a')
+    // And an installation it cannot name is given a name, as a device new to the app is.
+    expect(await tokens.device()).toBe(ids.device)
+  })
+
   it('works for as long as the app runs on a device that will not keep it', async () => {
     const { tokens, vault } = device()
     jest.spyOn(vault, 'set').mockRejectedValue(new Error('the keystore refused'))
@@ -259,6 +277,49 @@ describe('a renewal', () => {
     expect(tokens.member()).toBeNull()
     expect(vault.held()[vaultKeys.signIn(ids.member)]).toBeUndefined()
     expect(ended).not.toHaveBeenCalled()
+  })
+
+  // A request that left as one member and was refused once another's sign-in was the one in
+  // use is the first one's request: sent again with the second's token, it is made as them.
+  it('hands a request refused on another member’s token nothing of the sign-in in use', async () => {
+    const { tokens, exchange } = device()
+    await tokens.keep(ids.member, pair('a'))
+    await tokens.remove(ids.member)
+    await tokens.keep(ids.otherMember, pair('b'))
+    expect(await tokens.renew('access-a')).toBeUndefined()
+    expect(exchange).not.toHaveBeenCalled()
+    // The second one's own is renewed as ever.
+    exchange.mockResolvedValue({ kind: 'renewed', tokens: pair('c') })
+    expect(await tokens.renew('access-b')).toBe('access-c')
+  })
+
+  it('answers a request refused on a token of this sign-in’s the app read as it started', async () => {
+    const first = device()
+    await first.tokens.keep(ids.member, pair('a'))
+    const { tokens, exchange } = device(first.vault.held())
+    await tokens.start()
+    exchange.mockResolvedValue({ kind: 'renewed', tokens: pair('b') })
+    expect(await tokens.renew('access-a')).toBe('access-b')
+  })
+
+  // A keychain shut while the device is locked refuses the write, and takes it once it is not:
+  // left unwritten, the app closed would start again on a refresh token that is used up.
+  it('writes a pair the vault would not take again, as a token is next asked for', async () => {
+    const { tokens, exchange, vault } = device()
+    await tokens.keep(ids.member, pair('a'))
+    const set = jest.spyOn(vault, 'set').mockRejectedValueOnce(new Error('the keychain is shut'))
+    exchange.mockResolvedValue({ kind: 'renewed', tokens: pair('b') })
+    expect(await tokens.renew('access-a')).toBe('access-b')
+    expect(vault.held()[vaultKeys.signIn(ids.member)]).toContain('refresh-a')
+    expect(await tokens.current()).toBe('access-b')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(vault.held()[vaultKeys.signIn(ids.member)]).toContain('refresh-b')
+    // Written once it was taken, and not at every token asked for after.
+    const writes = set.mock.calls.length
+    expect(await tokens.current()).toBe('access-b')
+    await Promise.resolve()
+    expect(set.mock.calls).toHaveLength(writes)
   })
 
   it('refused after another member signed in ends nothing of theirs', async () => {

@@ -48,13 +48,18 @@ export interface UnreadProps {
 /**
  * In a screen's place where what it is drawn from could not be read, and nothing is kept of it:
  * said, with the way to ask again. It is said aloud as it arrives, as a body's failure is: it
- * takes the place of a wait, and asked again to no avail it is drawn anew and said again, where
- * a screen that came back without a word would tell whoever cannot see it nothing of the press.
+ * takes the place of a wait, and asked again of a server that answers and to no avail it is
+ * drawn anew and said again, where a screen that came back without a word would tell whoever
+ * cannot see it nothing of the press. Asked again with no connection the read waits for one
+ * as it did, nothing is drawn anew and nothing is said: the press changed nothing. And where
+ * asking again brings the screen, the screen is what is drawn: nothing here says so, there
+ * being no words for it but the screen's own (ADR 0029).
  */
 export function Unread({ title, body, retry }: UnreadProps) {
   const t = useTranslate()
   useEffect(() => {
-    announceNow(`${title} ${body}`)
+    // The title, a line break, the sentence: as a banner says its own (ui/Banner.tsx).
+    announceNow(`${title}\n${body}`)
   }, [title, body])
   return (
     <Screen title={title} testID="unread">

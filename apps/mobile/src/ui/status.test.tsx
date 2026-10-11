@@ -14,6 +14,7 @@ import { Banner, type BannerTone } from './Banner.tsx'
 import { Button } from './Button.tsx'
 import { EmptyState } from './EmptyState.tsx'
 import { OfflineBar } from './OfflineBar.tsx'
+import { Screen } from './Screen.tsx'
 import { Skeleton } from './Skeleton.tsx'
 import { StatusMark, SyncMark, syncStates, type SyncState } from './StatusMark.tsx'
 
@@ -318,6 +319,25 @@ describe('a banner', () => {
       </Banner>,
     )
     expect(said.mock.calls).toEqual([[words.reason], [words.sentence]])
+  })
+
+  // A tab's screen and a household another was opened over stay mounted: what arrives on one
+  // out of sight is said to nobody, and stands there, unsaid, when its member comes back.
+  it('says nothing on a screen that is not the one in front, nor of what stands there once it is', async () => {
+    const drawn = (inFront: boolean, sentence: string) => (
+      <Screen inFront={inFront}>
+        <Banner tone="danger" announce>
+          {sentence}
+        </Banner>
+      </Screen>
+    )
+    const view = await render(drawn(false, words.reason))
+    expect(saidNow).not.toHaveBeenCalled()
+    await view.rerender(drawn(true, words.reason))
+    expect(saidNow).not.toHaveBeenCalled()
+    // What arrives from then on is said.
+    await view.rerender(drawn(true, words.sentence))
+    expect(saidNow.mock.calls).toEqual([[words.sentence]])
   })
 
   it('draws what stands under its sentence, which is no part of what is said', async () => {

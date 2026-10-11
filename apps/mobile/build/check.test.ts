@@ -11,13 +11,45 @@ import { bundlesOf, check, holds, standIns } from './bundles.ts'
 /** apps/mobile: Jest runs in it. */
 const app = resolve('.')
 
-const sources = (pattern: string) => globSync(pattern, { cwd: app }).sort()
+/** The files `pattern` names, by their path from apps/mobile, whatever the machine writes one with. */
+const sources = (pattern: string) =>
+  globSync(pattern, { cwd: app })
+    .map((file) => file.replaceAll('\\', '/'))
+    .sort()
 const read = (file: string) => readFileSync(join(app, file), 'utf8')
+
+/** Everything a bundle is made of that is the app's own: its entry, its routes and what they draw. */
+const own = () => ['index.ts', ...sources('{app,src}/**/*.{ts,tsx}')]
+
+/**
+ * Whether `source` imports a file of a `dev` folder, any way a module can: by name (`from`),
+ * behind a call (`import()`, `require()`), or bare, for what the file does as it loads.
+ */
+function importsDev(source: string): boolean {
+  return /(?:\bfrom|\bimport|\brequire)\s*\(?\s*'[^']*\/dev\//.test(source)
+}
+
+/** The variable the build the flows walk is made with, which the condition reads. */
+const variable = 'EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS'
+
+/** The one file that writes the condition to be read, and the expression it writes. */
+const gate = 'src/dev/gate.ts'
+const condition = /^export const devScreens: boolean = (.+)$/m.exec(read(gate))?.[1] ?? ''
+
+/** The two controls that lead to the dev screens from a screen every build holds. */
+const ways = ['src/session/SignIn.tsx', 'src/shell/More.tsx']
 
 describe('a dev screen', () => {
   const routes = sources('app/dev/*.tsx')
 
-  it('has a route that asks for it behind the one condition Metro folds away', () => {
+  it('is behind one condition, which one file writes to be read', () => {
+    // What Metro folds: a global it replaces, and a variable Expo's preset writes the value
+    // of into the bundle as it is made. Nothing else, and nothing imported.
+    expect(condition).toContain('__DEV__')
+    expect(condition).toContain(`process.env.${variable}`)
+  })
+
+  it('has a route that asks for it behind that condition, written out where it stands', () => {
     expect(routes.length).toBeGreaterThan(0)
     for (const file of routes) {
       const source = read(file)
@@ -25,8 +57,7 @@ describe('a dev screen', () => {
       expect([file, source]).toEqual([
         file,
         expect.stringContaining(
-          "export default __DEV__ || process.env.EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS === '1'\n" +
-            "  ? lazy(() => import('../../src/dev/",
+          `export default ${condition}\n` + "  ? lazy(() => import('../../src/dev/",
         ),
       ])
       // And nothing of src/dev is imported any other way, which a production bundle would hold.
@@ -37,14 +68,42 @@ describe('a dev screen', () => {
     }
   })
 
+  it('is led to by two controls, each behind that condition written out where it stands', () => {
+    for (const file of ways) {
+      // In the markup, so that what is drawn behind it goes with it when it is folded away.
+      expect([file, read(file)]).toEqual([file, expect.stringContaining(`${condition} ? (\n`)])
+    }
+  })
+
+  it('has its condition written in those places alone, and in no other words', () => {
+    const writing = own().filter(
+      (file) => file !== gate && !/\.test\.tsx?$/.test(file) && read(file).includes(variable),
+    )
+    expect(writing).toEqual([...routes, ...ways].sort())
+    for (const file of writing) {
+      const source = read(file)
+      // As often as the variable is named, the whole condition is written.
+      expect([file, source.split(variable).length]).toEqual([file, source.split(condition).length])
+    }
+  })
+
   it('is imported by nothing outside src/dev but its own route', () => {
-    const outside = sources('{app,src}/**/*.{ts,tsx}').filter(
-      (file) => !file.replaceAll('\\', '/').startsWith('src/dev/') && !routes.includes(file),
-    )
-    const importing = outside.filter((file) =>
-      /from '[^']*\/dev\/|import\('[^']*\/dev\//.test(read(file)),
-    )
-    expect(importing).toEqual([])
+    expect(own()).toContain('index.ts')
+    const outside = own().filter((file) => !file.startsWith('src/dev/') && !routes.includes(file))
+    expect(outside.filter((file) => importsDev(read(file)))).toEqual([])
+    // Nor is the file that writes the condition to be read, by anything at all.
+    expect(own().filter((file) => read(file).includes("/gate.ts'"))).toEqual([])
+  })
+
+  it('is found imported by name, behind a call, or for what a file does as it loads', () => {
+    expect(importsDev("import { Harness } from '../dev/harness/index.tsx'\n")).toBe(true)
+    expect(importsDev("export { devMarker } from '../../src/dev/marker.ts'\n")).toBe(true)
+    expect(importsDev("const Sync = lazy(() => import('../dev/sync/index.tsx'))\n")).toBe(true)
+    expect(importsDev("import '../dev/sample.ts'\n")).toBe(true)
+    expect(importsDev("import './src/dev/sample.ts'\n")).toBe(true)
+    // An address is no import, and neither is a folder that only ends as one does.
+    expect(importsDev("const dev = { path: '/dev/harness' }\n")).toBe(false)
+    expect(importsDev("import { paths } from '../devices/paths.ts'\n")).toBe(false)
   })
 
   it('holds the marker, through the screen every one of them stands in', () => {
@@ -75,7 +134,7 @@ describe('what stands in for the server and the replica outside src/dev', () => 
   it('is every file outside src/dev and src/test that is named as a fixture or a stand-in', () => {
     const named = sources('src/**/{*.fixtures.ts,standIn.ts,testing.ts}')
       .map((file) => file.replaceAll('\\', '/'))
-      .filter((file) => !file.startsWith('src/dev/'))
+      .filter((file) => !file.startsWith('src/dev/') && !file.startsWith('src/test/'))
     expect(named.length).toBeGreaterThan(0)
     for (const file of named) expect(Object.keys(standIns)).toContain(file)
   })

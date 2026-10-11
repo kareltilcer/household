@@ -406,6 +406,124 @@ export const neverTruncated: Rule = (tree) =>
       failure('truncated', element, 'is a text held to a number of lines, and cut off past them'),
     )
 
+/** Whether `element` is one a screen reader stops on as one thing: marked so, or a control. */
+function isOneThing(element: TestInstance): boolean {
+  return propsOf(element).accessible === true || takesPress(element)
+}
+
+/**
+ * A control is within a screen reader's reach: nothing that takes a press, and no field that is
+ * typed in, stands inside what is one thing to a screen reader, an `accessible` view or another
+ * control. On iOS such a thing is one element, read by the words it holds, and what is inside
+ * it is not an element of its own *(read: `isAccessibilityElement` and
+ * `RCTRecursiveAccessibilityLabel`, RCTViewComponentView.mm)*: a control drawn there can be
+ * seen and pressed by a finger, and is not there at all for whoever cannot see it. A part that
+ * is hidden from a screen reader on purpose, the ring of a hold, is no control to it.
+ */
+export const controlsWithinReach: Rule = (tree) =>
+  elementsOf(tree)
+    .filter(
+      (element) =>
+        (takesPress(element) || element.type === 'TextInput') &&
+        !isHiddenFromAccessibility(element),
+    )
+    .flatMap((element) => {
+      const around: TestInstance[] = []
+      for (let above = element.parent; above !== null; above = above.parent) around.push(above)
+      const holder = around.find(isOneThing)
+      return holder === undefined
+        ? []
+        : [
+            failure(
+              'reach',
+              element,
+              `is inside ${describe(holder)}, which is one thing to a screen reader: out of its reach`,
+            ),
+          ]
+    })
+
+/** How far a child of a row gives and takes room, as Yoga reads its style. */
+function flexing(element: TestInstance): {
+  readonly grows: boolean
+  readonly shrinks: boolean
+  readonly basis: boolean
+} {
+  const style: Props = { ...StyleSheet.flatten(propsOf(element).style as StyleProp<ViewStyle>) }
+  const flex = length(style.flex) ?? 0
+  const basis = style.flexBasis
+  return {
+    grows: (length(style.flexGrow) ?? Math.max(flex, 0)) !== 0,
+    shrinks: (length(style.flexShrink) ?? Math.max(-flex, 0)) !== 0,
+    // Room that is asked for: a length, or a share of the row. None and `auto` ask for none.
+    basis: typeof basis === 'number' ? basis > 0 : typeof basis === 'string' && basis !== 'auto',
+  }
+}
+
+/**
+ * A row that wraps breaks by the room its words ask for: a child that says how much room it is
+ * to have before its neighbours go under it, by a `flexBasis` with `flexGrow` and `flexShrink`,
+ * is not the row's only child that flexes. Yoga takes the one child of a row that both grows
+ * and shrinks for a child whose basis it need not ask, counts it as nothing wide, and breaks no
+ * line for it *(read: `computeFlexBasisForChildren`, CalculateLayout.cpp, and
+ * `calculateFlexLine`, FlexLine.cpp, in React Native's ReactCommon/yoga)*: the words are left
+ * what the row's other children did not take, which at 200 % text on a phone was a letter's
+ * width (ui/ListRow.tsx). What was laid out is not seen here; what a row declares is.
+ */
+export const wrapsByItsWords: Rule = (tree) =>
+  elementsOf(tree)
+    .filter((element) => {
+      const style: Props = { ...StyleSheet.flatten(propsOf(element).style as StyleProp<ViewStyle>) }
+      return style.flexWrap === 'wrap' || style.flexWrap === 'wrap-reverse'
+    })
+    .flatMap((row) => {
+      const children = row.children.filter((child) => typeof child !== 'string')
+      const flexible = children.filter((child) => {
+        const { grows, shrinks } = flexing(child)
+        return grows || shrinks
+      })
+      const [only] = flexible
+      if (children.length < 2 || flexible.length !== 1 || only === undefined) return []
+      const { grows, shrinks, basis } = flexing(only)
+      return grows && shrinks && basis
+        ? [
+            failure(
+              'wrap',
+              only,
+              'is the only child that flexes of a row that wraps, so its `flexBasis` is not what the row breaks by',
+            ),
+          ]
+        : []
+    })
+
+/** The roles of a control that is on or off, and of one that is the chosen one of several. */
+const checkable: readonly string[] = ['switch', 'checkbox', 'radio']
+
+/** A state `element` says of itself, by either of the two names React Native reads it under. */
+function stateOf(element: TestInstance, state: 'checked' | 'selected'): unknown {
+  const props = propsOf(element)
+  const said: Props =
+    typeof props.accessibilityState === 'object' && props.accessibilityState !== null
+      ? { ...props.accessibilityState }
+      : {}
+  return said[state] ?? props[`aria-${state}`]
+}
+
+/**
+ * A control that is on or off says which: a switch, a checkbox and a radio say `checked`, and a
+ * tab says whether it is the one `selected`. A role alone is a control that is read as a switch
+ * and never as on. The platform's own switch says it itself.
+ */
+export const stateSaid: Rule = (tree) =>
+  elementsOf(tree)
+    .filter((element) => element.type !== 'RCTSwitch' && !isHiddenFromAccessibility(element))
+    .flatMap((element) => {
+      const role = roleOf(element)
+      const state = checkable.includes(role) ? 'checked' : role === 'tab' ? 'selected' : undefined
+      return state === undefined || stateOf(element, state) !== undefined
+        ? []
+        : [failure('state', element, `is a ${role}, and does not say whether it is ${state}`)]
+    })
+
 /** Every rule, in the order a failure is listed. A rule that is added is added here. */
 export const rules: readonly Rule[] = [
   named,
@@ -418,6 +536,9 @@ export const rules: readonly Rule[] = [
   fieldsNamed,
   holdNeedsNoHold,
   neverTruncated,
+  controlsWithinReach,
+  wrapsByItsWords,
+  stateSaid,
 ]
 
 /** Everything in `tree` that breaks a rule. */

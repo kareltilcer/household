@@ -76,6 +76,15 @@ describe('what an address that arrives comes to', () => {
     expect(resolve(today, { visitor: true, shown: null })).toEqual({ kind: 'held', path: today })
   })
 
+  // Held, the sign-in's own address is where a member who has just signed in would be sent from
+  // the sign-in screen: to itself, without end.
+  it('holds nothing for a visitor but an address in a household: any other is opened as it is', () => {
+    const visitor = { visitor: true, shown: null }
+    expect(resolve(paths.signIn.path, visitor)).toEqual({ kind: 'opened', path: '/sign-in' })
+    expect(resolve('/', visitor)).toEqual({ kind: 'opened', path: '/' })
+    expect(resolve('/nowhere', visitor)).toEqual({ kind: 'notAvailable', path: '/nowhere' })
+  })
+
   it('wrong household: the address is the switch, and what it switched from is known', () => {
     expect(resolve(elsewhere, here)).toEqual({
       kind: 'switched',

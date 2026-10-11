@@ -3,8 +3,9 @@
 // said three ways, its colour, its glyph and a sentence, and the sentence is the product's own
 // (PRD 06 §5), which the shared key holds.
 //
-// It is drawn when the connection goes and is said then, once the screen reader has finished,
-// as a banner that arrives is; and said again when its owner changes what it says, which is one
+// It is drawn when the connection goes and is said then, as a banner that arrives and is no
+// failure is (on iOS once the screen reader has finished, announce.ts); and said again when its
+// owner changes what it says, which is one
 // bar whose words change where it stands (the household's bars, src/sync). A bar that was there
 // when its screen opened is read in its place: its owner says so.
 import { useEffect } from 'react'

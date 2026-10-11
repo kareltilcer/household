@@ -11,7 +11,14 @@ import { Platform } from 'react-native'
 /** What the system says of notifications from this app. */
 export type Permission = 'default' | 'denied' | 'granted'
 
-/** The channel every notification is shown in on Android, which names none of its own. */
+/**
+ * The channel the app makes on Android for its notifications. Whether a push that names no
+ * channel is shown in it is not known: read in expo-notifications' Android sources, a message
+ * that names none is shown in the library's own fallback channel, *Miscellaneous*, unless
+ * Expo's push service names this one for it, which nothing here can read and no build can
+ * receive yet (plan item 30's first push shows it; the mend is one field of the server's
+ * message, `channelId`, or the plugin's `defaultChannel`).
+ */
 const channel = 'default'
 
 /**
@@ -38,8 +45,8 @@ export async function permission(): Promise<Permission> {
 /**
  * Makes the channel Android shows the app's notifications in, under `name`, which is what the
  * system's settings call it; made again it is the same channel, renamed to the language the app
- * is in now. The server names no channel, and without this one the system would file them under
- * a name of its own. Nothing on iOS, which has none.
+ * is in now. The server names no channel (see `channel`, above, for what that may come to).
+ * Nothing on iOS, which has none.
  */
 export async function ensureChannel(name: string): Promise<void> {
   if (Platform.OS !== 'android') return

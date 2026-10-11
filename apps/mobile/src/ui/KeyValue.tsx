@@ -12,7 +12,9 @@ export interface Pair {
   /**
    * Left out, or anything that would be drawn as nothing, null, an empty string or `false`:
    * nothing is recorded, which the block says in a word. A string or a number is set as the
-   * block sets a value; anything else is drawn as it is given.
+   * block sets a value; anything else is drawn as it is given, and is words or figures, a
+   * money value or a mark. No control goes here: a pair is one thing to a screen reader, and a
+   * control inside it is out of its reach on iOS (the rules fail one, src/test/a11y.ts).
    */
   readonly value?: ReactNode
   readonly numeric?: boolean
@@ -61,7 +63,21 @@ export function KeyValue({ pairs }: { readonly pairs: readonly Pair[] }) {
                 {`— ${none}`}
               </Text>
             ) : typeof value === 'string' || typeof value === 'number' ? (
-              <Text step={pair.numeric === true ? 'num' : 'body'} style={{ flexShrink: 1 }}>
+              // A value can be copied: a kept version's banner tells its member to copy what
+              // they still need (`sync.kept.hint`), and a registration or a policy number is
+              // what a member takes elsewhere. Read in React Native's source: on iOS a long
+              // press on a selectable text offers Copy, of the whole of it, from a recogniser of
+              // the text's own view (RCTParagraphComponentView.mm, `enableContextMenu`), which
+              // the pair's being one thing to a screen reader does not stand in the way of;
+              // on Android the text is told it is selectable (ReactTextViewManager.kt,
+              // `setSelectable`). Not known, and heard by nobody: what a screen reader makes of
+              // it, how Copy is reached with VoiceOver on, and whether TalkBack then stops on a
+              // value apart from its label, a selectable text being one a touch can focus.
+              <Text
+                selectable
+                step={pair.numeric === true ? 'num' : 'body'}
+                style={{ flexShrink: 1 }}
+              >
                 {value}
               </Text>
             ) : (

@@ -9,6 +9,7 @@
 import { cloneElement, useRef, useState, type ReactElement, type ReactNode, type Ref } from 'react'
 import { Pressable, type AccessibilityState, type View } from 'react-native'
 import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
+import { useFocusRing } from './focus.ts'
 import { Ink } from './Icon.tsx'
 import { Sheet } from './Sheet.tsx'
 import { Text } from './Text.tsx'
@@ -41,9 +42,42 @@ export interface MenuProps {
   readonly items: readonly MenuItem[]
 }
 
-export function Menu({ trigger, items }: MenuProps) {
+/** One action of the sheet: a row that takes the press, named by its words. */
+function Item({ item, onPress }: { readonly item: MenuItem; readonly onPress: () => void }) {
   const theme = useTheme()
   const target = useTarget()
+  // A keyboard's focus, or a switch's: a touch gives none. Inside the row, which fills the
+  // sheet's width: an outline outside it would be cut by the rows above and under it.
+  const focus = useFocusRing('inside')
+  const words = item.danger === true ? 'danger' : 'text-primary'
+  return (
+    <Pressable
+      testID={item.testID}
+      accessibilityRole="button"
+      onPress={onPress}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
+      style={({ pressed }) => ({
+        alignSelf: 'stretch',
+        minHeight: target,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.space['space-15'],
+        paddingHorizontal: theme.space['space-1'],
+        borderRadius: theme.radii['radius-control'],
+        backgroundColor: pressed ? theme.color['surface-sunken'] : 'transparent',
+        ...focus.ring,
+      })}
+    >
+      <Ink color={words}>{item.icon ?? null}</Ink>
+      <Text color={words} style={{ flex: 1 }}>
+        {item.label}
+      </Text>
+    </Pressable>
+  )
+}
+
+export function Menu({ trigger, items }: MenuProps) {
   const opener = useRef<View>(null)
   const [open, setOpen] = useState(false)
   /** The item that was pressed, until the sheet has gone. */
@@ -72,35 +106,16 @@ export function Menu({ trigger, items }: MenuProps) {
           item?.onSelect()
         }}
       >
-        {items.map((item) => {
-          const words = item.danger === true ? 'danger' : 'text-primary'
-          return (
-            <Pressable
-              key={item.id}
-              testID={item.testID}
-              accessibilityRole="button"
-              onPress={() => {
-                chosen.current = item
-                setOpen(false)
-              }}
-              style={({ pressed }) => ({
-                alignSelf: 'stretch',
-                minHeight: target,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: theme.space['space-15'],
-                paddingHorizontal: theme.space['space-1'],
-                borderRadius: theme.radii['radius-control'],
-                backgroundColor: pressed ? theme.color['surface-sunken'] : 'transparent',
-              })}
-            >
-              <Ink color={words}>{item.icon ?? null}</Ink>
-              <Text color={words} style={{ flex: 1 }}>
-                {item.label}
-              </Text>
-            </Pressable>
-          )
-        })}
+        {items.map((item) => (
+          <Item
+            key={item.id}
+            item={item}
+            onPress={() => {
+              chosen.current = item
+              setOpen(false)
+            }}
+          />
+        ))}
       </Sheet>
     </>
   )

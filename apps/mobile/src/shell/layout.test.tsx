@@ -16,14 +16,16 @@ import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { answering, json, problem, testClient } from '../api/testing.ts'
 import { HouseholdNotAvailable, NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
+import type { MotionPreference } from '../display/modes.ts'
 import { heldDestination, takeDestination } from '../links/destination.ts'
 import { linkArrived, resetSwitched } from '../links/switched.ts'
 import type { SessionState } from '../session/context.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { Inbox } from '../sync/Inbox.tsx'
 import { conflict, rejectionWith } from '../sync/sync.fixtures.ts'
+import { elementsOf } from '../test/a11y.ts'
 import { householdOf, households, ids } from '../test/fixtures.ts'
-import { TestProviders } from '../test/render.tsx'
+import { root, TestProviders } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
 import { Screen } from '../ui/Screen.tsx'
 import { Arrange } from './Arrange.tsx'
@@ -88,10 +90,12 @@ const arrange = inHousehold.arrange(ids.household)
 interface Opening {
   readonly state?: SessionState
   readonly signOut?: () => Promise<void>
+  /** How much may move. Left out, as the device says, which under Jest asks for no less. */
+  readonly motion?: MotionPreference
 }
 
 /** The app at `address`, for a member of the fixtures' two households. */
-async function opened(address: string, { state, signOut }: Opening = {}) {
+async function opened(address: string, { state, signOut, motion }: Opening = {}) {
   const api = answering({
     [`GET /households/${ids.household}`]: () => json(200, own),
     [`GET /households/${ids.otherHousehold}`]: () => json(200, other),
@@ -101,7 +105,7 @@ async function opened(address: string, { state, signOut }: Opening = {}) {
   })
   function Root() {
     return (
-      <TestProviders>
+      <TestProviders {...(motion ? { motion } : {})}>
         <SessionFixture
           api={testClient(api.transport)}
           {...(state ? { state } : {})}
@@ -330,6 +334,23 @@ describe('a household’s layout', () => {
     })
     expect(screen.getByTestId('route:more')).toBeOnTheScreen()
     expect(screen.queryByTestId('switched')).toBeNull()
+  })
+
+  // What the navigator hands the platform's own stack for each of its screens: `stackAnimation`
+  // is how one screen takes another's place, and is left out where the platform's own is to be.
+  const transitions = () =>
+    elementsOf(root())
+      .filter((element) => element.type === 'RNSScreen')
+      .map((element): unknown => element.props.stackAnimation)
+
+  // The root's stack in this test is the router's own, and the households' under it the app's.
+  it.each([
+    { how: 'as the platform does where nothing asks for less motion', motion: 'system' },
+    { how: 'at once where motion is reduced', motion: 'reduced', transition: 'none' },
+  ] as const)('opens a household over another $how', async ({ motion, ...over }) => {
+    await opened(home, { motion })
+    await shows('route:household')
+    expect(transitions()).toEqual([undefined, 'transition' in over ? over.transition : undefined])
   })
 
   // The banner's own way back, and whatever else leads to another household with no link: the

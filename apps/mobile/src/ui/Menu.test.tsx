@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { controls } from '@household/icons'
 import { catalogs, createTranslator } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
-import { act, screen, userEvent } from '@testing-library/react-native'
-import { Platform, StyleSheet, type StyleProp, type TextStyle } from 'react-native'
+import { act, fireEvent, screen, userEvent } from '@testing-library/react-native'
+import { Platform, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
 import type { TestInstance } from 'test-renderer'
 import { expectAccessible } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
@@ -77,6 +77,23 @@ describe('a menu', () => {
     expect(screen.getByRole('button', { name: sample.rename })).toBeOnTheScreen()
     expect(screen.getByRole('button', { name: sample.archive })).toBeOnTheScreen()
     expectAccessible()
+  })
+
+  it('shows where a keyboard’s focus is on an item, inside its row', async () => {
+    await render(<Actions />)
+    await userEvent.press(trigger())
+    const item = () => screen.getByRole('button', { name: sample.rename })
+    const ring = () => StyleSheet.flatten(item().props.style as StyleProp<ViewStyle>)
+    expect(ring().outlineWidth).toBeUndefined()
+    await fireEvent(item(), 'focus')
+    // Inside: the rows above and under it would cut an outline drawn outside it.
+    expect(ring()).toMatchObject({
+      outlineWidth: 2,
+      outlineOffset: -2,
+      outlineColor: nativeThemes.light.color.focus,
+    })
+    await fireEvent(item(), 'blur')
+    expect(ring().outlineWidth).toBeUndefined()
   })
 
   it('does what the chosen item does, once, when its sheet has gone and the focus is back on the trigger', async () => {

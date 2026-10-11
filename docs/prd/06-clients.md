@@ -141,7 +141,7 @@ applies to consumer services from June 2025, and this is a consumer service sold
 | Screen reader | VoiceOver and TalkBack manual passes per release on the primary flows; every icon-only control has a label |
 | Page titles (web) | Each screen names the page in its title, before the app's name; the end-to-end walk of the routes holds each route's title to its heading (**D-165**) |
 | Refusals and failures (web) | A refusal that marks a field moves the focus to that field, whose sentence is read with it; one that marks none is announced where it is drawn. Neither is left beside a control for whoever can see it alone (**D-166**) |
-| Screen names, refusals and failures (mobile) | A screen's title is its one header, which a screen reader names it by. A refusal that marks a field moves the accessibility focus to that field; one that marks none is announced as it arrives; and a success no control of its screen says is a toast, which stays while a screen reader is on (**D-188**) |
+| Screen names, refusals and failures (mobile) | A screen's title is a header, the first on its screen, in the app bar; a section's heading within it is a header too. A refusal that marks a field moves the accessibility focus to that field; one that marks none is announced as it arrives; and a success no control of its screen says is a toast, which stays while a screen reader is on (**D-188**) |
 | Dynamic type | Layouts survive 200 % text scaling without clipping or loss of function. On a device the text follows the system's size up to 200 % and is held there (**D-186**) |
 | Motion | `prefers-reduced-motion` respected; no essential information conveyed by motion alone |
 | Colour | Never the sole carrier of meaning — status is always colour **and** icon **and** text |

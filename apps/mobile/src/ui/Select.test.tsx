@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { controls } from '@household/icons'
 import { catalogs } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
-import { screen, userEvent } from '@testing-library/react-native'
+import { act, screen, userEvent } from '@testing-library/react-native'
 import { useState } from 'react'
 import { Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { expectAccessible, violations } from '../test/a11y.ts'
@@ -73,7 +73,16 @@ describe('a select', () => {
   })
 
   it('opens a sheet of its choices, named as it is, and takes the one that is pressed', async () => {
-    const onChange = jest.fn()
+    // Everywhere but on iOS the sheet is gone as soon as it is closed.
+    jest.replaceProperty(Platform, 'OS', 'android')
+    const order: string[] = []
+    jest.spyOn(announcer, 'focusOn').mockImplementation(() => {
+      order.push('focus')
+      return true
+    })
+    const onChange = jest.fn((value: string) => {
+      order.push(value)
+    })
     await render(<Register onChange={onChange} />)
     expect(field()).toBeCollapsed()
     await userEvent.press(field())
@@ -81,13 +90,40 @@ describe('a select', () => {
     expect(screen.getByRole('header', { name: sample.register })).toBeOnTheScreen()
     await userEvent.press(screen.getByRole('radio', { name: night.label }))
     expect(onChange.mock.calls).toEqual([['night']])
+    // The focus is back on the field first: what the choice sets off may move it on.
+    expect(order).toEqual(['focus', 'night'])
     // The sheet is closed, and the field reads what was chosen.
     expect(screen.queryByRole('radio')).toBeNull()
     expect(field()).toHaveAccessibilityValue({ text: night.label })
     expect(field()).toHaveTextContent(night.label)
   })
 
+  it('waits on iOS until the platform says the sheet has gone, and tells its owner once', async () => {
+    jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    const onChange = jest.fn()
+    await render(<Register onChange={onChange} />)
+    await userEvent.press(field())
+    const { onDismiss } = screen.getByTestId('register:choices').props as {
+      readonly onDismiss: () => void
+    }
+    await userEvent.press(screen.getByRole('radio', { name: night.label }))
+    // The sheet is still leaving: nobody is told, and the field reads what it read.
+    expect(onChange).not.toHaveBeenCalled()
+    expect(field()).toHaveTextContent(sample.choose)
+    await act(() => {
+      onDismiss()
+    })
+    expect(onChange.mock.calls).toEqual([['night']])
+    expect(field()).toHaveTextContent(night.label)
+    // Said again by the platform, nobody is told twice.
+    await act(() => {
+      onDismiss()
+    })
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
   it('starts on what its owner says is chosen, and tells nobody when that is chosen again', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android')
     const onChange = jest.fn()
     await render(<Register start="day" onChange={onChange} />)
     expect(field()).toHaveAccessibilityValue({ text: day.label })

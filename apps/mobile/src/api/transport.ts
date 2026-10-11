@@ -49,8 +49,12 @@ function signed(request: Request, token: string): Request {
 /**
  * Whether `response`, a `401`, refuses the token it was sent with. An expired access token and
  * one whose sign-in was revoked are answered alike, `unauthenticated` (openapi.yaml,
- * Authentication); a sign-in that failed or a second step whose challenge is gone is its
- * screen's to answer, and renews nothing. Read from a copy: the answer is its caller's.
+ * Authentication); a sign-in that failed, `invalid_credentials`, is its screen's to answer, and
+ * renews nothing. A second step whose challenge is gone is answered `unauthenticated` too
+ * (postAuthMfaVerify), which the answer cannot tell from a refused token: a screen that signs
+ * somebody in beside a sign-in in use, a tablet's second profile (plan item 29), asks through a
+ * client that signs nothing, as the renewal does (session/Providers.tsx), or its lapsed
+ * challenge renews the other's token for nothing. Read from a copy: the answer is its caller's.
  */
 async function refusesToken(response: Response): Promise<boolean> {
   const body: unknown = await response

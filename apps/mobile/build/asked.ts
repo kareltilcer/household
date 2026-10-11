@@ -15,7 +15,14 @@ export const asked: Readonly<Record<string, string>> = {
     'Whether the device is online: the offline bar, and a read that waits for a connection (NetInfo).',
   'android.permission.POST_NOTIFICATIONS':
     'Showing a notification, which its member is asked for at a press and never at launch (expo-notifications).',
-  'android.permission.VIBRATE': 'A notification that is felt (expo-notifications).',
+  // The template's own, and no library's. expo-notifications declares none and calls no
+  // vibrator, and of everything the app links only React Native's `Vibration` does, which the
+  // app never calls (read in their sources). Whether Android still makes a notification felt
+  // for an app that does not hold it is the platform's to say, and is in none of them: it is
+  // kept until a device has shown one felt without it (plan item 30), and removed then in
+  // app.config.ts.
+  'android.permission.VIBRATE':
+    'A notification that is felt. Expo’s template asks for it and no library does: kept until a device has shown one felt without it.',
   'android.permission.WAKE_LOCK':
     'The device stays awake for as long as a push takes to arrive (Firebase messaging, under expo-notifications).',
   'com.google.android.c2dm.permission.RECEIVE':
@@ -40,11 +47,19 @@ export const ownPermission = 'DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
 
 export type Built = 'development' | 'staging' | 'production'
 
-/** What `aapt2 dump permissions` printed of a build: whose it is, and each permission it uses. */
+/**
+ * What `aapt2 dump permissions` printed of a build: whose it is, and each permission it uses.
+ * A manifest asks for one in either of two elements, and the list prints each under its own
+ * name (aapt2's DumpManifest.cpp): `uses-permission`, and `uses-permission-sdk-23`, which asks
+ * from Android 6 on and so of every device this app runs on. Both are read: one a library
+ * declared the second way would otherwise pass with no reason.
+ */
 export function read(dump: string): { readonly identifier: string | undefined; names: string[] } {
   return {
     identifier: /^package: (\S+)$/m.exec(dump)?.[1],
-    names: [...dump.matchAll(/^uses-permission: name='([^']+)'/gm)].map(([, name = '']) => name),
+    names: [...dump.matchAll(/^uses-permission(?:-sdk-23)?: name='([^']+)'/gm)].map(
+      ([, name = '']) => name,
+    ),
   }
 }
 

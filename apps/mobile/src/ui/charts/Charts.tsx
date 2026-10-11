@@ -6,7 +6,7 @@
 import { remPx } from '@household/tokens'
 import type { ColorName } from '@household/tokens/native'
 import { useState, type ReactNode } from 'react'
-import { View, type LayoutChangeEvent } from 'react-native'
+import { View, type LayoutChangeEvent, type ViewStyle } from 'react-native'
 import { useDisplay, useTheme } from '../../display/DisplayProvider.tsx'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import { BaseIcon } from '../Icon.tsx'
@@ -228,13 +228,25 @@ export interface CompositionProps {
   readonly total: string
 }
 
-/** The least room a legend's or a flow's label is given before its figure goes under it, in rem. */
+/**
+ * The least room a legend's or a flow's label is given before its figure goes under it, in rem.
+ * A row breaks by it only where the label is not the one child of its row that can flex: Yoga
+ * counts the one child that both grows and shrinks as nothing wide when it breaks a row's lines
+ * (ui/ListRow.tsx says where that is read), and the label was then left what its figure did not
+ * take. So what stands beside a label may shrink.
+ */
 const labelRem = 8
+
+/** A label's part of its row: as wide as the row leaves it, from `labelRem` of the reader's text. */
+function useLabelRoom(): Pick<ViewStyle, 'flexGrow' | 'flexShrink' | 'flexBasis'> {
+  const { textScale } = useDisplay()
+  return { flexGrow: 1, flexShrink: 1, flexBasis: labelRem * remPx * textScale }
+}
 
 export function Composition({ caption, segments, total }: CompositionProps) {
   const format = useFormat()
   const theme = useTheme()
-  const { textScale } = useDisplay()
+  const labelRoom = useLabelRoom()
   return (
     <Chart testID="chart:composition">
       <View
@@ -285,20 +297,41 @@ export function Composition({ caption, segments, total }: CompositionProps) {
               rowGap: theme.space['space-05'],
             }}
           >
+            {/* The colour stands with its label, in one part, and is never left a line of its
+                own above it. */}
             <View
               style={{
-                alignSelf: 'center',
-                width: theme.space['space-15'],
-                height: theme.space['space-15'],
-                backgroundColor: theme.color[seriesAt(index)],
-                borderRadius: theme.radii['radius-control'],
+                flexDirection: 'row',
+                alignItems: 'baseline',
+                columnGap: theme.space['space-15'],
+                ...labelRoom,
               }}
-            />
-            <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: labelRem * remPx * textScale }}>
-              <Text>{segment.label}</Text>
+            >
+              <View
+                style={{
+                  alignSelf: 'center',
+                  width: theme.space['space-15'],
+                  height: theme.space['space-15'],
+                  backgroundColor: theme.color[seriesAt(index)],
+                  borderRadius: theme.radii['radius-control'],
+                }}
+              />
+              <Text style={{ flex: 1 }}>{segment.label}</Text>
             </View>
-            <Text step="num">{segment.text}</Text>
-            <Text step="num">{format.percent(segment.share)}</Text>
+            {/* The two figures go under the label together, and may shrink (`labelRem`). */}
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                alignItems: 'baseline',
+                columnGap: theme.space['space-15'],
+                rowGap: theme.space['space-05'],
+                flexShrink: 1,
+              }}
+            >
+              <Text step="num">{segment.text}</Text>
+              <Text step="num">{format.percent(segment.share)}</Text>
+            </View>
           </View>
         ))}
       </View>
@@ -344,7 +377,7 @@ function Side({
   readonly beside: boolean
 }) {
   const theme = useTheme()
-  const { textScale } = useDisplay()
+  const labelRoom = useLabelRoom()
   return (
     <View style={{ ...(beside ? { flex: 1 } : {}), gap: theme.space['space-05'] }}>
       <Text step="overline" color="text-muted">
@@ -370,10 +403,13 @@ function Side({
               borderRadius: theme.radii['radius-control'],
             }}
           >
-            <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: labelRem * remPx * textScale }}>
+            <View style={labelRoom}>
               <Text>{node.label}</Text>
             </View>
-            <Text step="num">{node.text}</Text>
+            {/* The figure may shrink, so that the label's room is what the row breaks by. */}
+            <Text step="num" style={{ flexShrink: 1 }}>
+              {node.text}
+            </Text>
           </View>
         ))}
       </View>

@@ -23,7 +23,7 @@ import { useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useHouseholdShown } from '../shell/HouseholdContext.tsx'
 import { HouseholdScreen } from '../shell/HouseholdScreen.tsx'
-import { announce, focusOn } from '../ui/announce.ts'
+import { announce, focusOn, type Focusable } from '../ui/announce.ts'
 import { Button } from '../ui/Button.tsx'
 import { ModuleChip } from '../ui/Chip.tsx'
 import { EmptyState } from '../ui/EmptyState.tsx'
@@ -79,7 +79,8 @@ interface EntryProps {
   readonly words: Words
   readonly setting: Setting
   readonly describers: Describers
-  readonly onOpen: () => void
+  /** Opens the row's sheet, from `mark`: the control that was pressed. */
+  readonly onOpen: (mark: Focusable) => void
 }
 
 /** A merge's row: no mark, since nothing of it is in question, and its banner under it. */
@@ -98,23 +99,22 @@ function MergedEntry({ outcome, reading, words, setting, describers }: EntryProp
       secondary={said}
       chip={reading.module === undefined ? undefined : <ModuleChip module={reading.module} />}
       trailing={
-        <>
-          <Button
-            variant="ghost"
-            accessibilityState={{ expanded: shown }}
-            onPress={() => {
-              setShown(!shown)
-            }}
-          >
-            {t('sync.kept.show')}
-          </Button>
-          {shown ? (
-            // A line of its own under the row, as wide as the row.
-            <View style={{ flexBasis: '100%', flexGrow: 1 }}>
-              <KeptLoser outcome={outcome} setting={setting} describers={describers} />
-            </View>
-          ) : null}
-        </>
+        <Button
+          variant="ghost"
+          accessibilityState={{ expanded: shown }}
+          onPress={() => {
+            setShown(!shown)
+          }}
+        >
+          {t('sync.kept.show')}
+        </Button>
+      }
+      // Under the row, on a line of its own, and no part of what stands beside the title: the
+      // control that opens it is then where it was pressed, with the banner open as without.
+      under={
+        shown ? (
+          <KeptLoser outcome={outcome} setting={setting} describers={describers} />
+        ) : undefined
       }
     />
   )
@@ -122,6 +122,9 @@ function MergedEntry({ outcome, reading, words, setting, describers }: EntryProp
 
 function Entry(props: EntryProps) {
   const t = useTranslate()
+  // The mark this row's sheet is opened from, which is given the focus back when the sheet
+  // has gone. It holds nothing once the row has left.
+  const mark = useRef<View>(null)
   const { outcome, reading, words, onOpen } = props
   if (outcome.outcome !== 'conflict' && outcome.outcome !== 'rejected') {
     return <MergedEntry {...props} />
@@ -133,7 +136,10 @@ function Entry(props: EntryProps) {
       secondary={when === undefined ? undefined : t('sync.inbox.since', { when })}
       chip={reading.module === undefined ? undefined : <ModuleChip module={reading.module} />}
       mark={outcome.outcome}
-      onOpenMark={onOpen}
+      markRef={mark}
+      onOpenMark={() => {
+        onOpen(mark)
+      }}
     />
   )
 }
@@ -159,10 +165,14 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
   // sent what it was holding, or the member answered it from the row's own screen.
   const opened =
     openedId === null ? undefined : entries?.find((entry) => entry.mutation_id === openedId)
+  // The mark the open sheet was opened from. The sheet gives the focus back to it once it has
+  // gone, where the row is still there: iOS's modal does that by itself and Android's does not
+  // (ui/Dialog.tsx), so it is named.
+  const [opener, setOpener] = useState<Focusable | undefined>(undefined)
 
-  // The row a sheet was opened from is gone once its answer is given, and the focus the sheet
-  // gave back went with it: it is put on the list's own place, where the next row is, or,
-  // where that was the last row, on the sentence that says nothing waits. Not before the sheet
+  // The row a sheet was opened from is gone once its answer is given, and there is then no
+  // mark to give the focus back to: it is put on the list's own place, where the next row is,
+  // or, where that was the last row, on the sentence that says nothing waits. Not before the sheet
   // has gone from the screen, which would take the focus back from under it; by asking the
   // replica whether the answer still waits, since a sheet closed with no answer leaves its row
   // and the focus on it; and not before the list drawn here has heard, which it does a moment
@@ -286,8 +296,9 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
                   words={words}
                   setting={setting}
                   describers={describers}
-                  onOpen={() => {
+                  onOpen={(mark) => {
                     answering.current = outcome.mutation_id
+                    setOpener(mark)
                     setOpenedId(outcome.mutation_id)
                   }}
                 />
@@ -304,6 +315,7 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
         onClosed={closed}
         setting={setting}
         describers={describers}
+        opener={opener}
       />
     </View>
   )

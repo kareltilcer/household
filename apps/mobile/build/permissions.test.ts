@@ -8,6 +8,9 @@
 // build is merged is in no file of this repository: CI's Android job reads the list off the
 // build it makes and holds it to asked.ts, and its iOS job reads the built app's Info.plist
 // (docs/runbooks/mobile-builds.md).
+//
+// The same reading says which schemes a variant answers, which a plugin adds to as it adds a
+// permission: unasked, to every build it is applied to.
 import { describe, expect, it } from '@jest/globals'
 import { spawnSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
@@ -73,6 +76,28 @@ function permissions(native: unknown): { asks: string[]; removes: string[] } {
   return { asks: names(false), removes: names(true) }
 }
 
+/** `value` as a list, or none where it is no list. */
+function list(value: unknown): unknown[] {
+  return Array.isArray(value) ? (value as unknown[]) : []
+}
+
+/**
+ * The schemes a build answers: on iOS the URL types of its Info.plist, and on Android the data
+ * of its activities' intent filters.
+ */
+function schemes(native: unknown): { ios: string[]; android: string[] } {
+  const ios = list(field(native, 'ios', 'infoPlist', 'CFBundleURLTypes')).flatMap((type) =>
+    list(field(type, 'CFBundleURLSchemes')).map(String),
+  )
+  const android = list(field(native, 'android', 'manifest', 'manifest', 'application'))
+    .flatMap((application) => list(field(application, 'activity')))
+    .flatMap((activity) => list(field(activity, 'intent-filter')))
+    .flatMap((filter) => list(field(filter, 'data')))
+    .map((data) => field(data, '$', 'android:scheme'))
+    .filter((scheme): scheme is string => typeof scheme === 'string')
+  return { ios, android }
+}
+
 const variants: readonly Variant[] = ['development', 'staging', 'production']
 
 describe('what a build asks for and what it removes', () => {
@@ -122,6 +147,20 @@ describe.each(variants)('a %s build', (variant) => {
     const application = field(native, 'android', 'manifest', 'manifest', 'application')
     const attributes = field(Array.isArray(application) ? application[0] : undefined, '$')
     expect(field(attributes, 'android:usesCleartextTraffic')).toBe(member ? undefined : 'true')
+  })
+
+  it('answers the dev client’s own scheme only where it is a development build', () => {
+    // The dev client's plugin adds `exp+` and the slug to whatever build it is applied to, for
+    // a developer's machine to open a development build by. The three variants share the
+    // slug: a staging or a production build that answered it too would be opened in the
+    // development build's place, and a store's build would answer a scheme nothing of it serves.
+    const { ios, android } = schemes(native)
+    const generated = (scheme: string) => scheme.startsWith('exp+')
+    expect(ios.filter(generated)).toEqual(member ? [] : ['exp+household'])
+    expect(android.filter(generated)).toEqual(member ? [] : ['exp+household'])
+    // And each answers its own on both, so that this is no reading of nothing.
+    expect(ios.filter((scheme) => !generated(scheme))).not.toEqual([])
+    expect(android.filter((scheme) => !generated(scheme))).not.toEqual([])
   })
 
   it('gives iOS no reason for a permission but the dev launcher’s own', () => {

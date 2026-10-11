@@ -179,6 +179,18 @@ describe('a household’s frame, while its household is not read', () => {
     expect(await lastHousehold(ids.member)).toBeNull()
   })
 
+  // Whatever answers `404` in the API's place has said nothing of the household.
+  it('could not be read where a `404` is no problem of the API’s, and is asked again', async () => {
+    await opened(() => new Response('<html>Not Found</html>', { status: 404 }))
+    await waitFor(() => {
+      expect(
+        screen.getByRole('header', { name: en['shell.household.error.title'] }),
+      ).toBeOnTheScreen()
+    })
+    expect(screen.queryByTestId('route:notFound')).toBeNull()
+    expect(screen.getByRole('button', { name: en['ui.retry'] })).toBeOnTheScreen()
+  })
+
   // A kept read stands in for a server that cannot be asked, never for one that answered.
   it('is not available over whatever the device kept, once the server says so', async () => {
     let gone = false
@@ -251,6 +263,24 @@ describe('a household’s frame, once its household is read', () => {
   it('remembers the household as the one its member was last in on this device', async () => {
     await opened(() => json(200, own))
     await drawn()
+    await waitFor(async () => {
+      expect(await lastHousehold(ids.member)).toBe(ids.household)
+    })
+  })
+
+  // A household another was opened over stays mounted underneath: the one in front is the one
+  // its member is in, and the one they go back to is theirs again, which mounts nothing.
+  it('remembers only the household in front, and one underneath again once it is gone back to', async () => {
+    mockFront.is = false
+    const api = answering({
+      [route]: () => json(200, own),
+      'GET /households': () => json(200, { items: [summaryOf(own)] }),
+    })
+    const view = await render(<Frame api={api} />)
+    await drawn()
+    expect(await lastHousehold(ids.member)).toBeNull()
+    mockFront.is = true
+    await view.rerender(<Frame api={api} />)
     await waitFor(async () => {
       expect(await lastHousehold(ids.member)).toBe(ids.household)
     })

@@ -69,7 +69,7 @@ function MemberHome({ me }: { readonly me: Me }) {
   if (!last.read) return <Waiting />
   const open = opening(households.data, last.household)
   if (open === undefined) {
-    // In none, as this device last read it, which may be a day old: somebody who has joined one
+    // In none, as this device last read it, which may be long ago: somebody who has joined one
     // since, by an invitation answered elsewhere, is not told they are in none. The list is
     // being read again, and where the app opens waits for it. With no connection nothing is
     // being read, and what was kept is what there is to go by.

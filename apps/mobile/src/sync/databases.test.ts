@@ -1,7 +1,7 @@
 // The replicas a device keeps, by name, and their removal (FR-ID7): what is noted before a
 // replica is opened, what a sign-in that ended marks, and how far a removal that failed is
 // taken up again at the next start.
-import { beforeEach, describe, expect, it } from '@jest/globals'
+import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { households, ids } from '../test/fixtures.ts'
 import {
@@ -60,6 +60,24 @@ describe('a replica that is opened', () => {
     expect(await keptReplicas()).toEqual([{ member, household: home }])
     expect(asked).toEqual([])
   })
+
+  it('is not opened where the device would not keep its note: nothing would ever remove it', async () => {
+    const { removal } = removing()
+    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('database or disk is full'))
+    expect(await claimReplica(member, home, removal)).toBe(false)
+    expect(await keptReplicas()).toEqual([])
+    // Asked again once the device keeps what it is told, it is noted, and may be opened.
+    expect(await claimReplica(member, home, removal)).toBe(true)
+    expect(await keptReplicas()).toEqual([{ member, household: home }])
+  })
+
+  it('is opened where it is noted already, with nothing written: a device that writes nothing now shuts no replica it has the note of', async () => {
+    const { removal } = removing()
+    await claimReplica(member, home, removal)
+    const written = jest.mocked(AsyncStorage.setItem).mock.calls.length
+    expect(await claimReplica(member, home, removal)).toBe(true)
+    expect(jest.mocked(AsyncStorage.setItem).mock.calls).toHaveLength(written)
+  })
 })
 
 describe('a sign-in that ended', () => {
@@ -90,13 +108,24 @@ describe('a sign-in that ended', () => {
     expect(await AsyncStorage.getAllKeys()).toEqual([])
   })
 
-  it('keeps what could not be emptied as leaving, and empties it at the next start', async () => {
-    const first = removing({ empty: true })
+  it('deletes what could not be emptied all the same, and forgets it once its file is gone', async () => {
+    // A wipe that fails may fail at every start, on a device with no room left or over a file
+    // that is damaged: the rows are not kept for good for want of it.
+    const { removal, asked } = removing({ empty: true })
+    await claimReplica(member, home, removal)
+    await markLeaving(member)
+    await removeLeft(removal)
+    expect(asked).toEqual([`empty:${member}/${home}`, `remove:${member}/${home}`])
+    expect(await keptReplicas()).toEqual([])
+  })
+
+  it('keeps what could be neither emptied nor deleted as leaving, and takes it up at the next start', async () => {
+    const first = removing({ empty: true, remove: true })
     await claimReplica(member, home, first.removal)
     await markLeaving(member)
     await removeLeft(first.removal)
-    // Not deleted either: what was not emptied is not taken for gone.
-    expect(first.asked).toEqual([`empty:${member}/${home}`])
+    expect(first.asked).toEqual([`empty:${member}/${home}`, `remove:${member}/${home}`])
+    // Not noted as emptied: nothing says its file holds nothing.
     expect(await keptReplicas()).toEqual([{ member, household: home, leaving: true }])
 
     const next = removing()
@@ -149,12 +178,21 @@ describe('a replica its member comes back to', () => {
     expect(await keptReplicas()).toEqual([{ member, household: home }])
   })
 
-  it('is not opened where it could not even be emptied: it holds what an ended sign-in left', async () => {
-    const { removal } = removing({ empty: true })
+  it('is not opened where it could be neither emptied nor deleted: it holds what an ended sign-in left', async () => {
+    const { removal } = removing({ empty: true, remove: true })
     await claimReplica(member, home, removal)
     await markLeaving(member)
     expect(await claimReplica(member, home, removal)).toBe(false)
     expect(await keptReplicas()).toEqual([{ member, household: home, leaving: true }])
+  })
+
+  it('is theirs to open anew where it could not be emptied and its file was deleted', async () => {
+    const { removal } = removing({ empty: true })
+    await claimReplica(member, home, removal)
+    await markLeaving(member)
+    // Nothing of the ended sign-in is left in a file that is gone: the next is made anew.
+    expect(await claimReplica(member, home, removal)).toBe(true)
+    expect(await keptReplicas()).toEqual([{ member, household: home }])
   })
 })
 

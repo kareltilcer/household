@@ -34,14 +34,16 @@ command's first use is where it is checked.
 |---|---|---|---|
 | Identifier | `com.kareltilcer.household.dev` | `com.kareltilcer.household.staging` | `com.kareltilcer.household` |
 | Scheme | `household-dev` | `household-staging` | `household` |
+| The dev client's own scheme | `exp+household`, by which a developer's machine opens the build | none | none |
 | Name under the icon | Household Dev | Household Staging | Household |
 | The API | the developer's machine, unless told | told, or the build is refused | told, or the build is refused |
 | Plain `http` on Android | allowed | refused | refused |
 | EAS profile | `development`: a development client, internal distribution | `staging`: internal distribution | `production`: the stores', the build number raised by EAS |
 
 The three install side by side on one device. On iOS every variant may ask an address on its own
-network over plain `http` and no other, which is the template's setting and how a simulator
-reaches the developer's machine.
+network over plain `http` and no other, which is the template's setting
+(`NSAllowsLocalNetworking`) and how a simulator reaches the developer's machine: read in the
+template's `Info.plist`, and run by nothing, no flow on iOS asking a server.
 
 ## Before the first EAS build
 
@@ -97,6 +99,16 @@ eas build --profile production --platform all
   expo prebuild --platform android`, then `expo run:android` (or `ios`). The folders it writes,
   `apps/mobile/android` and `apps/mobile/ios`, are ignored by git, ESLint and Prettier; delete them
   after a change to `app.config.ts`, or pass `--clean`. Expo writes no iOS project on Windows.
+- **A build that embeds its JavaScript on a developer's machine** (`expo run:android --variant
+  release`, `eas build --local`, the commands of CI's jobs) bundles through `expo export:embed`.
+  React Native's build scripts pass it `--reset-cache`, and Expo drops that where `CI` is set
+  in the environment, as it is on a runner and may be in a shell (read in React Native's Gradle
+  task and Xcode script and in Expo's CLI; run on nothing but CI's fresh runners). Metro keeps
+  what it transformed and does not know of `EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS`, so with `CI` set
+  on a machine that has bundled before, a build holds the dev screens, or does not, as whatever
+  was bundled before it did: clear the cache by hand first (`expo start --clear` clears it as
+  it starts, and is stopped again), or unset `CI`. `run check` reads an export and nothing a
+  build embeds, so it does not catch this one.
 
 ## What a build asks of its device
 
@@ -111,6 +123,9 @@ holds a build to them.
   draws its errors over the app. It is the source of the table in the release notes. Beside them
   every build holds one permission of its own making,
   `<identifier>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, which asks its member nothing.
+  `VIBRATE` is the template's own, and no library the app links asks for it: it is kept until a
+  device has shown a notification felt without it (plan item 30), and removed then in
+  `app.config.ts`.
 - **`apps/mobile/app.config.ts`** (`unusedPermissions`) is what every build removes, whichever
   library asks for it, each with why nothing needs it: shared storage (the template's and
   expo-file-system's), a fingerprint or a face (androidx.biometric's, under expo-secure-store), the
@@ -120,7 +135,8 @@ holds a build to them.
   sixteen that draw a count on the icon of one launcher or another (the badge library's, under
   expo-notifications). The first build on a runner asked for thirty-one; a development build is
   to ask for eight, and one a member installs for seven.
-- **CI's `mobile-android` job** reads the list off the build it makes and fails on a permission that
+- **CI's `mobile-android` job** reads the list off the build it makes, the permissions a manifest
+  asks for from Android 6 on (`uses-permission-sdk-23`) with the rest, and fails on a permission that
   has no reason, and on a reason for a permission the build does not ask for. So **a new library
   that brings a permission fails that job** until somebody decides: its reason in `asked.ts`, or
   its name in `unusedPermissions`. The build is the development variant, and the flows run on it
@@ -136,7 +152,7 @@ holds a build to them.
   sixteen launchers' names out of `unusedPermissions`, and giving each its reason. **A
   notification the device itself shows at a time**, a reminder scheduled on it and not pushed, is
   the other: it is `RECEIVE_BOOT_COMPLETED`'s reason, without which what was scheduled is lost
-  when the device restarts.
+  when the device restarts (read in expo-notifications' sources, and run on nothing).
 
 **iOS** asks through a sentence in `Info.plist`, and the configuration writes none of its own: no
 Face ID (`expo-secure-store` is told so), no camera, no photographs, no location, no contacts. The
@@ -215,7 +231,10 @@ to the server, and `stack`'s sign-in is still there for the job to find whatever
   its end. What was seen is where it stopped. Why is read in React Native's source and was not
   tried on a device: the count is a single line with its text centred, which Android's text
   field takes for one that scrolls sideways, and such a field keeps the touch. If that is it,
-  it is a defect of the control and not of the flows, which a member's thumb meets as well.
+  it is a defect of the control and not of the flows, which a member's thumb meets as well: so
+  the count is no longer centred on Android (`apps/mobile/src/ui/Stepper.tsx`), and no flow has
+  swiped from one since. The line that would show it is a swipe that begins on the count, and
+  an assertion of what is below the fold.
 - **Scrolled to once it is there, and waited for where it stands.** `scrollUntilVisible` swipes
   for as long as it has not found its element, one that has not come yet as one that is further
   down: so it is for a thing that is drawn already. What a screen draws later, a replica opened
@@ -232,7 +251,9 @@ to the server, and `stack`'s sign-in is still there for the job to find whatever
 
 **The way to a dev screen is by presses, and not by a link.** The sign-in screen has a control that
 leads to the dev sign-in form (`sign-in:dev`), and every dev screen leads to their index
-(`dev-screen:index`): `flows/parts/dev.yaml` walks that, and each flow runs it. A member reaches
+(`dev-screen:index`): `flows/parts/dev.yaml` walks that, and each flow that reads a dev screen
+with nobody signed in runs it, where the three with the stack run `flows/parts/sign-in.yaml`,
+which takes the same control to the dev form. A member reaches
 the index from More (`more:dev`), which is how `replica` comes to the screen for sync with the
 household's own screens, and the replica they opened, still beneath it. iOS asks before it
 opens a link that came from outside the app, *Open in "Household Dev"?*, in a dialog of the

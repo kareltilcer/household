@@ -336,4 +336,169 @@ describe('the accessibility rules', () => {
     expect(broken('tied')).toEqual([])
     expect(broken('tied-to-nothing')).toEqual(['field'])
   })
+
+  it('want every control within a screen reader’s reach: in no `accessible` view, and in no other control', async () => {
+    await render(
+      <View>
+        <View testID="swallowed" accessible>
+          <Text>{words.title}</Text>
+          <Pressable accessibilityRole="button" style={target} onPress={noop}>
+            <Text>{words.open}</Text>
+          </Pressable>
+        </View>
+        <Pressable testID="nested" accessibilityRole="button" style={target} onPress={noop}>
+          <Text>{words.title}</Text>
+          <Pressable accessibilityRole="button" style={target} onPress={noop}>
+            <Text>{words.open}</Text>
+          </Pressable>
+        </Pressable>
+        <View testID="typed" accessible>
+          <TextInput accessibilityLabel={words.title} allowFontScaling={false} />
+        </View>
+        <View testID="beside">
+          <View accessible>
+            <Text>{words.title}</Text>
+          </View>
+          <Pressable accessibilityRole="button" style={target} onPress={noop}>
+            <Text>{words.open}</Text>
+          </Pressable>
+        </View>
+        <View testID="hidden" accessible>
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={target}
+          >
+            <Pressable style={target} onPress={noop} />
+          </View>
+        </View>
+      </View>,
+    )
+    expect(broken('swallowed')).toEqual(['reach'])
+    expect(broken('nested')).toEqual(['reach'])
+    expect(broken('typed')).toEqual(['reach'])
+    // The words are one thing and the control beside them is another.
+    expect(broken('beside')).toEqual([])
+    // What is hidden from a screen reader on purpose is no control to it.
+    expect(broken('hidden')).toEqual([])
+    expect(() => {
+      expectAccessible(screen.getByTestId('swallowed'))
+    }).toThrow(/\[reach\] <View role="button" name="Open"> is inside <View testID="swallowed"/)
+  })
+
+  it('want a row that wraps to break by the room its words ask for', async () => {
+    const room = { flexGrow: 1, flexShrink: 1, flexBasis: 160 }
+    const row = { flexDirection: 'row', flexWrap: 'wrap' } as const
+    await render(
+      <View>
+        <View testID="squeezed" style={row}>
+          <View style={room}>
+            <Text>{words.long}</Text>
+          </View>
+          <Pressable accessibilityRole="button" style={target} onPress={noop}>
+            <Text>{words.open}</Text>
+          </Pressable>
+        </View>
+        <View testID="two-parts" style={row}>
+          <View style={room}>
+            <Text>{words.long}</Text>
+          </View>
+          <View style={{ flexShrink: 1 }}>
+            <Pressable accessibilityRole="button" style={target} onPress={noop}>
+              <Text>{words.open}</Text>
+            </Pressable>
+          </View>
+        </View>
+        <View testID="alone" style={row}>
+          <View style={room}>
+            <Text>{words.long}</Text>
+          </View>
+        </View>
+        <View testID="the-rest" style={row}>
+          <Text style={{ flex: 1 }}>{words.long}</Text>
+          <Pressable accessibilityRole="button" style={target} onPress={noop}>
+            <Text>{words.open}</Text>
+          </Pressable>
+        </View>
+        <View testID="one-line" style={{ flexDirection: 'row' }}>
+          <View style={room}>
+            <Text>{words.long}</Text>
+          </View>
+          <Pressable accessibilityRole="button" style={target} onPress={noop}>
+            <Text>{words.open}</Text>
+          </Pressable>
+        </View>
+      </View>,
+    )
+    expect(broken('squeezed')).toEqual(['wrap'])
+    // A second child that may shrink: the first's basis is what the row breaks by.
+    expect(broken('two-parts')).toEqual([])
+    // With nothing beside it nothing takes its room.
+    expect(broken('alone')).toEqual([])
+    // A child that asks for no room of its own is given the rest, and asked for no more.
+    expect(broken('the-rest')).toEqual([])
+    // A row that does not wrap has no line to break.
+    expect(broken('one-line')).toEqual([])
+  })
+
+  it('want a switch, a checkbox and a radio to say whether they are checked, and a tab whether it is selected', async () => {
+    const roles = ['switch', 'checkbox', 'radio'] as const
+    await render(
+      <View>
+        {roles.map((role) => (
+          <View key={role}>
+            <Pressable
+              testID={`${role}:mute`}
+              accessibilityRole={role}
+              style={target}
+              onPress={noop}
+            >
+              <Text>{words.open}</Text>
+            </Pressable>
+            <Pressable
+              testID={`${role}:off`}
+              accessibilityRole={role}
+              accessibilityState={{ checked: false }}
+              style={target}
+              onPress={noop}
+            >
+              <Text>{words.open}</Text>
+            </Pressable>
+          </View>
+        ))}
+        <Pressable testID="tab:mute" accessibilityRole="tab" style={target} onPress={noop}>
+          <Text>{words.title}</Text>
+        </Pressable>
+        <Pressable
+          testID="tab:open"
+          accessibilityRole="tab"
+          accessibilityState={{ selected: true }}
+          style={target}
+          onPress={noop}
+        >
+          <Text>{words.title}</Text>
+        </Pressable>
+        <Pressable
+          testID="checkbox:some"
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: 'mixed' }}
+          style={target}
+          onPress={noop}
+        >
+          <Text>{words.open}</Text>
+        </Pressable>
+      </View>,
+    )
+    for (const role of roles) {
+      expect(broken(`${role}:mute`)).toEqual(['state'])
+      // Off is a state, and is said.
+      expect(broken(`${role}:off`)).toEqual([])
+    }
+    expect(broken('tab:mute')).toEqual(['state'])
+    expect(broken('tab:open')).toEqual([])
+    expect(broken('checkbox:some')).toEqual([])
+    expect(() => {
+      expectAccessible(screen.getByTestId('tab:mute'))
+    }).toThrow(/\[state\] .* is a tab, and does not say whether it is selected/)
+  })
 })

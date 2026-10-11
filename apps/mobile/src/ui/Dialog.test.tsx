@@ -131,7 +131,8 @@ describe('a dialog', () => {
     const [, safe, destroys] = screen.getAllByRole('button')
     expect(safe).toHaveTextContent(sample.keep)
     expect(destroys).toHaveTextContent(sample.deleteIt)
-    // What is behind it is no part of what a screen reader walks.
+    // Said of what it draws as well, which iOS reads of a view's own siblings: what keeps a
+    // screen reader from the screen behind is the platform's own presentation (Dialog.tsx).
     expect(elementsOf(modal()).some((each) => each.props.accessibilityViewIsModal === true)).toBe(
       true,
     )
@@ -162,6 +163,34 @@ describe('a dialog', () => {
     await opened({ sheet: true, toField: true })
     await fireEvent(modal(), 'show')
     expect(lastFocused(spy)).toMatchObject({ accessibilityLabel: sample.value })
+  })
+
+  // A field that mounts after its neighbours is not there as the modal is shown: the focus
+  // is not left where it was, behind the modal.
+  it('puts the focus on its title where what its owner named is not drawn yet', async () => {
+    // As the app's own does: whether there was anything there to give the focus to.
+    const spy = jest
+      .spyOn(announcer, 'focusOn')
+      .mockImplementation((target) => target.current !== null)
+    function Later() {
+      const absent = useRef<TextInput>(null)
+      return (
+        <Sheet
+          testID="it"
+          open
+          onClose={() => undefined}
+          title={sample.deleteTitle}
+          initialFocus={absent}
+        />
+      )
+    }
+    await render(<Later />)
+    await fireEvent(modal(), 'show')
+    expect(spy.mock.calls.map(([target]) => target.current === null)).toEqual([true, false])
+    expect(lastFocused(spy)).toMatchObject({
+      accessibilityRole: 'header',
+      accessibilityLabel: sample.deleteTitle,
+    })
   })
 
   it('is closed by its owner alone: the system’s back asks, and so does a screen reader’s escape', async () => {

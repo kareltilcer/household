@@ -6,8 +6,8 @@ import type { Component } from 'react'
 import { AccessibilityInfo, findNodeHandle } from 'react-native'
 
 /**
- * Says `message` to a screen reader once it has finished what it is saying: a success, a change
- * of state, a wait. Nothing is said for an empty message.
+ * Says `message` to a screen reader: a success, a change of state, a wait. On iOS, once it has
+ * finished what it is saying. Nothing is said for an empty message.
  */
 export function announce(message: string): void {
   if (message === '') return
@@ -15,8 +15,12 @@ export function announce(message: string): void {
 }
 
 /**
- * Says `message` at once, over what is being said: a failure, and nothing else. A screen that
- * opens with a failure announces nothing: it is read in its place.
+ * Says a failure, and nothing else: on iOS at once, over what is being said. On Android React
+ * Native passes no such option, so it is said as any other announcement is *(read, React
+ * Native 0.86.3: `queue` reaches iOS alone, AccessibilityInfo.js, and Android's module sends
+ * one announcement event for either, AccessibilityInfoModule.kt)*; what a screen reader there
+ * makes of two that follow each other is heard by nobody yet. A screen that opens with a
+ * failure announces nothing: it is read in its place.
  */
 export function announceNow(message: string): void {
   if (message === '') return

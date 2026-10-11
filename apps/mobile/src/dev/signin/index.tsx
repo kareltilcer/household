@@ -16,6 +16,7 @@ import { ApiProblemError, problemIn, unwrap } from '../../api/problem.ts'
 import { useProblemText } from '../../api/problemText.ts'
 import { askedNow } from '../../api/query.ts'
 import { paths } from '../../app/paths.ts'
+import { heldDestination } from '../../links/destination.ts'
 import { useSession } from '../../session/context.ts'
 import { Banner } from '../../ui/Banner.tsx'
 import { Button } from '../../ui/Button.tsx'
@@ -149,9 +150,12 @@ export default function DevSignIn() {
             { email, password },
             {
               // From the press's own callback: it is dropped with this screen, and leads nobody
-              // away from wherever they had gone meanwhile.
+              // away from wherever they had gone meanwhile. On to the address that was held for
+              // them, as the sign-in screen said: led to where the app opens, the first
+              // household's guard would take the held address as reached, and it would open
+              // nowhere.
               onSuccess: () => {
-                router.replace(paths.home.path)
+                router.replace(heldDestination() ?? paths.home.path)
               },
             },
           )

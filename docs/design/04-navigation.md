@@ -3,7 +3,7 @@
 > **Seventeen modules cannot be seventeen tabs.**
 > ([06-clients §2](../prd/06-clients.md))
 
-## 1. Mobile — five destinations, fixed
+## 1. Mobile — five destinations, in a fixed order
 
 | Tab | Contents |
 |---|---|

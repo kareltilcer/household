@@ -15,7 +15,8 @@ import {
   unanswered,
   type Answering,
 } from '../../api/testing.ts'
-import { paths } from '../../app/paths.ts'
+import { inHousehold, paths } from '../../app/paths.ts'
+import { holdDestination, takeDestination } from '../../links/destination.ts'
 import type { SignedIn } from '../../session/context.ts'
 import { account, SessionFixture } from '../../session/fixture.tsx'
 import { expectAccessible } from '../../test/a11y.ts'
@@ -135,6 +136,17 @@ describe('the dev sign-in form', () => {
     expect(order).toEqual(['signed in', 'led on'])
     // Busy still: idle, it would take a second press that signs in a second time.
     expect(screen.getByTestId('dev-sign-in:submit')).toBeBusy()
+  })
+
+  it('leads on to the address that was held for whoever signs in, as the sign-in screen said', async () => {
+    const held = inHousehold.more(ids.household)
+    holdDestination(held)
+    await form(() => json(200, { user: me, tokens }))
+    await submit()
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(held)
+    })
+    takeDestination()
   })
 
   it('is busy while the server is asked, and sends one sign-in for two presses', async () => {

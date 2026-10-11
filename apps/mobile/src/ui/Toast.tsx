@@ -1,8 +1,9 @@
 // Toast, with undo (02-components §1, 03-patterns §5; the web's is apps/web/src/ui/Toast.tsx):
 // what just happened, in a sentence, and a real window in which to take it back. Undo is a
 // button, never a gesture, and it stays for the whole dwell (the tokens' `toast-dwell`): no
-// swipe puts a toast away, its own control does. Each is said to a screen reader as it comes,
-// once it has finished what it is saying.
+// swipe puts a toast away, its own control does. Each is said to a screen reader as it comes:
+// on iOS once it has finished what it is saying, and on Android as any announcement is
+// (announce.ts says what of that is read).
 //
 // Where they are drawn is the one thing a device changes. React Native's `Modal` stands above
 // everything else the app draws, so while a dialog or a sheet is open the toasts are drawn
@@ -10,6 +11,7 @@
 // an Undo could not be pressed. They are one list wherever it is drawn, each toast with a dwell
 // that runs on through a modal that opens or closes around it.
 import { controls } from '@household/icons'
+import { remPx } from '@household/tokens'
 import {
   createContext,
   use,
@@ -25,7 +27,9 @@ import { KeyboardAvoidingView, Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useDisplay, useTarget, useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { onForget } from '../session/forget.ts'
 import { announce, watchScreenReader } from './announce.ts'
+import { useFocusRing } from './focus.ts'
 import { BaseIcon } from './Icon.tsx'
 import { Text } from './Text.tsx'
 
@@ -95,6 +99,13 @@ function Dwell({
   return null
 }
 
+/**
+ * The least room a toast's sentence is given before its controls go under it, in rem: little
+ * enough that the control which puts it away stays beside the sentence at 200 % on a phone
+ * 360 pt wide, and enough that Undo with it does not.
+ */
+const sentenceRem = 6
+
 /** One toast: its sentence, its Undo where it has one, and the control that puts it away. */
 function Toast({
   toast,
@@ -108,6 +119,10 @@ function Toast({
   const target = useTarget()
   const { textScale } = useDisplay()
   const { undo } = toast
+  // A keyboard's focus, or a switch's, on either control: a touch gives none. The ring is in
+  // the toast's own ink, as the web's is: the focus token has no declared pair on this ground.
+  const undoFocus = useFocusRing('outside', 'text-inverse')
+  const dismissFocus = useFocusRing('outside', 'text-inverse')
   const control = {
     minHeight: target,
     minWidth: target,
@@ -118,9 +133,15 @@ function Toast({
   return (
     <View
       testID="toast"
+      // The sentence, and its controls after it: beside it where there is the room for both,
+      // and under it, at the end of their own line, where there is not. With the controls as
+      // the sentence's plain neighbours the row could not break, and at 200 % text on a phone
+      // the sentence was left what Undo and the dismiss did not take: in German, nothing.
       style={{
         flexDirection: 'row',
+        flexWrap: 'wrap',
         alignItems: 'center',
+        justifyContent: 'flex-end',
         gap: theme.space['space-1'],
         width: '100%',
         // 32 rem at the most, counted in the reader's text.
@@ -133,44 +154,60 @@ function Toast({
         boxShadow: theme.shadows['shadow-2'],
       }}
     >
-      {/* Met by a screen reader, it is read as it was announced: after the one word. */}
-      <Text
-        color="text-inverse"
-        accessibilityLabel={`${t('ui.toast.label')}: ${toast.message}`}
-        style={{ flex: 1 }}
+      <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: sentenceRem * remPx * textScale }}>
+        {/* Met by a screen reader, it is read as it was announced: after the one word. */}
+        <Text color="text-inverse" accessibilityLabel={`${t('ui.toast.label')}: ${toast.message}`}>
+          {toast.message}
+        </Text>
+      </View>
+      {/* The controls are one part, which may shrink: a second flexible child beside the
+          sentence, without which its room is not what the row breaks by (ui/ListRow.tsx). */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: theme.space['space-1'],
+          flexShrink: 1,
+        }}
       >
-        {toast.message}
-      </Text>
-      {undo === undefined ? null : (
+        {undo === undefined ? null : (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              undo()
+              dismiss(toast.id)
+            }}
+            onFocus={undoFocus.onFocus}
+            onBlur={undoFocus.onBlur}
+            style={{
+              ...control,
+              // Its word wraps inside it where the two controls have a line too narrow for both.
+              flexShrink: 1,
+              paddingHorizontal: theme.space['space-15'],
+              borderWidth: 1,
+              // The toast's own ink, on its own ground: the one pair an inverse surface has.
+              borderColor: theme.color['text-inverse'],
+              ...undoFocus.ring,
+            }}
+          >
+            <Text color="text-inverse" weight={500} style={{ textAlign: 'center' }}>
+              {t('ui.toast.undo')}
+            </Text>
+          </Pressable>
+        )}
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={t(controls.dismiss.labelKey)}
           onPress={() => {
-            undo()
             dismiss(toast.id)
           }}
-          style={{
-            ...control,
-            paddingHorizontal: theme.space['space-15'],
-            borderWidth: 1,
-            // The toast's own ink, on its own ground: the one pair an inverse surface has.
-            borderColor: theme.color['text-inverse'],
-          }}
+          onFocus={dismissFocus.onFocus}
+          onBlur={dismissFocus.onBlur}
+          style={{ ...control, ...dismissFocus.ring }}
         >
-          <Text color="text-inverse" weight={500}>
-            {t('ui.toast.undo')}
-          </Text>
+          <BaseIcon name={controls.dismiss.glyph.id} color="text-inverse" />
         </Pressable>
-      )}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t(controls.dismiss.labelKey)}
-        onPress={() => {
-          dismiss(toast.id)
-        }}
-        style={control}
-      >
-        <BaseIcon name={controls.dismiss.glyph.id} color="text-inverse" />
-      </Pressable>
+      </View>
     </View>
   )
 }
@@ -217,6 +254,18 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
   // taken back.
   const [reader, setReader] = useState(false)
   useEffect(() => watchScreenReader(setReader), [])
+
+  // A toast names a row of its member's, and its Undo writes to their replica. It stands above
+  // the router and under the session, so nothing else takes it away when a sign-in ends: it
+  // goes with whatever else the device kept of a member (session/forget.ts), and whoever picks
+  // the device up next is shown none of it and can take nothing back.
+  useEffect(
+    () =>
+      onForget(() => {
+        setShown([])
+      }),
+    [],
+  )
 
   const label = t('ui.toast.label')
   const show = useCallback<ShowToast>(

@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { act, screen, userEvent, waitFor, within } from '@testing-library/react-native'
 import { router } from 'expo-router'
 import { useState } from 'react'
-import { Platform } from 'react-native'
+import { Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { answering, json, problem, testClient } from '../api/testing.ts'
 import type { Household } from '../household/data.ts'
 import { createFormatters } from '../i18n/format.ts'
@@ -105,6 +105,35 @@ const row = (name: string) => {
   )
   if (found === undefined) throw new Error(`no row is called ${name}`)
   return found
+}
+
+/**
+ * What the accessibility focus was asked to go to, each by its `testID` as it stood when it was
+ * asked, or null where it had gone already: a ref to a row that has left holds nothing later.
+ */
+const went: (string | null)[] = []
+
+/**
+ * Watches where the accessibility focus is asked to go, answering as the app's own `focusOn`
+ * does: whether there was anything there to give it to.
+ */
+function watchFocus() {
+  return jest.spyOn(announcer, 'focusOn').mockImplementation((target) => {
+    const there = target.current
+    const { testID } = { ...there?.props } as { readonly testID?: string }
+    went.push(there === null ? null : (testID ?? ''))
+    return there !== null
+  })
+}
+
+/** Where the focus was asked to go since `focus` was last cleared, in the order it was asked. */
+function focused(focus: ReturnType<typeof watchFocus>): (string | null)[] {
+  return went.slice(went.length - focus.mock.calls.length)
+}
+
+/** The places of the list's own that the focus was put on: its lead, or its empty sentence. */
+function placed(focus: ReturnType<typeof watchFocus>): (string | null)[] {
+  return focused(focus).filter((testID) => testID?.startsWith('sync:inbox:') === true)
 }
 
 beforeEach(async () => {
@@ -259,7 +288,7 @@ describe('the inbox', () => {
   })
 
   it('puts the focus on the list’s own place once an answered row has gone, and not before the sheet has', async () => {
-    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    const focus = watchFocus()
     await inbox({ entries: [conflict, rejectionWith('forbidden')] })
     await userEvent.press(within(row('March electricity')).getByTestId('status:conflict'))
     const { onDismiss } = screen.getByTestId('resolver').props as {
@@ -277,8 +306,11 @@ describe('the inbox', () => {
       await Promise.resolve()
     })
     await waitFor(() => {
-      expect(focus).toHaveBeenCalledTimes(1)
+      expect(placed(focus)).toHaveLength(1)
     })
+    // The sheet gave the focus back to the mark it was opened from, which had left with its
+    // row: there was nothing there, and the list's own place took it.
+    expect(focused(focus)).toEqual([null, 'sync:inbox:lead'])
     // One thing to a screen reader, which says what the list under it is.
     const place = focus.mock.lastCall?.[0].current
     expect({ ...place?.props }).toMatchObject({ accessible: true, testID: 'sync:inbox:lead' })
@@ -289,7 +321,7 @@ describe('the inbox', () => {
 
   // With the last row answered there is no list: its place is the sentence that says so.
   it('puts the focus on the sentence that nothing waits once the last row has been answered', async () => {
-    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    const focus = watchFocus()
     await inbox({ entries: [conflict] })
     await userEvent.press(screen.getByTestId('status:conflict'))
     const { onDismiss } = screen.getByTestId('resolver').props as {
@@ -307,7 +339,7 @@ describe('the inbox', () => {
       await Promise.resolve()
     })
     await waitFor(() => {
-      expect(focus).toHaveBeenCalledTimes(1)
+      expect(placed(focus)).toEqual(['sync:inbox:empty'])
     })
     // One thing to a screen reader, which reads the sentence as the focus lands on it.
     expect({ ...focus.mock.lastCall?.[0].current?.props }).toMatchObject({
@@ -324,7 +356,7 @@ describe('the inbox', () => {
   // says a sheet has gone as it closes the sheet is gone first.
   it('waits for the list to have heard before it puts the focus, where the sheet had gone first', async () => {
     jest.replaceProperty(Platform, 'OS', 'android')
-    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    const focus = watchFocus()
     const stand = standIn({ registry, entries: [conflict] })
     // What the replica says of its inbox after the first time, held until the test lets it by.
     let tell: () => void = () => undefined
@@ -355,24 +387,23 @@ describe('the inbox', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    // The sheet has gone, the answer was given, and the row is still drawn: the lead above it
-    // is about to leave with it, and is no place to put the focus on.
+    // The sheet has gone, the answer was given, and the row is still drawn: the sheet gave the
+    // focus back to the row's mark, and the lead above it, about to leave with the row, is no
+    // place to put the focus on.
     expect(rows()).toHaveLength(1)
-    expect(focus).not.toHaveBeenCalled()
+    expect(focused(focus)).toEqual(['status:conflict'])
     await act(() => {
       tell()
     })
     await waitFor(() => {
-      expect(focus).toHaveBeenCalledTimes(1)
+      expect(placed(focus)).toHaveLength(1)
     })
-    expect({ ...focus.mock.lastCall?.[0].current?.props }).toMatchObject({
-      testID: 'sync:inbox:empty',
-    })
+    expect(focused(focus)).toEqual(['status:conflict', 'sync:inbox:empty'])
   })
 
   it('takes the focus once for an answered row: a row the replica sends by itself later takes none', async () => {
     jest.replaceProperty(Platform, 'OS', 'android')
-    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
+    const focus = watchFocus()
     const stand = await inbox({
       entries: [conflict, rejectionWith('forbidden'), rejectionWith('not_found')],
     })
@@ -380,7 +411,7 @@ describe('the inbox', () => {
     focus.mockClear()
     await userEvent.press(screen.getByTestId('resolver:keep-theirs'))
     await waitFor(() => {
-      expect(focus).toHaveBeenCalledTimes(1)
+      expect(placed(focus)).toHaveLength(1)
     })
     await act(async () => {
       await stand.opened.replica.discard(rejectionWith('forbidden').mutation_id)
@@ -388,23 +419,28 @@ describe('the inbox', () => {
     await waitFor(() => {
       expect(rows()).toHaveLength(1)
     })
-    expect(focus).toHaveBeenCalledTimes(1)
+    expect(placed(focus)).toHaveLength(1)
   })
 
-  it('leaves the focus where the sheet gave it back when it was closed with no answer', async () => {
+  // Android's modal gives the focus back to nothing by itself, where iOS's remembers what a
+  // screen reader was on (read in React Native's two hosts, ui/Dialog.tsx): the sheet is told
+  // which mark it was opened from.
+  it('gives the focus back to the mark a sheet was opened from when it is closed with no answer', async () => {
     jest.replaceProperty(Platform, 'OS', 'android')
-    const focus = jest.spyOn(announcer, 'focusOn').mockReturnValue(true)
-    await inbox({ entries: [rejectionWith('forbidden'), rejectionWith('not_found')] })
-    const [first] = screen.getAllByTestId('status:rejected')
-    if (first === undefined) throw new Error('no row is marked')
-    await userEvent.press(first)
+    const focus = watchFocus()
+    await inbox({ entries: [conflict, rejectionWith('forbidden')] })
+    await userEvent.press(screen.getByTestId('status:rejected'))
+    focus.mockClear()
     await userEvent.press(screen.getByTestId('resolver:close'))
     await waitFor(() => {
       expect(screen.queryByTestId('resolver:surface')).toBeNull()
     })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // Its own row is still there: its mark takes the focus, and the list's own place does not.
     expect(rows()).toHaveLength(2)
-    // Its own row is still there, and the platform gives the focus back to its mark.
-    expect(focus).not.toHaveBeenCalled()
+    expect(focused(focus)).toEqual(['status:rejected'])
   })
 
   it('opens the reason from a refusal’s mark', async () => {
@@ -448,6 +484,33 @@ describe('the inbox', () => {
       expect(rows()).toHaveLength(1)
     })
     expect(stand.asked).toEqual([`resolve:${overriddenMerge.mutation_id}`])
+  })
+
+  // The banner is a line of its own under the row, and no part of what stands beside the
+  // title: were it one, the control that opens it would go under the title as it is pressed.
+  it('keeps what opens a merge’s banner where it was pressed, the banner open as closed', async () => {
+    await inbox({ entries: [overriddenMerge] })
+    const parts = () =>
+      row('Oat milk').children.flatMap((part) => (typeof part === 'string' ? [] : [part]))
+    const declared = () =>
+      parts().map((part) => StyleSheet.flatten(part.props.style as StyleProp<ViewStyle>))
+    const [words, beside, ...closed] = declared()
+    expect(closed).toEqual([])
+    await userEvent.press(screen.getByRole('button', { name: en['sync.kept.show'] }))
+    const [wordsOpen, besideOpen, under, ...rest] = declared()
+    expect(rest).toEqual([])
+    // The row's two parts declare what they declared, so the row breaks where it broke.
+    expect(wordsOpen).toEqual(words)
+    expect(besideOpen).toEqual(beside)
+    expect(beside).toMatchObject({ flexShrink: 1 })
+    expect(under).toMatchObject({ flexBasis: '100%' })
+    // And the control is in the part it was in, the banner in a part of its own.
+    const [, second, third] = parts()
+    if (second === undefined || third === undefined) throw new Error('the row has no such part')
+    expect(within(second).getByRole('button', { name: en['sync.kept.show'] })).toBeExpanded()
+    expect(within(second).queryByTestId('sync:kept')).toBeNull()
+    expect(within(third).getByTestId('sync:kept')).toBeOnTheScreen()
+    expectAccessible()
   })
 
   it('reads the same with no connection, and says changes go when it is back', async () => {

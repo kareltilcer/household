@@ -68,7 +68,10 @@ export function ArrangeLists({ household, registry, arrangement, onArrange }: Ar
   const navigation = navigationOf(household, registry, arrangement)
   // The row that last went from one list to another, to be followed there: a new value for each
   // such change, so that a row that goes back and forth is followed each time.
-  const [followed, setFollowed] = useState<{ readonly module: ModuleKey } | null>(null)
+  const [followed, setFollowed] = useState<{
+    readonly module: ModuleKey
+    readonly sentence: string
+  } | null>(null)
   // What a screen reader meets first of each row, by its module: its handle where it has one,
   // and its name where it has none.
   const firsts = useRef(new Map<ModuleKey, View>())
@@ -83,14 +86,17 @@ export function ArrangeLists({ household, registry, arrangement, onArrange }: Ar
     if (followed === null) return
     const element = firsts.current.get(followed.module)
     if (element !== undefined) focusOn({ current: element })
+    // Said once the focus is where it goes, and not at the press: a screen reader reads what
+    // its focus lands on, and a sentence said a moment before that may be cut off by it (the
+    // order is the app's; what is heard of either order is heard by nobody yet).
+    announce(followed.sentence)
   }, [followed])
   const name = (module: ModuleKey) => t(`module.${module}.name`)
 
   /** Takes `module` to another list: it is said, and the focus follows the row there. */
   const went = (module: ModuleKey, next: Arrangement, sentence: string) => {
     onArrange(next)
-    announce(sentence)
-    setFollowed({ module })
+    setFollowed({ module, sentence })
   }
 
   /** Moves `module` within `list`, and says where it has come to: at an end, where it still is. */

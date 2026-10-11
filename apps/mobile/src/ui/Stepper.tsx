@@ -14,7 +14,7 @@ import { Platform, View } from 'react-native'
 import { useDisplay, useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { IconButton } from './Button.tsx'
-import { Field, FieldInput, type FieldProps } from './Field.tsx'
+import { Field, FieldInput, type FieldInputProps, type FieldProps } from './Field.tsx'
 import { BaseIcon } from './Icon.tsx'
 
 export interface StepperProps extends FieldProps {
@@ -42,6 +42,25 @@ function typedNumber(text: string): number {
   return /^[-+]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(written)
     ? Number(written.replace(',', '.'))
     : Number.NaN
+}
+
+/**
+ * How the count stands in its box: in the middle of it, between its two buttons, on iOS, and at
+ * its start on Android, where centring it costs the page its scroll. In CI's runs a swipe that
+ * began on the count scrolled the page no further on Android, where iOS scrolled the same page.
+ *
+ * Read in React Native's own source: its Android field shuts its parents out of a touch as the
+ * finger comes down, and lets them back in at the first move only if it can scroll no way
+ * itself (`onTouchEvent`, ReactEditText.kt:296-320); and `textAlign: 'center'` is the field's
+ * horizontal gravity (`setTextAlign`, ReactTextInputManager.kt:546-570). Recalled of Android's
+ * own `TextView`, whose source is not in this repository, and run on nothing: a field of one
+ * line answers that it can scroll sideways unless that gravity is the start's, its line being
+ * laid out far wider than the field. So a centred count would keep every touch that begins on
+ * it. No property of the field turns that off but `multiline`, which is another control on iOS.
+ * A flow that swipes from the count is what shows whether this mends it.
+ */
+function centredOn(os: typeof Platform.OS): Pick<FieldInputProps, 'align'> {
+  return os === 'android' ? {} : { align: 'center' }
 }
 
 export function Stepper({
@@ -88,6 +107,7 @@ export function Stepper({
   }
   const decrease = t(controls.decrease.labelKey, { name: label })
   const increase = t(controls.increase.labelKey, { name: label })
+  const centred = centredOn(Platform.OS)
   return (
     <Field label={label} help={help} error={error} required={required} typed>
       {(wiring) => (
@@ -106,7 +126,7 @@ export function Stepper({
             wiring={wiring}
             {...(testID === undefined ? {} : { testID })}
             numeric
-            align="center"
+            {...centred}
             // As wide as the row leaves it, and never narrower than four figures.
             layout={{ flex: 1, minWidth: 64 * textScale }}
             // Digits alone, where its least allows no minus: a fraction cannot be typed on

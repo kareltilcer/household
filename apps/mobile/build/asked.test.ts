@@ -33,6 +33,24 @@ describe('what a build asks of its device', () => {
     })
   })
 
+  it('is read off the element that asks from Android 6 on too, and held to a reason as any other', () => {
+    // As aapt2 prints `<uses-permission-sdk-23>`, with or without the last version it is for.
+    const printed =
+      dump(development) +
+      "uses-permission-sdk-23: name='android.permission.CAMERA'\n" +
+      "uses-permission-sdk-23: name='android.permission.RECORD_AUDIO' maxSdkVersion='34'\n"
+    expect(read(printed).names).toEqual([
+      ...development,
+      `${identifier}.${ownPermission}`,
+      'android.permission.CAMERA',
+      'android.permission.RECORD_AUDIO',
+    ])
+    const failures = judge(printed, 'development')
+    expect(failures).toHaveLength(2)
+    expect(failures[0]).toContain('android.permission.CAMERA')
+    expect(failures[1]).toContain('android.permission.RECORD_AUDIO')
+  })
+
   it('passes a build that asks for what has a reason and nothing else', () => {
     expect(judge(dump(development), 'development')).toEqual([])
     expect(judge(dump(member), 'staging')).toEqual([])

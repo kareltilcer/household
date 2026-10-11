@@ -131,14 +131,21 @@ export function Surface({
       supportedOrientations={everyWay}
       onRequestClose={onClose}
       onShow={() => {
-        focusOn(initialFocus ?? heading)
+        // What its owner named may not be drawn yet, a field that mounts after its neighbours:
+        // the focus is then put on the title, and never left where it was, behind the modal.
+        if (!focusOn(initialFocus ?? heading)) focusOn(heading)
       }}
       onDismiss={gone}
     >
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <View
           style={{ flex: 1 }}
-          // What is behind is no part of what a screen reader walks while this is open.
+          // What keeps a screen reader from what is behind is the platform's own presentation,
+          // as far as it was read: on Android a modal is a window of its own (a dialog,
+          // ReactModalHostView.kt), and on iOS a view controller presented over the whole
+          // screen (RCTModalHostViewComponentView.mm), neither of which this view has a say
+          // in. The property is iOS's alone and speaks of this view's own siblings: it is said
+          // as well, and what it adds there is heard by nobody yet.
           accessibilityViewIsModal
           onAccessibilityEscape={onClose}
         >

@@ -11,8 +11,9 @@
 // On a device an update is the store's. The one action opens the app's page there, where the
 // build was told of one for the platform it runs on (store.ts); a build that was told none
 // draws no control, a control that cannot act being absent.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { announceNow } from '../ui/announce.ts'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
 import { Screen } from '../ui/Screen.tsx'
@@ -29,9 +30,17 @@ export function UpdateRequired({ store = storeUrl() }: UpdateRequiredProps) {
   const [opening, setOpening] = useState(false)
   // The device had nothing that opens the store's address: said, since the press came to nothing.
   const [failed, setFailed] = useState(false)
+  const title = t('ui.update.required.title')
+  const body = t('device.update.body')
+  // It never opens a screen: it takes the place of whatever was drawn when a request was
+  // answered so, and of everything under it, so it is said as it arrives, as what could not be
+  // read is (session/guards.tsx).
+  useEffect(() => {
+    announceNow(`${title}\n${body}`)
+  }, [title, body])
   return (
-    <Screen title={t('ui.update.required.title')} testID="update-required">
-      <Text color="text-muted">{t('device.update.body')}</Text>
+    <Screen title={title} testID="update-required">
+      <Text color="text-muted">{body}</Text>
       {failed ? (
         <Banner tone="danger" announce>
           {t('device.update.failed')}

@@ -8,7 +8,10 @@
 import * as SecureStore from 'expo-secure-store'
 
 export interface Vault {
-  /** What is kept under `key`, or null: where nothing is, and where the device will not say. */
+  /**
+   * What is kept under `key`, or null where nothing is. It rejects where the device will not
+   * say: what it holds then is not known, which is not the same as nothing (tokens.ts).
+   */
   readonly get: (key: string) => Promise<string | null>
   /** Keeps `value` under `key`. It rejects where the device will not keep it. */
   readonly set: (key: string, value: string) => Promise<void>
@@ -24,14 +27,13 @@ const options: SecureStore.SecureStoreOptions = {
 export function secureVault(): Vault {
   return {
     get: async (key) => {
-      try {
-        // A device that holds nothing under a key says null; whatever else it says is no value.
-        const value: unknown = await SecureStore.getItemAsync(key, options)
-        return typeof value === 'string' ? value : null
-      } catch {
-        // A keystore whose key was lost, as after a restore, reads as holding nothing.
-        return null
-      }
+      // A device that holds nothing under a key says null, and so does one whose own key for it
+      // was lost, as after a restore (read in expo-secure-store's sources, run on nothing);
+      // whatever else it says is no value. A keychain that cannot be read now, shut while the
+      // device is locked, rejects: taken for holding nothing, a sign-in it still holds would
+      // be read as gone, and what the device kept of its member removed for it.
+      const value: unknown = await SecureStore.getItemAsync(key, options)
+      return typeof value === 'string' ? value : null
     },
     set: async (key, value) => {
       await SecureStore.setItemAsync(key, value, options)

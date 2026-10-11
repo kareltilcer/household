@@ -17,6 +17,17 @@
 // The form's part is named for the file as it is stored, which is its row's id: the upload
 // names a part by the path it sends and by nothing else. The row carries the file's own name,
 // and has reached the server before its bytes are sent.
+//
+// A waiting file is found by its name, in the directory its replica has now, and never at the
+// place the queue was told when the file was added. The queue keeps that place whole, as a
+// `file://` address under the app's own container, and hands it back at every run, weeks later
+// if need be; and iOS gives an app's container another path when the app is updated or
+// restored from a backup. That is not run here, and is read only in what guards against it:
+// PowerSync's own queue looks at every start for a file that "exists locally but the localUri
+// is broken", and finds it again by its name (@powersync/common,
+// `AttachmentQueue.verifyAttachments`). Looked for where it was first put, every file that
+// waited across an update would be said to be lost (the queue's `bytes_lost`) with its bytes
+// still here.
 import { readProblem } from '@household/api'
 import type { AttachmentOptions, StoredTransport } from '@household/sync'
 import { Directory, File, Paths, UploadType } from 'expo-file-system'
@@ -34,6 +45,15 @@ function bufferOf(bytes: Uint8Array<ArrayBuffer>): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
 }
 
+/**
+ * The file the queue names by `place`, where it waits now: in `directory`, under the name that
+ * place ends in. The name alone is read of it, as a word and with nothing asked of the device,
+ * so a place under a container the app no longer has is as good a name as any.
+ */
+function waiting(directory: Directory, place: string): File {
+  return new File(directory, Paths.basename(place))
+}
+
 /** Where a replica's files wait: `directory`, as the library's queue asks for it. */
 export function fileStorage(directory: Directory): AttachmentOptions['storage'] {
   const make = (made: Directory) => {
@@ -46,20 +66,21 @@ export function fileStorage(directory: Directory): AttachmentOptions['storage'] 
     },
     getLocalUri: (filename) => new File(directory, filename).uri,
     saveFile: (path, data) => {
-      const file = new File(path)
+      const file = waiting(directory, path)
       file.create({ intermediates: true, overwrite: true })
       file.write(typeof data === 'string' ? data : new Uint8Array(data))
       return Promise.resolve(file.size)
     },
     // The way out reads nothing (the transport below is handed the file's place): this is for
     // whoever asks for a file's bytes by name.
-    readFile: async (path) => bufferOf(await new File(path).bytes()),
+    readFile: async (path) => bufferOf(await waiting(directory, path).bytes()),
     deleteFile: (path) => {
-      const file = new File(path)
+      const file = waiting(directory, path)
       if (file.exists) file.delete()
       return Promise.resolve()
     },
-    fileExists: (path) => Promise.resolve(new File(path).exists),
+    fileExists: (path) => Promise.resolve(waiting(directory, path).exists),
+    // A directory is named by whoever asks, as they ask: the queue keeps the place of none.
     makeDir: (path) => {
       make(new Directory(path))
       return Promise.resolve()
@@ -90,6 +111,8 @@ export function removeFiles(member: string, household: string): void {
 export interface UploadOptions {
   /** Where a problem that is about the app, and not about the file, is told. */
   readonly problems: ProblemHub
+  /** The directory the replica's files wait in (`filesOf`): a file is sent from there, by its name. */
+  readonly directory: Directory
 }
 
 /**
@@ -97,9 +120,9 @@ export interface UploadOptions {
  * queue reads as any other; a file that could not be read and a request that got no answer
  * reject, which the queue counts as a try and makes again.
  */
-export function uploadByUri({ problems }: UploadOptions): StoredTransport {
+export function uploadByUri({ problems, directory }: UploadOptions): StoredTransport {
   return async (url, credential, file) => {
-    const answer = await new File(file.uri).upload(url, {
+    const answer = await waiting(directory, file.uri).upload(url, {
       httpMethod: 'POST',
       uploadType: UploadType.MULTIPART,
       fieldName: 'file',

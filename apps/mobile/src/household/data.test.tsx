@@ -12,6 +12,7 @@ import { dataStates } from '../ui/states.ts'
 import { Text } from '../ui/Text.tsx'
 import {
   householdKey,
+  householdsKey,
   lastHousehold,
   moduleKeys,
   opening,
@@ -201,6 +202,41 @@ describe('a member’s households', () => {
     await waitFor(() => {
       expect(screen.getByTestId('list')).toHaveTextContent(`${ids.otherHousehold} ${ids.household}`)
     })
+  })
+
+  // Where the app opens goes by the list the device kept, and leaves for a household at once:
+  // a re-read given up as its reader left would never land, and a household the kept list
+  // still names and the server no longer does would be where the app opens for good.
+  it('are read to the end though whoever asked has gone: the answer is there for the next reader', async () => {
+    let answer: (response: Response) => void = () => undefined
+    const api = answering({
+      'GET /households': () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve
+        }),
+    })
+    let client: QueryClient | undefined
+    function List() {
+      client = useQueryClient()
+      useHouseholds()
+      return null
+    }
+    const view = await render(
+      <SessionFixture api={testClient(api.transport)}>
+        <List />
+      </SessionFixture>,
+    )
+    await waitFor(() => {
+      expect(api.asked).toHaveLength(1)
+    })
+    await view.rerender(<SessionFixture api={testClient(api.transport)}>{null}</SessionFixture>)
+    await act(async () => {
+      answer(json(200, { items: [summaryOf(households.own)] }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(client?.getQueryData<HouseholdSummary[]>(householdsKey)?.map((each) => each.id)).toEqual(
+      [ids.household],
+    )
   })
 })
 

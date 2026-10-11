@@ -88,8 +88,11 @@ describe('please update', () => {
     expect(screen.getByTestId('banner:danger')).toHaveTextContent(
       catalogs.en['device.update.failed'],
     )
-    expect(said).toHaveBeenCalledTimes(1)
-    expect(said).toHaveBeenCalledWith(catalogs.en['device.update.failed'])
+    // After the screen's own words, said as it arrived.
+    expect(said.mock.calls).toEqual([
+      [`${catalogs.en['ui.update.required.title']}\n${catalogs.en['device.update.body']}`],
+      [catalogs.en['device.update.failed']],
+    ])
     // Pressed again, with a store that opens: the sentence goes.
     open.mockResolvedValueOnce(true)
     await userEvent.press(screen.getByRole('button', { name: action }))

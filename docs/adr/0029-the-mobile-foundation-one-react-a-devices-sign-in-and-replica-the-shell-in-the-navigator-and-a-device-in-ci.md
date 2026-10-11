@@ -63,8 +63,9 @@ and react-native-svg, are catalog entries too. `packageExtensions` makes
 `react-native-drawer-layout`'s two peers optional, as expo-router itself declares them: left
 required, pnpm installed reanimated, gesture-handler and worklets at versions the SDK does not
 pin, which autolinking would link into every build. The app has none of the three: a primitive
-is `View`, `Pressable`, `Modal`, `Animated` and react-native-svg. Expo's own packages are
-written with the SDK's ranges, as `expo install` writes them, and everything else is pinned
+is `View`, `Pressable`, `Modal`, `Animated` and react-native-svg. Expo's own packages, and the
+two others the SDK pins by a range (`react-native-safe-area-context`, `react-native-screens`),
+are written with the SDK's ranges, as `expo install` writes them, and everything else is pinned
 exactly; the lockfile is what pins the first. The app builds for Android 10 and for iOS 16.4,
 which is the SDK's own floor: its build properties refuse a deployment target under it (D-185).
 
@@ -107,7 +108,13 @@ connection, so a language chosen is shown at once. A shared key is used where it
 true of a phone. Where it says *this browser*, *tab*, *page* or *reload*, the app has a key of
 its own under the first segment `device`, which is a row of `packages/i18n/src/parts.ts` beside
 the server's own segments (`deviceSegments`) and in no part, so no download of the web's holds
-one. The account's language is followed by one function of the provider (`followAccount`,
+one. One shared sentence is made true of a phone, and has no twin: a kept version's banner
+tells its member to copy what they still need (`sync.kept.hint`), so the value of a key–value
+pair can be selected (`src/ui/KeyValue.tsx`). *Read*: on iOS a long press on a selectable text
+offers Copy, of the whole of it, and on Android the text is told that it is selectable. Not
+known, and heard by nobody: what a screen reader makes of it, how Copy is reached with
+VoiceOver on, and whether TalkBack then stops on a value apart from its label. The account's
+language is followed by one function of the provider (`followAccount`,
 `src/i18n/I18nProvider.tsx`), and the followed and the chosen language are both kept on the
 device, so the app starts in its member's language before the session is read.
 
@@ -142,30 +149,41 @@ with the system's own scaling off, since the two would multiply. ESLint fails an
 Native's `Text` anywhere else in the app. A target is 44 pt times the same scale (`useTarget`),
 a glyph is drawn at it, and a field that is typed in turns the system's scaling off as `Text`
 does. The display modes are the device's: the theme (light by default, dark, or the system's)
-and motion, kept in AsyncStorage, with no density mode and no scale mode. A dev screen may hold
+and motion, kept in AsyncStorage, with no density mode and no scale mode. Where motion is
+reduced, by its member's choice or the device's, one screen takes another's place at once in
+both of the router's stacks (`src/app/Root.tsx`, `src/shell/HouseholdsLayout.tsx`), as a modal
+does: an instant change, and never a slower one. A dev screen may hold
 a theme or a scale over them without keeping it (`hold`), and a `ThemeScope` draws a subtree in
 a named theme, which is how the harness draws each cell in both.
 
 **A dev screen is in a bundle only where its route's own condition lets it in, and a check of
 the export holds that** (D-154). Each file under `app/dev/` writes the condition out,
 `__DEV__ || process.env.EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS === '1'`, and loads its screen behind
-it with `lazy(() => import(…))`; where it is false the route draws *not available*. Metro folds
-a condition only where it is written, so a constant imported from elsewhere would not do
-(`src/dev/gate.ts` is for a question asked at run time alone). Every dev screen stands in
+it with `lazy(() => import(…))`; where it is false the route draws *not available*. The two
+controls that lead to the dev screens write it out too, in their markup
+(`src/session/SignIn.tsx`, `src/shell/More.tsx`). Metro folds a condition only where it is
+written, so a constant imported from elsewhere would not do: `src/dev/gate.ts` is the one place
+the condition is written to be read, and nothing imports it. Every dev screen stands in
 `DevScreen`, whose `testID` begins with one marker (`src/dev/marker.ts`), and `build/check.ts`
 fails an export whose bundle holds the marker, searched for as bytes so that Hermes bytecode is
 read as JavaScript is. It fails one that holds a stand-in the same way: what stands in for the
 server, the replica or a member in a test is written outside `src/dev`, since a test may import
-nothing from there and a dev screen draws over two of them, and each of those five files is
-named in `build/bundles.ts` (`standIns`) with words it alone holds. `build/check.test.ts` holds
-every dev route to that exact line, everything outside `src/dev` to importing nothing from it,
-and each stand-in's words to its own file and to no other source. Metro's transform cache does not key
-on an `EXPO_PUBLIC_*` variable, so the `export` script clears it every time. The dev screens'
-words are fixtures in English, accented under the pseudo-locale (`useSample`), and in no catalog.
+nothing from there and a dev screen draws over two of them, and each that holds words, five
+files, is named in `build/bundles.ts` (`standIns`) with words it alone holds. The two providers
+a test alone draws in (`src/session/fixture.tsx`, `src/shell/fixture.tsx`) hold none and are
+listed nowhere, the first importing two that are. `build/check.test.ts` reads the condition out
+of `gate.ts` and holds every dev route and the two controls to exactly it, and the variable to
+being named nowhere else; holds everything outside `src/dev`, the app's entry among it, to
+importing nothing from it, by name, behind a call or bare, and the gate to being imported by
+nothing at all; and holds each stand-in's words to its own file and to no other source, and
+every file outside `src/dev` and `src/test` that is named `*.fixtures.ts`, `standIn.ts` or
+`testing.ts` to being on that list. Metro's transform cache does not key on an `EXPO_PUBLIC_*`
+variable, so the `export` script clears it every time. The dev screens' words are fixtures in
+English, accented under the pseudo-locale (`useSample`), and in no catalog.
 The harness at `/dev/harness` is eight data bodies through the twelve states, in both themes at
 200 % text, the data table being the web's alone (D-190).
 
-**Where axe stands on the web, ten rules stand over the tree a test draws**
+**Where axe stands on the web, thirteen rules stand over the tree a test draws**
 (`src/test/a11y.ts`, `expectAccessible`). Each fails with the element it failed on. `named`:
 whatever takes a press has a role and a name. `registered-name`: an icon-only control is called
 what the register calls one (`@household/icons`' `controls`), in any of the five languages or
@@ -178,24 +196,43 @@ is named, or hidden from a screen reader. `status`: whatever carries a `testID` 
 so is the app's `Text`. `field`: a field that is typed in has a name, its own or a drawn
 label's, and the system's scaling off. `hold`: a hold-to-complete is within a screen reader's
 reach, declares an `activate` action with a label, and answers an accessibility action, an
-accessibility tap and a click. `truncated`: no text is held to a number of lines. What none of
-them can hold is anything laid out, since Jest lays nothing out: a size as a device measures it,
-a word clipped at 200 %; nor contrast, which the tokens' own test holds pair by pair; nor the
-order a screen reader walks, nor whether an announcement was heard. Those are a flow's, which
-reads the harness at 200 % in both themes, and a person's with VoiceOver and TalkBack (item
-95). An announcement is a call and no tree, so a component's own test spies on
+accessibility tap and a click. `truncated`: no text is held to a number of lines. `reach`:
+nothing that takes a press, and no field that is typed in, stands inside what is one thing to a
+screen reader, an `accessible` view or another control, where on iOS it would be no element of
+its own *(read: `RCTViewComponentView.mm`)*. `wrap`: in a row that wraps, a child that says how
+much room it is to have before its neighbours go under it, by a `flexBasis` with `flexGrow`
+and `flexShrink`, is not the row's only child that flexes: Yoga counts such a child as nothing
+wide and breaks no line for it *(read)*, which is how a list row's title came to a letter's
+width at 200 % (Consequences). `state`: a switch, a checkbox and a radio say whether they are
+`checked`, and a tab whether it is `selected`. What none of them can hold is anything laid out,
+since Jest lays nothing out: a size as a device measures it, a word clipped at 200 %, where a
+line broke, `wrap` reading what a row declares; nor contrast, which the tokens' own test holds
+pair by pair; nor the order a screen reader walks, nor whether an announcement was heard.
+Those are a flow's, which reads the harness at 200 % in both themes, and a person's with
+VoiceOver and TalkBack (item 95). An announcement is a call and no tree, so a component's own test spies on
 `src/ui/announce.ts`, the one file that calls React Native's `AccessibilityInfo`.
 
-**What a press came to is said through that one file** (D-188). A screen's title is its one
-header, which is what a screen reader names the screen by. A refused form's fields enter the
-form in the order they are drawn, each saying whether the refusal marks it (`RefusedFields`,
-`useRefusable`, `src/ui/refusal.ts`), and the first one marked is given the accessibility focus
-(`useRefusedField`), the keyboard's left where it was. A banner's sentence is a string, since it
-is what is announced, and whatever else stands under it is its `detail`, which is not. A banner
+**What a press came to is said through that one file** (D-188). A screen's title is a header,
+the first on its screen, which a screen reader lists and moves to *(read)*; a section within a
+screen is headed too (`src/shell/Arrange.tsx`, `src/shell/More.tsx`), a device's header having
+no level. A refused form's fields enter the form in the order they are drawn, each saying
+whether the refusal marks it (`RefusedFields`, `useRefusable`, `src/ui/refusal.ts`), and the
+first one marked is given the accessibility focus (`useRefusedField`), the keyboard's left
+where it was. A banner's sentence is a string, since it is what is announced, and whatever
+else stands under it is its `detail`, which is not. A banner
 whose owner says `announce` says its title and its sentence as one announcement as it arrives
 and whenever they change, a failure at once and anything else politely; a bar that stood when
-its screen opened is read in its place and not said. A success that no control of its screen
-says is a toast.
+its screen opened is read in its place and not said. A banner is said by a screen that is in
+front alone (`useInFront`, `src/ui/Screen.tsx`, which `HouseholdScreen` tells from the
+navigator): a tab's screen and a household that another was opened over stay mounted, and what
+arrives on one out of sight is told to nobody and taken as having stood there when its member
+comes back, as the bar above a household's screens is. *At once* is iOS's: on Android React
+Native hands an announcement no place in a queue, so a failure is said there as any other is
+*(read: `AccessibilityInfo.js`, where `queue` is iOS only)*. What stands in a screen's place
+where a read failed (`Unread`, `src/session/guards.tsx`) and *please update*
+(`src/update/UpdateRequired.tsx`) open no screen of their own, so each is said as it arrives,
+its title and its sentence joined by a line break, as a banner's are. A success that no control
+of its screen says is a toast.
 
 **A device signs in with a token pair kept under its member** (`src/session`). The vault is
 SecureStore (`vault.ts`, the one file that imports it), every item
@@ -203,35 +240,53 @@ SecureStore (`vault.ts`, the one file that imports it), every item
 `household.signins`, who is signed in here and which of them is in use; and
 `household.signin.<member>`, a pair with the moment its access token lapses by the device's own
 clock. The layout is several sign-ins' from the first, one a member, since a shared tablet holds
-several (D-104), which item 29 builds on. The API's client (`src/api/client.ts`,
-`src/api/transport.ts`) names the app on every request, `Household-Client: mobile/<version>`
-with the package's own version, says `credentials: 'omit'`, and signs with the access token. A
-token is renewed when a request needs one within a minute of its lapse, and once more where a
-request is refused `401 unauthenticated`, which is read from a copy of the answer, the request
-then sent again from a copy of itself. It is never renewed on a timer, so a device that is not
-being used rotates nothing. One renewal runs at a time, and every request that needs one
-meanwhile is served by it. The renewal itself leaves by a client that signs nothing
-(`renewal.ts`). The new pair is held in memory before it is written, and a keystore that
-refuses the write is passed over: the token it replaces is used up either way.
+several (D-104), which item 29 builds on. The vault answers nothing where nothing is kept, and
+rejects where the device will not say what it holds, a keychain shut while the device is
+locked: the store then starts as nobody's for that run, and nothing is removed on the vault's
+silence *(read in expo-secure-store's sources and run on nothing: Android answers nothing for a
+key permanently invalidated and for a value it cannot decrypt after a reinstall; iOS answers
+nothing for an item not found and throws any other status)*. The API's client
+(`src/api/client.ts`, `src/api/transport.ts`) names the app on every request,
+`Household-Client: mobile/<version>` with the package's own version, says
+`credentials: 'omit'`, and signs with the access token. A token is renewed when a request needs
+one within a minute of its lapse, and once more where a request is refused
+`401 unauthenticated`, which is read from a copy of the answer, the request then sent again
+from a copy of itself. A request is answered by its own sign-in alone: one refused on a token
+that was another member's, the one in use until a moment ago, is given no token of the one now
+in use, and its own refusal stands. A token is never renewed on a timer, so a
+device that is not being used rotates nothing. One renewal runs at a time, and every request
+that needs one meanwhile is served by it. The renewal itself leaves by a client that signs
+nothing (`renewal.ts`). The new pair is held in memory before it is written, its writes going
+one after another, and one the keystore would not take is written again as a token is next
+asked for: the token it replaces is used up either way.
 
 **Only a renewal the server answers `401 refresh_token_invalid` ends a sign-in** (D-187). The
 store removes the pair and tells the session, which removes everything else the device kept of
 that member (`forget`, `src/session/forget.ts`): what the query client kept of what they read,
-the note of their push registration, and every replica of theirs with its waiting files and
-the changes it had not sent. A renewal that got no answer ends nothing, and leaves the request
-it was made for with no answer either, which `@household/api` resends; one answered with
+the note of their push registration, every replica of theirs with its waiting files and the
+changes it had not sent, and the toasts on screen. A renewal that got no answer ends nothing,
+and leaves the request it was made for with no answer either, which `@household/api` resends;
+one answered with
 another problem ends nothing, and the request's own `401` stands. A `401` to a request ends
 nothing. Signing out removes the device's push registration at the server first, then ends the
 sign-in there, and removes what the device kept only once the server has heard or says that it
-no longer knows the sign-in: unreached, the member stays signed in with everything kept. A
-different member signing in removes the first one's before anything of theirs is kept, and
-nothing is started again. The sign-in screen then says, in one banner of the `info` tone, that
-the device was signed out and that what it kept was removed with any change it had not sent. It
-names no cause, the answer naming none (Q18), and is announced only where it arrives under a
-screen that is already drawn. A `400 update_required`, from any request, the renewal's, the
-replica's and an upload's among them, draws *please update* in every screen's place and nothing
-beside it, no route, no link and no registration (D-193). Its one action opens the app's page
-in the store, where the build was told of one for the platform it runs on
+no longer knows the sign-in. That it no longer knows it is a `401` whose renewal the server
+refused, the pair gone with it; a `401` that left the pair where it was, a lapsed token whose
+renewal failed for another reason, is the server never having heard, and the sign-out fails as
+one that was not reached does. Unreached, the member stays signed in with everything kept but
+the device's note of its push registration, which the next start makes again. A different
+member signing in ends the first one's sign-in at the server, under the first one's token and
+whatever that comes to: left alive there it would never lapse (D-99), a sign-in no device
+holds, for which the server goes on sending its member's notifications to the device another
+now uses. The first one's pair and everything else of theirs
+is then removed before anything of the second is kept, and nothing is started again. After a
+sign-in that ended from elsewhere the sign-in screen says, in one banner of the `info` tone,
+that the device was signed out and that what it kept was removed with any change it had not
+sent. It names no cause, the answer naming none (Q18), and is announced only where it arrives
+under a screen that is already drawn. A `400 update_required`, from any request, the renewal's,
+the replica's and an upload's among them, draws *please update* in every screen's place and
+nothing beside it, no route, no link and no registration (D-193). Its one action opens the
+app's page in the store, where the build was told of one for the platform it runs on
 (`src/update/store.ts`); a build told none draws no control.
 
 **Push is registered for a device that allows it already, and asked for by a press alone**
@@ -246,31 +301,46 @@ item 29's. A build that was told no EAS project cannot ask Expo for a token: its
 
 **D-98's window is the server's, and a device cannot close it.** A renewal presents the refresh
 token the device holds, and the server uses it up as it answers with the next pair. A device
-that was killed between the answer and the write, or whose keystore refused the write, or, the
-commoner case on a phone, that never received the answer at all, still holds the used token.
+that was killed between the answer and the write, or closed while its keystore still would not
+take the pair, or, the commoner case on a phone, that never received the answer at all, still
+holds the used token.
 Presented again within a minute, with the next one unused, it is the retry it is, and is
 answered with a new pair. Presented after the minute it is a reuse: the server revokes the
 family and emails the takeover notice, and the device, answered `401 refresh_token_invalid`,
 removes what it kept, its unsent changes among it. So a phone that goes into a lift as its
 token is renewed and comes out two minutes later is signed out, and its member is sent an email
 that reads as an incident. The client narrows the window as far as it can: one renewal at a
-time; the pair held in memory before it is written; a renewal only when a request needs one; a
-lost answer resent at once with the same token; and a renewal with no answer changing nothing,
-so that the next presents the same token. It cannot make the minute longer.
+time; the pair held in memory before it is written, and written again until the keystore takes
+it; a renewal only when a request needs one; a lost answer resent with the same token as soon
+as the platform gives the request up, the app setting no deadline of its own on it; and a
+renewal with no answer changing nothing, so that the next presents the same token. It cannot
+make the minute longer.
 
 **What a device keeps is named for its member and its household** (D-187): a replica's file,
 `household.<member>.<household>.db`, and the directory its waiting files are in; the reads the
 query client keeps, `household.queries.<member>`; the pair; and the note of a push token. A
 shared tablet holds several profiles signed in at once, each seeing other rows, and a device
 removes a member's own whenever their sign-in ends, so D-161's objection to the member in a
-name, a copy that stays until its member returns, does not hold here. The query client is one
-member's at a time: its keys are the web's, without the member in them, what it kept is
-restored under the member whose sign-in is in use, and an account it holds is taken for the one
-signed in only where its id is theirs. Its keep is the app's own, over `dehydrate` and
-`hydrate` (`src/api/keep.ts`), a day long and for one version of the app. What outlives a
-sign-in is the device's and no member's content: the display modes, the language, a member's
-arrangement of their modules (D-155), which household they were last in, and their own choice
-to turn notifications off on this device.
+name, a copy that stays until its member returns, does not hold here. **And what it keeps of
+anybody it holds no sign-in of is removed as the app starts** (`forgetOthers`,
+`src/session/forget.ts`; D-161's *whether or not a page knew them when it ended*). Whoever
+keeps something named for its member says whom it keeps something of, the kept reads by their
+keys (`keptMembers`) and the replicas by their notes, and the session removes what is kept of
+every member the vault names no sign-in of, before anything is read back and before a sign-in
+is taken. That is what a run closed between a pair's removal and the rest left behind, what a
+keystore that lost a pair left, and what a restore from a backup brought, which carries what
+was kept and never the pair. Where the vault would not say what it holds, nothing is removed.
+The query client is one member's at a time: its keys are the web's, without the member in them,
+what it kept is restored under the member whose sign-in is in use, and an account it holds is
+taken for the one signed in only where its id is theirs. Its keep is the app's own, over
+`dehydrate` and `hydrate` (`src/api/keep.ts`), for as long as its member's sign-in and for one
+version of the app: what this build kept is read back however old it is, the account, the
+households and a household's own answer being what the shell and the replica open on with no
+connection (PRD 03 §2.1), and what another build kept is dropped. What outlives a sign-in is
+the device's and no member's content: the display modes, the language, a member's arrangement
+of their modules (D-155), which household they were last in, their own choice to turn
+notifications off on this device, the installation's own id, and the address of the screen a
+sign-in ended under, which is held for whoever signs in next.
 
 **The global `fetch` on a device is Expo's already, and the client hands it the `Request`
 whole.** Read in Expo SDK 57's runtime: it installs `expo/fetch` in React Native's place, and
@@ -291,10 +361,18 @@ the foreground session, and not through the `fetch` the replica's other requests
 read in the installed sources, `expo/fetch` builds every body in memory and refuses a part
 given by its URI, and React Native's own networking, which takes one, holds the whole form in
 memory on iOS, where `File.upload` hands the system a file on both platforms. So this one
-request names the app, and tells the problem hub of `update_required`, itself. The upload names
+request names the app, and tells the problem hub of `update_required`, itself; and the queue
+takes that answer for no refusal of the file, which waits with its row for the app its member
+updates to, as one refused by no problem of the API's does
+(`packages/sync/src/attachments.ts`). The upload names
 the form's part by the path it sends, which is the row's id: the row carries the file's own
-name, and has reached the server before its bytes (D-25). No route takes a file yet, and the
-way in, `Replica.attach`, still takes bytes.
+name, and has reached the server before its bytes (D-25). A waiting file is found by its name,
+in the directory its replica has now, which the transport and the storage are both handed, and
+never at the place the queue was told when the file was added: the queue keeps that place
+whole, and iOS gives an app's container another path when the app is updated or restored *(not
+run; read in what guards against it, PowerSync's own queue, which looks at each start for a
+file whose stored place is broken and finds it again by its name)*. No route takes a file yet,
+and the way in, `Replica.attach`, still takes bytes.
 
 **A replica is opened for a member, of a household that is theirs, and once on a device
 however many hold it** (`src/sync/open.ts`, the one file of the app that imports the sync
@@ -302,8 +380,12 @@ library's values, which a test of the sources holds). The provider
 (`src/sync/ReplicaProvider.tsx`) opens nothing on an address's word: only for whoever is signed
 in, of a household that the server, or what the device kept of its answer, says is theirs. It
 opens through `@household/sync/native` with a `fetch` that names the app and tells the hub of
-`update_required` (`namedFetch`), with the session's credential, which throws the library's
-`Revoked` once the sign-in has ended, and with the file storage and the transport above.
+`update_required` (`namedFetch`), with the file storage and the transport above, and with a
+credential that is its member's own. The session's signs with whichever sign-in is in use on
+the device, and another member may sign in before this replica has been emptied: so the
+replica's asks the session only while its own member's sign-in stands, looked at before the
+session is asked and again once it has answered, and throws the library's `Revoked` from then
+on.
 Holders are counted by the file's name: the household on screen, one underneath it in the
 stack, a dev screen over both. The replica is connected once, as it is opened, closed when the
 last holder lets go, and one that is being closed is waited out before its file is opened
@@ -313,17 +395,24 @@ household's layout, and so loaded as the app starts, which is when it says what 
 to forget.
 
 **A replica's removal is noted step by step, and what failed is taken up at the next start**
-(`src/sync/databases.ts`). A replica is noted in AsyncStorage before it is opened. When a
-member's sign-in ends theirs are marked as leaving, which is all the session waits for. Each is
-then emptied through the library, wiped and closed, one that is not open being opened for
-nobody, with a credential that throws and no server to ask, and noted as emptied; then its
-database's file is deleted by op-sqlite itself, after a checkpoint that truncates its log, its
-files' directory is deleted, and its note dropped. Whatever failed is tried again as the file
-is loaded, before any replica is opened. A replica that is still leaving is removed before it
-is opened again; one that was emptied and whose file could not be deleted is its member's to
-open, being empty; one that could not be emptied is not opened. A sign-in that ends while its
-replica is on its way opens nothing. `onRevoked` is not handed to the replica: the refusal
-that makes the credential throw has ended the sign-in already.
+(`src/sync/databases.ts`). A replica is noted in AsyncStorage before it is opened, and one
+whose note the device would not write is not opened: nothing would mark it when its member's
+sign-in ended, and nothing would ever remove it. One that is noted already is opened with
+nothing written. When a member's sign-in ends theirs are marked as leaving, which is all the
+session waits for. Each is then emptied by one path. One that is open is closed, under whoever
+still holds it, and never wiped through: its last holder may have closed it first, as a
+sign-out's screen does on its way out, and a closed database refuses the wipe, and the library
+may have begun to discard it itself, after which its wipe answers at once whatever became of
+the first. It is then opened for nobody, with a credential that throws and no server to ask,
+wiped, closed, and noted as emptied. Then its database's file is deleted by op-sqlite itself,
+after a checkpoint that truncates its log, its files' directory is deleted whatever became of
+the database's deletion, and its note dropped. What could not be emptied has its file deleted
+all the same. Whatever failed is tried again as the file is loaded, before any replica is
+opened. A replica that is still leaving is removed before it is opened again; one that was
+emptied and whose file could not be deleted is its member's to open, being empty; one that
+could be neither emptied nor deleted is not opened. A sign-in that ends while its replica is on
+its way opens nothing. `onRevoked` is not handed to the replica: the refusal that makes the
+credential throw has ended the sign-in already.
 
 **"Receiving" is read as the web reads it** (D-105, ADR 0026): true while PowerSync's status is
 connected, false once an attempt has failed, for as long as the SDK keeps that failure, and
@@ -337,7 +426,12 @@ Above a household's screens stands one bar
 (`src/sync/HouseholdBars.tsx`): offline, or, with the device online and the replica not
 receiving, that sentence in the same place (D-191). Over a household that takes no writes it
 promises nothing of a change, and at the addresses whose changes are asked at once (D-170) it
-says that a change needs a connection. The app never tells the replica to connect again.
+says that a change needs a connection. A bar that arrives, and a sentence that takes another's
+place, is said, and by the household in front alone: one that another was opened over stays
+mounted with its own bar, the connection goes for both at once, and what stands above it when
+its member comes back is taken as having stood there. What is told apart is which sentence it
+is and not its words, so the same one in another language is no change. The app never tells
+the replica to connect again.
 
 **The guard, the replica's provider and the frame stand inside the household's navigator, in
 its `layout`** (`src/shell/HouseholdLayout.tsx`). A household's screens are a tab navigator
@@ -366,28 +460,38 @@ kept and the slots share the bar again, at five, four or three. The registry is 
 build, so no bar of it draws Add or Chat, and a test fails as soon as a module registers a
 capture surface while the slot still opens nothing. The bar opens a place by its address and
 reads which is open from the navigator's own state; a route that draws *not available* is
-under no place, and no slot says it is open. A slot is a `tab`, and the row that holds them
-`tabbar` on iOS and `tablist` elsewhere *(read: on iOS `tabbar` is the one of the three that
-maps to a trait)*. On a phone a slot is a share of the bar, at least 44 pt high at the reader's
-scale, its label wrapping and never cut; from 744 pt of room counted in the reader's text each
-slot is a row, a glyph beside its word, and the slots stand together in the middle (D-192).
-The bar in front tells the toasts how high it stands, and no other does.
+under no place, and no slot says it is open. A slot that opens a place is a `tab`, Add a
+`button`, and the row that holds them `tabbar` on iOS and `tablist` elsewhere *(read: on iOS
+`tabbar` is the one of the three that maps to a trait)*. On a phone a slot is a share of the
+bar, at least 44 pt high at the reader's scale, its label wrapping and never cut; from 744 pt
+of room counted in the reader's text each slot is a row, a glyph beside its word, and the slots
+stand together in the middle (D-192). The bar in front tells the toasts how high it stands, and
+no other does.
 
 **Every screen of a household stands in `HouseholdScreen`** (`src/shell/HouseholdScreen.tsx`):
-the app bar, which says the household's name first and the screen's one header after it, with
-the way back where the screen says it was reached from another. `src/app/routes.test.ts` reads
+the app bar, which says the household's name first and the screen's title, a header, after it,
+with the way back where the screen says it was reached from another. `src/app/routes.test.ts` reads
 the sources and fails a household's route whose screen is drawn in a plain `Screen`, which
 under the frame would keep clear of the top a second time and carry no bar. The name is a label
 that takes `onSwitch`, by which item 29 makes it the switcher's control. The frame
 (`src/shell/HouseholdFrame.tsx`) reads the household, and the member's arrangement of its
 modules from AsyncStorage, before anything of the shell is drawn, and draws a wait, *could not
 be read*, *not available*, or the bars and the screens under them, with a place under the
-offline bar's for item 29's one entitlement banner. **A household's own answer is read in one
+offline bar's for item 29's one entitlement banner. It remembers the household as the one its
+member was last in while it is the one in front, and so again when they go back to one that
+another was opened over, which mounts nothing. **A household's own answer is read in one
 place** (`useHousehold`, `src/household/data.ts`), only for a member and of an id that can be a
 household's. The frame and the replica's provider read it in the same commit, by one key and so
 in one request, and whatever else needs it is handed it, as the bar above the screens is: a
 reader that mounts after the answer finds it stale at once and asks again, which is how a
-household that was opened came to be asked for twice. More lists the modules the member holds
+household that was opened came to be asked for twice. That the address opens nothing is the
+API's own `404`, a problem with its code (`isAbsent`): a `404` from whatever stands before the
+API has said nothing of the household, and is a read that failed. The member's list of
+households is read with no signal, so that a re-read which began is finished though its reader
+has left: where the app opens goes by the list the device kept and leaves for a household at
+once, and a re-read given up there never landed, so a household the kept list named and the
+server no longer did was where the app opened for good, *not available* leading back to
+itself. More lists the modules the member holds
 that this build has screens for, in their own order (`src/shell/navigation.ts`, the web's
 derivation ported whole), and after them arranging, the way to what needs their attention
 while something does, with its count, which the More tab's name carries too (D-191), and
@@ -398,7 +502,9 @@ the left cannot fill a second.
 row, so the handle takes no press: it is named *Reorder {name}* and has the two actions
 `increment` and `decrement`, labelled *Move up* and *Move down*, and only the moves that exist.
 A row is moved from its menu too. A move is announced, and a row that leaves its list for
-another takes the accessibility focus with it.
+another takes the accessibility focus with it: that move is said once the focus is where it
+goes and not at the press, a screen reader reading what its focus lands on *(the order is the
+app's; which of the two is heard is heard by nobody yet)*.
 
 **An address that arrives is the web's own, and one function says what it comes to**
 (`src/links/resolve.ts`, D-196). A route is a line of `src/app/paths.ts` and a file under
@@ -407,27 +513,43 @@ ways; the addresses are the web's, since the server writes one into a push's `da
 one the app has no screen for is the neutral *not available*, inside the household's frame
 where it names a household. A pressed notification's address is opened by the app's own router.
 A link the system hands over is left to expo-router, and the app does what the router does not
-know to: it holds the address for a visitor, in memory and in AsyncStorage, since signing in
-may leave the app, and notes that a link changed the household, which is said in a banner with
-the way back. That a link switched the household is positive evidence, an address that named
+know to: it holds the address for a visitor where it leads into a household, in memory and in
+AsyncStorage, since signing in may leave the app, and notes that a link changed the household,
+which is said in a banner with the way back. An address that leads into no household is a
+screen a visitor may open, and is opened as it is: the sign-in's own, held, sent a member who
+had just signed in from the sign-in screen to itself, without end. That a link switched the
+household is positive evidence, an address that named
 another household than the one on screen, and never inferred from a household having changed.
 
 **Overlays are React Native's `Modal`** (`src/ui/Dialog.tsx`, the one file that draws one;
 `Sheet`, `Menu` and `Select` stand on it). The owner decides every close: the system's back, a
-screen reader's escape, the ground and a sheet's close control ask. The accessibility focus is
-put on the title once the platform says the modal is shown, and given back to what opened it
-once it has gone, which iOS's `Modal` does by itself *(read)* and the app asks for once more
-where an `opener` is named. Three things follow from how iOS presents *(read in
-`RCTModalHostViewComponentView.mm`: a modal is presented by the nearest view controller, with
-no queue, and one asked for while another of the same controller's is still leaving is never
-drawn)*. A dialog over a sheet is drawn inside the sheet's children, so that the sheet's own
-controller presents it. A menu's chosen item acts once its sheet has gone and not as it is
+screen reader's escape, the ground and a sheet's close control ask. What keeps a screen reader
+from what is behind an open one is the platform's own presentation, a window of its own on
+Android and a view controller over the whole screen on iOS, and not `accessibilityViewIsModal`,
+which is iOS's alone and is said as well *(read; what it adds is heard by nobody)*. The
+accessibility focus is put on the title once the platform says the modal is shown, or on what
+its owner named instead, and on the title after all where that is not drawn yet; and it is
+given back to what opened it once the modal has gone. iOS's host gives it back by itself and
+Android's restores none *(read: `RCTModalHostViewComponentView.mm`, `ReactModalHostView.kt`)*,
+so the app gives it back wherever an `opener` is named: the inbox names the mark of the row
+that was opened, and a refused change's confirmation its *Discard*. Three things follow from
+how iOS presents *(read in `RCTModalHostViewComponentView.mm`: a modal is presented by the
+nearest view controller, with no queue, and one asked for while another of the same
+controller's is still leaving is never drawn)*. A dialog over a sheet is drawn inside the
+sheet's children, so that the sheet's own controller presents it. A menu's chosen item acts once its sheet has gone and not as it is
 pressed, what it opens being often a confirmation: CI's flow opens one so on the iOS
-simulator. And a resolver keeps what it last showed while it leaves, the refused change's
-sheet staying until its confirmation has gone. Toasts are drawn by the innermost open modal,
-in a row at its foot, and by the root where none is open, since under a modal an Undo could
-not be pressed: the hosts are a stack by depth, and a toast's dwell is the provider's and not
-the drawn toast's, so it runs on through a modal that opens or closes around it. **While a
+simulator. A select tells its owner of the choice once its sheet has gone too, for that reason
+and so that whatever the choice moves the focus to is not taken back by the sheet as it goes.
+And a resolver keeps what it last showed while it leaves, the refused change's sheet staying
+until its confirmation has gone; what a decision came to, where it failed, is drawn above the
+versions it was about, under which it would be below the fold at 200 %. Toasts are drawn by
+the innermost open modal, in a row at its foot, and by the root where none is open, since
+under a modal an Undo could not be pressed: the hosts are a stack by depth, and a toast's
+dwell is the provider's and not the drawn toast's, so it runs on through a modal that opens or closes around it. A toast with
+Undo wraps: its sentence says how much room it is to have, and its controls go under it where
+a phone at 200 % has not the room for both. The toasts on screen go with their member when a
+sign-in ends (`onForget`): one names a row of theirs, and its Undo writes to their replica.
+**While a
 screen reader is on, no toast's dwell runs** (D-188): a toast stays until its Undo or its
 dismiss is pressed, React Native saying whether a screen reader is on and not where its focus
 is.
@@ -483,15 +605,22 @@ a restart, signing out, and the replica.
 Three tags keep a flow out of a run: `stack`, `android`, and `awaiting`, for a flow written
 ahead of its screens, which excuses it its names and which no flow carries now. Maestro is
 fetched as its release's own archive and held to its digest (`e2e/install-maestro.sh`), and one
-script runs the flows for CI and for a developer (`e2e/run.ts`).
+script runs the flows for CI and for a developer (`e2e/run.ts`). It runs once more, in a
+session of their own, the flows that failed for no reason of theirs, Maestro's driver on the
+device being gone: on iOS a crash of the app in one flow takes the driver with it some minutes
+later, and every flow after that (seen in the fifth and sixth runs). A flow that failed for
+itself is not run again, and fails the job.
 
 **The dev screens are reached by presses, on both platforms.** On the first run iOS put a
 dialog of its own over the app when a flow sent a link, *Open in "Household Dev"?*, which
 carries no `testID` and stayed over every flow after it. So the sign-in screen has a control
 that leads to the dev sign-in form in a build that holds the dev screens, More has one that
 leads a member to their index, the sync screen's live replica needing a member, every dev
-screen leads to that index, and the flows walk that. A link is sent on Android alone, by the
-flow that proves one and by the replica's.
+screen leads to that index, and the flows walk that: the replica's comes to the sync screen from
+More, with the household's own screens, and the replica they opened, still beneath it. The dev
+form leads its member on to the address that was held for them, as the sign-in screen said it
+would, and to where the app opens where none was. A link is sent on Android alone, by the one
+flow that proves one.
 
 **A flow finds a thing by its own `testID`, never as inside another, and on a screen narrowed
 to one part.** The fourth run's flows looked for a cell's content as a child of the cell and
@@ -516,14 +645,19 @@ thirty-one permissions. `unusedPermissions` in `app.config.ts` removes twenty-th
 from every variant, the development one too, so that the build the flows run is one that goes
 without them; a development build alone keeps the one React Native draws its errors by. So a
 development build asks for eight, and one a member installs for seven, the app's own guard over
-its receivers among them. The
-Android job reads the list off the APK it built (`aapt2 dump permissions`) and `build/apk.ts`
-fails a permission with no reason and a reason for a permission the build does not ask for;
-`build/permissions.test.ts` holds each variant's configuration to the same two lists through
-Expo's own introspection. On iOS the configuration writes no usage sentence of its own, and
-the dev launcher's plugin, which writes one for the local network, adds the build phase that
-takes it out of every build but a debug one: the iOS job reads the release app it built and
-fails if it is there.
+its receivers among them. `VIBRATE` is of the seven as the template's own: no library the app
+links asks for it, and it is kept until a device has shown a notification felt without it
+(item 30). The Android job reads the list off the APK it built (`aapt2 dump permissions`), the
+permissions a manifest asks for from Android 6 on (`uses-permission-sdk-23`) among them, and
+`build/apk.ts` fails a permission with no reason and a reason for a permission the build does
+not ask for; `build/permissions.test.ts` holds each variant's configuration to the same two
+lists through Expo's own introspection. On iOS the configuration writes no usage sentence of
+its own, and the dev launcher's plugin, which writes one for the local network, adds the build
+phase that takes it out of every build but a debug one: the iOS job reads the release app it
+built and fails if it is there. The dev client's plugin also gives a build a scheme of its own
+making, `exp+household`, by which a developer's machine opens a development build; the three
+variants share the slug, so only a development build is given it (`addGeneratedScheme`,
+`app.config.ts`), which the same test holds for each variant on both platforms.
 
 **The budget is each platform's bytecode, what it measured and a fifth** (D-189,
 `build/budget.ts`): the `.hbc` files of a production export, in their own bytes, against one
@@ -578,8 +712,8 @@ platform.
 | The session's providers and the toasts' written into the root layout, and the replica's provider and the bars into the household's | Each is a file of its own that the layout composes, so a layout is edited for none of them |
 | That a store's build holds no stand-in read off the sources' imports, as the dev routes are read; one marker that every stand-in imports | A reading follows only the imports somebody thought to read: the export is what is asked. A shared marker is a line in each file that does nothing but be found. Each file is named by words it alone holds, which a test holds to that file and to no other source: the first try named one by a sentence a dev screen's own fixtures also held, and the check named the wrong file |
 | The dev screens reached by a member through a link alone; the dev sign-in form leading on to their index | No flow of both platforms can send a link, and the sync dev screen's live replica needs a member: More has a control, behind the gate's condition written out. The stack's flow waits after that form for the household's Home |
-| A focus ring's state kept, and its outline written, by each of nine controls; one pure function of the theme, the state left in each; a read that could not be made decided in each of four places | The state and its two handlers are the larger half of what was repeated: one hook draws the ring (`useFocusRing`, `src/ui/focus.ts`). And one function says that a read which holds nothing failed, or waits for a connection (`couldNotBeRead`, `src/api/query.ts`) |
-| A rule against a fixed height around text; a rule for contrast; a rule that a banner was announced | An avatar and a hold's ring are fixed boxes that grow with the scale, which a rule could not tell from a row. The tokens' own test holds contrast. An announcement is a call and no tree: each component's test spies on it |
+| A focus ring's state kept, and its outline written, by each control that draws one, fourteen places now; one pure function of the theme, the state left in each; a read that could not be made decided in each of four places | The state and its two handlers are the larger half of what was repeated: one hook draws the ring (`useFocusRing`, `src/ui/focus.ts`), in the focus token's colour, and in the toast's own ink on the one ground that token has no declared pair with. And one function says that a read which holds nothing failed, or waits for a connection (`couldNotBeRead`, `src/api/query.ts`) |
+| A rule against a fixed height around text; a rule for contrast; a rule that a banner was announced; a rule for where a row's line breaks | An avatar and a hold's ring are fixed boxes that grow with the scale, which a rule could not tell from a row. The tokens' own test holds contrast. An announcement is a call and no tree: each component's test spies on it. Jest lays nothing out: what a row that wraps declares is a rule (`wrap`), and where its line then breaks is a flow's to see |
 | A status mark, a hold and a flow's target found by their words | Five languages. A fixed `testID` on a shipped component is how a rule and a flow find it |
 | A drawing known to the rules by one platform's host name; react-native-svg stood in for by one name under Jest; a rule for each platform | react-native-svg draws another view on Android, so a status mark drawn as Android was read as one with no glyph. Under a stand-in the rules would hold a tree no device draws. And it is one fact with two names |
 | A banner whose children are any node, as the web's; its words read back out of its children; Android's live region with an announcement on iOS | Nothing to say aloud. A walk of React elements that breaks at the first component. Two mechanisms for one rule, Android saying an arriving banner twice wherever both fired *(read: `accessibilityLiveRegion` is Android's alone)* |
@@ -590,12 +724,14 @@ platform.
 | A refusal focusing the field for the keyboard too | The keyboard would rise over the error a sighted member is reading |
 | A status's word as a hidden text beside its glyph | React Native has no visually hidden text, only clipped or transparent text, which a screen reader may or may not read. The mark is one accessible element, named by its word |
 | Every text of a row a stop of its own; the whole row one accessible element | A row of four swipes. The second would put its trailing action and its conflict control out of a screen reader's reach on iOS *(read)*. A row's words are one element, and its mark and its action each their own |
+| One constant for the pair of props that hides an element from a screen reader on both platforms | Every place that hides one writes the pair, and none writes half of it; a wrapper is an element more in each |
 | The `Request` unpacked into an address and its options; `expo/fetch` imported by name; React Native's `fetch` forced (`EXPO_PUBLIC_USE_RN_FETCH`) | A body would be read as text, which refuses the form an upload sends. The second pins what the runtime already chose, and under Jest its native half is a stand-in. The third is a build-wide switch for no gain |
-| A renewal on any `401` | A sign-in that failed, `invalid_credentials`, would rotate the refresh token of whoever is signed in, for nothing |
+| A renewal on any `401` | A sign-in that failed, `invalid_credentials`, would rotate the refresh token of whoever is signed in, for nothing. A second step whose challenge is gone is answered `unauthenticated` all the same, which the answer cannot tell from a refused token: a screen that signs somebody in beside a sign-in in use asks through a client that signs nothing, as the renewal does (item 29) |
 | A renewal with no answer handing its request's `401` back; a renewal answered with another problem thrown | A member offline would be told that something went wrong at our end. `@household/api` takes a throw for a lost answer and resends, and each resend would ask for the renewal a `429` has just refused |
 | A request failed where its token could not be renewed before it lapsed | The token held is sent as it is, and the server says whether it still stands: an answered problem thrown from the transport would be taken for a lost answer |
 | The access token's lapse read out of the token | The server's clock against the device's. It is counted from when the pair arrived |
-| A renewal failed where its pair could not be written | The old refresh token is used up either way, and the request has a good token: held in memory, the sign-in works until the app is closed |
+| A renewal failed where its pair could not be written | The old refresh token is used up either way, and the request has a good token: held in memory, the sign-in works for as long as the app runs, and the pair is written again as a token is next asked for, which a keychain that was shut while the device was locked then takes |
+| A deadline of the app's own on the renewal | A timer for a hung attempt alone: a phone with no connection for longer than D-98's minute is signed out with or without it |
 | One vault entry holding everything; the keychain's default class; `AFTER_FIRST_UNLOCK`; the vault behind Face ID | SecureStore's values are small, and item 29's profiles add and remove one entry without rewriting the others. The default class travels in a backup: a pair restored on to another phone is one sign-in held by two devices, and the first renewal of either ends the other as a reuse, with the email. Nothing reads the vault while the device is locked, so the stricter class costs nothing today. And the app asks for no Face ID (FR-PR1): a prompt would stand in front of every renewal |
 | The token store told who listens for an ended sign-in as it is made; what is forgotten with a member held in a React context | The store is made before the provider that listens. The sync library's file says what it removes outside any component, as it is loaded |
 | The household a member was last in removed at a sign-out | It is an id and no content, and the twin of the web's key, which a sign-out leaves |
@@ -604,6 +740,7 @@ platform.
 | Nothing drawn until the vault is read | The router's stack must be mounted to be told where to go, and the splash is held already for the display's own reads. The session is *unknown* until then |
 | The member in every query key | Every screen's key would carry it, and the web's keys would stop being the app's. The cache is one member's at a time, and emptied when its member is forgotten |
 | TanStack's own persister | Its throttle writes a cache back after it was removed, and its restore rejects where storage refuses: the web's own reasons (ADR 0025) |
+| What another build kept, read back | A build may keep a read otherwise, a key's meaning or an answer's shape, and what is restored is drawn before any answer can correct it, with a connection as without. The first start after an update reads from the server (Consequences) |
 | The query client emptied in the providers' own cleanup | React runs a removed tree's cleanups parent first: the readers let go after the emptying, and each set a day's timer on a read the cache no longer held. It is emptied by a component that stands after everything that reads |
 | The device believed on `isInternetReachable`; *unknown* taken for offline | Where the platform cannot say, NetInfo asks a host of Google's. Every read at a cold start would wait for NetInfo's first answer, and a bar would be drawn for a state nobody reported. A network with nothing behind it is a request's own failure to say |
 | The offline bar hearing the device by a listener of its own, beside the query client's; a lint that keeps NetInfo to one file; the device asked once more as that file loads | Two stores of one fact, and the query client's is the one that holds a read back, so it is the one the bar must not disagree with: the bar reads what the query client was told. The lint's one rule of restricted imports is spent on `Text` for the same files, where a second block would replace it, so a test of the sources names the file. NetInfo hands a new listener the state it has *(read)* |
@@ -613,10 +750,14 @@ platform.
 | Navigation driven from a route's guard alone; a `+native-intent` file that rewrites what the system hands over | A pressed notification for a visitor who signed out themselves would not be held, the guard holding nothing for them, and nothing would know that a link changed the household. The second is a file under `app/` that is no route, and runs outside React, with no session |
 | *Switched* inferred from any change of household its member did not make, as the web infers it; the hook reading for itself whether its household is in front | On a device the index opening a household after a sign-out and a sign-in would read as a switch. The frame hands the second over: a stack keeps the household a link was opened over mounted underneath |
 | The held address in memory alone; held during render, as the web holds it | Signing in may leave the app, for a password manager or a provider's screen, and the system may close it meanwhile. The router has one address for every screen, and as the guarded screen gives way it reads the sign-in's own, which would take the place of what was held |
+| The guard holding a visitor's address with its query | The router's own word for where the app is has none, and the address that launches the app is heard by nothing else. No route reads a query and the server writes none into a link: the first route that takes one holds it |
 | expo-notifications called from each file that needs it | One file imports it (`src/push/device.ts`), and every call that can fail on a build with no notifications answers nothing there: Jest's stand-in for its native half throws |
 | Expo asked for the token again in order to remove it; *turned off here* kept for the device; the project as a default parameter | A sign-out on a poor connection may not reach Expo's service: the token that was registered is remembered. A shared tablet's profiles each keep their own (D-104). `undefined` passed on purpose would be replaced by the build's |
+| The device's registration left for the sign-out to end, with no removal before it | The web's order (ADR 0026), kept so that both clients sign out by one rule. What it costs is said (D-187): a device whose sign-out then failed stays signed in with no note of its registration, and is registered again only at its next start |
 | A second Android channel for urgent pushes; a notification left unshown while the app is open | The server names no channel, and from Android 8 a notification's own priority is ignored *(read)*. The server has applied its member's mutes and quiet hours already |
 | The device's twins of the web's `push.*` words written now | No screen of this item draws them: F-20 is item 29's, which designs the screen they belong to |
+| `device.` twins for `nav.home` and `ui.not_available.home` in German and Polish, which say *Zur Startseite* and *Strona główna* | That is what a phone app's home is called in both, and D-195 judges a key by its English |
+| A `device.` twin of `sync.kept.hint` that does not say *copy* | The shared sentence is true once the value it speaks of can be selected, which a key–value pair's now can |
 | The store's page derived from the app's identifier | Android's could be; iOS's needs the App Store's own number for the app. One rule for both is a setting |
 | Nothing said where the store cannot be opened | A press that came to nothing, said to nobody |
 | The dev sign-in form checking its fields before it sends; idle again once it has signed in; a `409` that asks for a second step read as an unreadable problem; a refusal's banner left to leave by itself between two presses | It is a dev form, and the server's `422` is what marks a field. A second press would sign in a second time, which ends the sign-in the first made (FR-ID3). It would read as *something went wrong at our end*. Two refusals can arrive in one draw, the banner then never leaves, and the second is said to nobody: it is keyed by the count of presses |
@@ -633,16 +774,19 @@ platform.
 | The bar above a household's screens reading the household for itself; a `staleTime` on the household's query; the bar reading the frame's context | The frame draws the bar only once the household is read, and a reader that mounts after an answer finds it stale at once and asks again: a household that was opened was asked for twice. A `staleTime` would hide that request and every one that should be made, the app looked at again among them. The sync dev screen draws the bar under no frame: it is handed what was read |
 | The web's *Reload* where a replica cannot be opened | A device has no page to reload: without a way to ask again its member would have to leave the household and come back |
 | *Receiving* read off `connecting` or `hasSynced` | ADR 0026: every retry is connecting, and a replica opened again has synced before and has not tried yet |
-| The file deleted, and that called the wipe; the removal waited for by the sign-out; not even its note waited for; every noted replica removed whose member is not the one signed in | A file that could not be deleted would keep its member's rows until some later start, and the deletion is the uncertain half. A sign-out's screen would be held by SQLite. An app killed after the sign-out and before the note would never remove anything. The session hands out one member, and item 29 signs several in |
+| The file deleted, and that called the wipe; the removal waited for by the sign-out; not even its note waited for; every noted replica removed whose member is not the one signed in | A file that could not be deleted would keep its member's rows until some later start, and the deletion is the uncertain half. A sign-out's screen would be held by SQLite. An app killed after the sign-out and before the note would never remove anything. The session hands out one member, and item 29 signs several in: what the app removes as it starts goes by every sign-in the vault holds, and not by the one in use |
 | The database's file deleted through expo-file-system; deleted with no checkpoint first | Its default place is op-sqlite's own, which on Android is outside the directories expo-file-system may touch *(read)*. A log left by a run that ended badly, found later beside a new file of the same name, is read into it |
-| A replica opened though what an ended sign-in left of it could not be emptied; one whose sign-in ended as it was opening let open and then closed | What an ended sign-in left would be drawn as the new one's. A file made for nobody, with a note that says it is kept |
+| A replica opened though what an ended sign-in left of it could be neither emptied nor deleted; one whose sign-in ended as it was opening let open and then closed; one that could not be emptied left for the wipe alone | What an ended sign-in left would be drawn as the new one's. A file made for nobody, with a note that says it is kept. A wipe that fails may fail at every start, on a device with no room left or over a file that is damaged: its rows would stay for good, and the household be shut to its member, so its file is deleted all the same |
+| A household's replica removed as its address answers `404` | A suspended household answers `404` too (D-115), and what a device had not sent of it must be there still when the suspension is lifted: the frame cannot tell gone from suspended. The member's list can, which item 29's lockout reads (Consequences) |
 | A note left of a replica whose sign-in ended before the note was asked for | It is two ids and no content, and is cleared at that member's next sign-in; but it says that a replica is kept which never was, on a device whose rule is that what it keeps of a member goes with their sign-in. The opening asks whether its sign-in has gone before it notes itself, as well as after |
 | `onRevoked` handed to the replica | A second path to an end the session has reached already |
 | The sentence for the settings' addresses left out of the bar until item 29 has screens there | The addresses are real, and a push names them: the bar over *not available* there would promise that changes are saved |
 | The inbox saying nothing after *Try again*; the focus moved to its list | The control that was pressed leaves with its sentence. Where one state takes another's place no element outlives both: what trying again came to is announced |
+| *Try again* outside the inbox announcing what it came to, by each owner of a wait; a debt of focus paid by the next screen's title | The inbox has a sentence for what came, and the three that stand in a read's place, of who is signed in, of the list of households and of a household, have none but the screen itself. A flag that the next title pays would be paid by whichever screen mounted next, one nobody asked again for among them. With no connection the press changes nothing and says nothing, as the web's (ADR 0026) |
 | The focus moved by an effect on the inbox's entries alone; whenever an entry leaves; as soon as the sheet has gone | On iOS the sheet goes after the row and on Android before it *(read)*: an effect on the entries alone steals the focus from under a leaving sheet, or misses the row. A row the replica sent by itself would take the focus from wherever its member was. And the sheet may have gone before the list has heard of the answer, the focus then put on the lead of a list about to leave with its last row. It is moved once the sheet has said that it has gone and the list no longer draws the answered row |
 | The focus left to the platform once the inbox's last row is answered; a wrapper round the list as its place, as the web's; the empty sentence announced | The web puts it on the list's own place (D-166), and a device's is the lead while rows are drawn and the empty sentence once none is. An accessible view round the list closes its rows to a screen reader on iOS *(read)*. And a focus that is nowhere is still nowhere after an announcement |
 | A resolver unmounted as its answer goes, as the web's; the confirmation and its sheet closed at once | A modal unmounted says nothing of having gone, and iOS refuses what is presented meanwhile *(read)*. A controller told to dismiss while the modal it presented is leaving may stay: unverified either way, so the order that cannot fail was taken |
+| *Put it away*, *Keep mine* and a refused change's *Try again* saying where the focus goes once they leave with their own press | The web's twins are the same, and React Native cannot say where a reader was. An answer that writes says what it came to in a toast |
 | A conflict's two versions side by side | A sheet on a phone at 200 % has room for one label and its value: they stand one under the other |
 | The dev screen's live replica read from the household underneath it; the replica's report brought forward in the build the flows walk | Another screen's provider is not this one's context. A second behaviour that only a test's build has: the dev screen has a control that has the replica report now |
 | The guard around the household's navigator | A layout that draws no navigator loses the rest of the address: a visitor's link to a screen of a household was held as a link to its Home |
@@ -687,7 +831,9 @@ platform.
 | The hold ended by the animation's callback; the native driver; a ring of two rotating halves | Under Jest the animation finishes at once, and on a device a busy thread would stretch the hold. The native driver does not drive a drawing's stroke. Four views and a mask for one small ring |
 | The hold's words as the button's accessibility value; its failure said at once; a word of its own for the `activate` action | iOS would say the changed value of the focused element and the announcement both *(read)*. An urgent one would cut *Completing* off. The control's own name does |
 | A completed hold saying nothing of itself; a completion that throws swallowed | A reader who comes back to it would hear a button that does nothing: it says `disabled`, and `busy` while completing, and stays. An owner's bug would be said as a refused write |
-| A list's rule as each row's bottom border; a row held to a number of lines; a money value held to one | A row does not know that it is last. Truncation removes meaning, and a rule fails it; an amount is kept together by the non-breaking spaces of its locale's own format |
+| A list's rule as each row's bottom border; a row held to a number of lines; a money value held to one | A row does not know that it is last. Truncation removes meaning, and a rule fails it; the non-breaking spaces of its locale's own format keep an amount together, for as long as it fits its line |
+| An amount wider than its line given a smaller step or a breaking space | No screen draws such a figure yet: the first that does decides |
+| Arrange's rows, a dismissable banner and a sheet's header given the list row's tail, so that their words do not stand between two targets at 200 % | Nothing is lost or cut at 360 pt: the words break inside a word, which is the price of a target that grows with the text (D-186) |
 | A flow chart laid out by the window; a side that fills its column when stacked | The window is not the pane. In a column of no fixed height it is given none, and the two lists overlap |
 | An estimated column dashed on three sides, as the web's | React Native draws a dashed border as one path round the whole box, in one width and one colour *(read)*: it is dashed on all four |
 | A badge in a status colour; as a bare dot; with a name of its own | Reserved (01-foundations). 02-components forbids it. What is counted is its owner's to say |
@@ -729,7 +875,17 @@ platform.
   `pnpm-workspace.yaml` is read afterwards for an exclusion pnpm may have appended.
 - An export made with `EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS` and the next one made without it are
   each made with Metro's cache cleared, which the `export` script does; `check` is what catches
-  one that was not. Before an export or `expo start` outside turbo, `pnpm exec turbo run gen`.
+  one that was not. That is true of an export and of nothing a build embeds. A build bundles
+  through `expo export:embed`, to which React Native's build scripts pass `--reset-cache`, and
+  which drops it where `CI` is set in its environment *(read in both, run on nothing but CI's
+  fresh runners)*: there, on a machine that has bundled before, Metro's cache is cleared by
+  hand first, or the dev screens' variable is read from the bundle before it
+  ([runbook](../runbooks/mobile-builds.md)). Before an export or `expo start` outside turbo,
+  `pnpm exec turbo run gen`.
+- What the app kept of what it read is one build's: **the first start after the app was updated
+  reads from the server**. With no connection that start draws *could not be read*, and the
+  replica stays shut, a household being read as its member's before it is opened, until one
+  start has had a connection.
 - A region's own conventions are not on a device: `de-AT`, `de-CH` and `en-GB` count and group
   as their language does, where the web formats them with the browser's whole CLDR. What a date
   prints on a device is its operating system's.
@@ -757,7 +913,41 @@ platform.
   it: one that mounts later asks the server again, and a test of the bar holds the household
   to being asked for once (`src/sync/bars.test.tsx`). The member's list of households is asked
   again as a household opens, by the notice of a switch, which names a household by a fresh
-  list: left.
+  list: left. And a read of that list which has begun is finished though its reader has gone,
+  where the app opens being such a reader: it leaves for a household at once, by the list the
+  device kept.
+- **A household that answers `404` keeps its replica's file until its member's sign-in ends**,
+  as the web's does (ADR 0026). On a device a sign-in never lapses (D-99), and PRD 03 §2.6 asks
+  that what a member lost access to be removed from what they hold. A suspended household
+  answers `404` too (D-115), and what a device had not sent of it must be there still when the
+  suspension is lifted, so the two are told apart by the member's list and not by the frame:
+  **item 29**'s lockout reads that list, and removes the replica of a household it no longer
+  names.
+- **The address held for whoever signs in next outlives a sign-in that was ended from
+  elsewhere**: it is where they are led, and today an id and a screen's name, with no word of
+  its member's. The first route whose address carries such a word, a note's slug, holds the
+  household's own address there instead.
+- **Backups are not decided here** *(read, and restored on nothing)*. A replica's file is in
+  op-sqlite's own directory (`NSLibraryDirectory` on iOS, `getDatabasePath` on Android) and its
+  waiting files under the app's documents, and both are in a device's backup; the pair is
+  readable on the device that made it alone. On Android what AsyncStorage holds travels too
+  (Expo writes `android:allowBackup` as true where the configuration says nothing), so a
+  restored device finds notes of a member it holds no sign-in of, and removes what they name
+  at its first start. On iOS AsyncStorage is excluded from a backup by default (RNCAsyncStorage),
+  so a restored replica's file arrives with no note and nothing finds it: its member signing
+  in again opens it as theirs, a copy of the old phone's with that phone's replica id.
+  `android.allowBackup` and an exclusion on iOS are **item 30**'s to decide, with the first
+  build.
+- **A modal is not its screen's** *(read on both platforms, run on neither)*. Android dismisses
+  one when its host is detached and shows it again at a resume; iOS leaves it over the screen
+  that a link or a pressed notification opens. No sheet is reachable in a member's build yet:
+  the first module's rows make one so (**item 30**), and the flow line for then, on Android
+  after `link`, is to open a sheet, send the link, assert that its `:surface` is not visible,
+  go back, press its opener and assert that it is.
+- **The tab bar at five slots does not fit its words on a 360 pt phone in German, Czech and
+  Slovak at 100 %** (*Unterhaltungen*, *Hinzufügen*): arithmetic on the tokens, seen on no
+  device. No member's bar of this build has five. **Items 38 and 87** give the slot a word of
+  the device's own if a screenshot of the dev shell page in German shows it.
 - **On Android the band behind the three navigation buttons is the device's, not the app's.**
   With the app dark on a device that is light, CI's screenshot shows it white. The platform
   draws it, light or dark by a flag of the window that React Native sets once, as the activity
@@ -767,17 +957,31 @@ platform.
   decides it beside its Appearance screen, where a member first chooses a theme that is not
   the device's. A device that navigates by gestures draws no band, and the buttons are legible
   on it either way.
-- **Open, on Android: a drag that begins on a stepper's count does not scroll the page.** Seen
-  as where a flow's scroll stopped, in two flows of the fourth run, the count under the middle
-  of the screen, where iOS scrolled the same page to its end. Its cause is read in React
-  Native's source and was tried on no device: the count is a single line with its text
-  centred, which Android's text field takes for one that scrolls sideways, and such a field
-  keeps the touch. If that is it, a member's thumb meets it on any form with a stepper
-  (`src/ui/Stepper.tsx`). Not decided here.
-- **Open, at 200 % on a phone: a list row's title wraps inside a word.** Seen in the fourth
-  run's screenshot of the harness, a title broken by the syllable (`src/ui/ListRow.tsx`).
-  Nothing is cut off, which is all the rules hold: they read what a text was told, and not
-  where a line broke. Not decided here.
+- **Mended as read, and proven on no device: on Android a drag that began on a stepper's count
+  did not scroll the page.** Seen as where a flow's scroll stopped, in two flows of the fourth
+  run, the count under the middle of the screen, where iOS scrolled the same page to its end.
+  Read in React Native's source: its Android field shuts its parents out of a touch as the
+  finger comes down, and lets them back in at the first move only if it can scroll no way
+  itself (`ReactEditText.kt`), and `textAlign: 'center'` is the field's horizontal gravity
+  (`ReactTextInputManager.kt`). Recalled of Android's own `TextView`, whose source is not in
+  the repository, and run on nothing: a field of one line answers that it can scroll sideways
+  unless that gravity is the start's. So the count is no longer centred on Android, and is
+  still on iOS (`src/ui/Stepper.tsx`). The flow line that would show it: a swipe that begins
+  on the count, and an assertion of what is below the fold.
+- **Mended as read, and proven on no device: at 200 % on a phone a list row's title was left a
+  letter's width.** Seen in the fifth run's `harness-conflicted.png`: a glyph a line, cut at
+  the right. The cause was not what stood beside the title but that no line broke. Read in
+  Yoga (`computeFlexBasisForChildren`, `CalculateLayout.cpp`; `calculateFlexLine`,
+  `FlexLine.cpp`): where a row's only flexible child both grows and shrinks, its basis is
+  taken for nothing and the row's lines are broken by that, so the words got what the avatar,
+  the mark and the action left. A row is now two parts, the avatar with the words and the mark
+  with the action, of which the second may shrink too, so the words' basis counts and the
+  second part goes under the first; and a row takes an `under` part for what stands across it,
+  the inbox's kept version (`src/ui/ListRow.tsx`). The same was so, and is mended the same
+  way, in the composition chart's legend, the flow chart's node and a toast with Undo. Jest
+  holds the styles, and the rule `wrap` holds the next row to them; that a device then draws
+  it so is unseen. The flow line: in the harness at 200 %, the row's *Open* below its title,
+  and whole glyphs in the conflicted cell's screenshot.
 - **Item 29** takes the seams this leaves: the sign-in screen's place (`src/session/SignIn.tsx`)
   and `signedIn`, which a sign-in the server answered is handed to; several profiles' sign-ins
   in the token store, of which one is in use; the household's name in the app bar as the
@@ -785,14 +989,30 @@ platform.
   banner, and the lockout where the frame draws *not available* for a household the member's
   list still names; `usePush()` for F-20, with the device's own words for it; sync health over
   the replica the provider holds; and the takeover notice where the ended sign-in is said.
+  And it takes what this leaves open. The lockout carries the way to sign out: a member in none
+  but suspended households is opened at one, *not available* leads back to it, and nothing on
+  that path signs out until then. A request is signed by whichever sign-in is in use when it
+  is sent, and when it is sent again, so several profiles need a client or a token store for
+  each member: only the refused leg is closed here, a request refused on another member's
+  token being given none of the one now in use. Its sign-in screens ask through a client that
+  signs nothing, a second step whose challenge is gone being answered as a refused token is. A
+  link the system hands over while a visitor is on the sign-in screen leaves two of them on
+  the stack. And *Try again* outside the inbox says nothing of what it came to (Alternatives
+  rejected).
 - **Item 30** makes the first EAS project and build: nothing of `eas.json` has run, nor the
   script that generates on the builder (`eas-build-post-install`), and until a project exists
   no build can ask for a push token. It gives the app a link host and its association files,
   the scheme alone opening it today, and the store's pages. Its first upload route must not
-  take the part's file name for the file's, which is the row's id on a device; the way in still
-  takes bytes, so a camera's file would be read whole once. Its critical paths on a device
-  stand on this item's flows, which read a member's replica and a household's clients on
-  Android already; its module is the first whose rows the inbox can hold and More can arrange.
+  take the part's file name for the file's, which is the row's id on a device, and an upload
+  it refuses `update_required` keeps its file; the way in still takes bytes, so a camera's file
+  would be read whole once. Its first push on Android is where the notification's channel
+  shows (below). It decides the backups (above), and whether `VIBRATE`, the template's own,
+  stays asked: it is left asked until a device shows whether a notification is still felt
+  without it. Its critical paths on a device stand on this item's flows. On Android a member's
+  replica opening and receiving, and the offline bar arriving and leaving, are run; that a
+  household's clients name `mobile/<version>` is not yet seen, the step that asks having run in
+  no run, and no replica has opened on iOS (below). Its module is the first whose rows the
+  inbox can hold and More can arrange.
 - **Item 33**, the first module with screens on a device, adds its line to
   `src/modules/registry.ts`, its routes to `src/app/paths.ts` and `app/`, and the place they
   stand under to `src/shell/tabs.ts`. The bar draws Add as soon as a registered module has a
@@ -805,10 +1025,20 @@ platform.
   show later takes `RECEIVE_BOOT_COMPLETED` out of the second and gives it its reason in the
   first, as one that draws a count on the icon does the launchers' sixteen.
 - **Item 95**'s VoiceOver and TalkBack checklist is where everything this record marks *(read)*
-  is first heard: start at the hold, a modal's focus, the tab bar and the arrange handle.
-- Android has one notification channel, of default importance, named in the app's language.
-  A channel of its own for urgent pushes is a product decision with a server half, the push
-  naming no channel today.
+  is first heard: start at the hold, a modal's focus, the tab bar and the arrange handle. Then
+  a screen's title as a header; a failure's announcement on Android, where React Native hands
+  it no *at once* and it is said as any other is; an announcement and a focus move that the app
+  makes together, a module moved to another list, a resolver's toast and the focus given back
+  as its sheet leaves, of which the order is the app's and which is heard is unheard; and
+  whether the focus the app gives back on Android to an opener that is named lands there,
+  Android's modal restoring none by itself *(read)*.
+- Android has one notification channel of the app's making, of default importance, named in
+  the app's language *(read, and the push itself unrun)*. A pushed notification that names no
+  channel is shown by expo-notifications in its own fallback channel, named *Miscellaneous* in
+  English, unless Expo's push service names one for it, which nothing here can read. **Item
+  30**'s first push on Android is where it shows, and the mend is one field: `channelId` in the
+  server's message to Expo, or the plugin's `defaultChannel`. A channel of its own for urgent
+  pushes is a product decision with a server half, the push naming no channel today.
 - `expo-localization`'s `supportedLocales`, by which the operating system offers the app's
   language in its own settings, is not set: the UI language is the member's (PRD 03 §9), and
   whether the system's setting may choose it is undecided.
@@ -825,41 +1055,54 @@ platform.
   would then follow; `expo/fetch` taking a file by its place; a patched `braces`, `node-forge`
   or a `query-string` that takes the patched `decode-uri-component`; a hosted runner on which
   a flow can answer the system's own dialog.
-- **Run on a device, as of CI's fourth run (2026-10-10).** This bullet says what that run and
-  the three before it showed, and nothing later: it is brought up to date from the last green
-  run before the pull request is marked ready. On the Android emulator: the app opens at
-  sign-in with nothing kept; the engine screen's checks hold on Hermes, the vectors' 87 format
-  cases and 8 match cases under the polyfills, the five families registered, the random source
-  and the client's name, and a screenshot shows the faces drawn; the theme changes at a press;
-  a link in the app's scheme opens its screen; the dev form signs in against the real server
-  over plain `http` and the household's Home is drawn, and drawn again after a restart, the
-  pair read back from the keystore by a build without the biometric permissions; and the built
-  APK asked for nine permissions, each with its reason, one more than it asks for since. On
-  the iOS simulator: the app opens at sign-in; the engine screen's checks hold; the theme
-  changes; a sheet opens and closes, and a menu's item opens a confirmation once its sheet has
-  gone; and the release build's `Info.plist` holds neither of the dev launcher's keys. In that
-  run the flows of the harness and of the hold found their targets on neither platform, nor
-  the primitives' on Android, for the two reasons the flows were then mended for; so the step
-  that asks the server for the account's devices, which follows the flows, did not run. Four
-  flows were written after it and had run on nothing: the shell's and the resolvers', and in
-  the Android job signing out and the replica, with the step that asks for the household's
-  clients. What those read is held by Jest until a run shows it.
+- **Run on a device, as of CI's seventh run (38070872439, 2026-10-10).** This bullet says what
+  that run and the six before it showed, and nothing later: it is brought up to date from the
+  last green run before the pull request is marked ready. On the iOS simulator all eight of its
+  flows passed: the app opens at sign-in with nothing kept; the engine screen's checks hold on
+  Hermes, the vectors' 87 format cases and 8 match cases under the polyfills, the five families
+  registered, the random source and the client's name; the theme changes at a press; the
+  harness draws a cell of each kind at 200 % in both themes; a sheet opens and closes, and a
+  menu's item opens a confirmation once its sheet has gone; a hold let go early completes
+  nothing and one held completes; a slot opens its place and says so, Add's sheet opens over
+  it, a module is hidden from its row's menu, the panes are one at a phone's width and two at a
+  tablet's, and the neutral screen leads home; and a refused change is given up, its
+  confirmation drawn inside its sheet, both leaving and a toast after them. The release
+  build's `Info.plist` holds neither of the dev launcher's keys. On the Android emulator eleven
+  of twelve passed: those of the simulator less the resolvers', and beside them a link in the
+  app's scheme opens its screen; the dev form signs in against the real server over plain
+  `http`, the household's Home is drawn in its frame over its tab bar, and drawn again after a
+  restart, the pair read back from the keystore by a build without the biometric permissions;
+  the bar's Today and More open their places, and More's sign-out leads back to sign-in; and
+  **a member's replica opens on a device and receives**, with nothing in its inbox, reports
+  itself when asked, and the offline bar arrives with the connection taken away and leaves
+  when it is back. The built APK asked for eight permissions, each with its reason. The one
+  flow that failed is the resolvers' on Android, and it is the flow's to mend, nothing of the
+  app's: its tap landed on the band behind the three navigation buttons, the control's bounds
+  being `[87,2223][642,2347]` on a screen of 1080 × 2400 and the tap at `(364, 2285)`, since
+  the flow's scroll stops as soon as its control is in the display and the app draws under
+  the band. Because a flow failed, the two steps after the flows did not run: that the server
+  lists the account's device, and that a household's clients name `mobile/<version>`, is
+  still unseen. In the fifth and sixth runs the sync dev screen drew on neither platform: a
+  fixture called `Array.prototype.toSorted` at its module's scope, which Node has and the
+  Hermes this React Native ships lacks, so every Jest test passed, and `e2e/engine.test.ts`
+  now reads the sources for such a built-in.
 - **Not run on a device: the session and the API on iOS.** A macOS runner has no Docker, so no
   flow signs in on iOS: the keychain, the bearer, the renewal, the household's frame and the
   replica have run there on nothing. On neither platform has a renewal at a token's real lapse
   run, nor a sign-in ended from elsewhere and the removal that follows, nor a restore from a
-  backup; that the native half of `expo/fetch` honours `credentials: 'omit'` is read. A
-  member's own sign-out is read by a flow, on Android.
-- **Not run on a device as of the fourth run: the replica.** Its flow is the Android job's,
-  with the stack, and reads that a member's replica opens, that it receives, that its inbox is
-  read, that it reports when asked, and that the offline bar arrives with the connection taken
-  away and leaves when it is back; the job then asks the server for a client named
-  `mobile/<version>`. No run had taken it: until one has, that op-sqlite, PowerSync's
-  extension and the SDK link and the rest of it are believed from the conformance suite, which
-  holds the library on Node's SQLite, and from Jest. No flow reads a replica's removal: that
-  op-sqlite's own deletion removes PowerSync's file, and that expo-router loads every route's
-  file as the app starts, so that the forgetter is registered before a sign-in can end, are
-  read. And no flow opens a replica on iOS.
+  backup, nor what a start removes of a member the device holds no sign-in of, nor a keychain
+  that is shut while its device is locked; that the native half of `expo/fetch` honours
+  `credentials: 'omit'` is read. A member's own sign-out is read by a flow, on Android.
+- **Run on Android, and on no iOS device: the replica.** Its flow is the Android job's, with
+  the stack. In the seventh run a member's replica opened and received, its inbox was read, it
+  reported when asked, and the offline bar arrived with the connection taken away and left
+  when it was back: op-sqlite, PowerSync's extension and the SDK link and run there. The step
+  after the flows, which asks the server for a client named `mobile/<version>`, has run in no
+  run. No flow reads a replica's removal: that op-sqlite's own deletion removes PowerSync's
+  file, and that expo-router loads every route's file as the app starts, so that the
+  forgetter is registered before a sign-in can end, are read. And no flow opens a replica on
+  iOS, where it is believed from the conformance suite, which holds the library on Node's
+  SQLite, and from Jest.
 - **Not run at all: an upload, a push, and EAS.** No route takes a file, so `File.upload` has
   met no server. No EAS project exists, so no permission was asked for, no token registered,
   no notification shown or pressed, and no build made from `eas.json`.
@@ -867,24 +1110,27 @@ platform.
   system hands over that names another household, which under Jest is asked of the router as a
   pressed notification asks it; a cold start by a pressed notification; and an address held
   while the app was left to sign in.
-- **Not run on a device as of the fourth run: most of the shell and the overlays.** Two flows
-  written since read some of it on the dev screens, with no server: a slot opening its place
-  and saying that it is open, Add's sheet, a module hidden from a menu's item, the panes at a
-  phone's width and at a tablet's, the neutral screen's way out; and a refused change given
-  up, its confirmation drawn inside its sheet, both leaving and a toast after them. With the
-  stack, on Android, two flows read the frame and the bar around a real household, two of its
-  places and the way out. No flow reads the frame's inset meeting the bar's, the bar's measured height
-  reaching the toasts, a tab's screen keeping its place, a real tablet, a toast inside an open
-  sheet, the keyboard under a sheet on Android, or whether Android gives the focus back to
-  what opened a modal by itself.
+- **Run on the dev screens, and little of it around a real household: the shell and the
+  overlays.** Two flows read some of it on the dev screens, with no server. On both platforms:
+  a slot opening its place and saying that it is open, Add's sheet, a module hidden from a
+  menu's item, the panes at a phone's width and at a tablet's, the neutral screen's way out.
+  On the simulator alone so far: a refused change given up, its confirmation drawn inside its
+  sheet, both leaving and a toast after them. With the stack, on Android, two flows read the
+  frame and the bar around a real household, two of its places and the way out. No flow reads
+  the frame's inset meeting the bar's, the bar's measured height reaching the toasts, a tab's
+  screen keeping its place, a real tablet, a toast inside an open sheet, the keyboard under a
+  sheet on Android, or the focus given back on Android to an opener that is named, where the
+  modal's host restores none by itself *(read)*.
 - **Heard by nobody: everything a screen reader does.** No run has VoiceOver or TalkBack on.
-  The hold's three activations, the tab bar's traits, the adjustable handle and its two
-  actions, a field's label read once on each platform, the focus on a modal's title and back,
-  a refusal's focus, every announcement, and a toast that stays while a reader is on are held
-  by Jest to what the app declares, and by reading React Native to what a platform makes of
-  it.
+  A screen's title as a header, the hold's three activations, the tab bar's traits, the
+  adjustable handle and its two actions, a field's label read once on each platform, the focus
+  on a modal's title and back, a refusal's focus, every announcement, which of an announcement
+  and a focus move made together is heard, what a reader makes of a value that can be selected,
+  and a toast that stays while a reader is on are held by Jest to what the app declares, and by
+  reading React Native to what a platform makes of it.
 - **Seen by nobody: what only glass shows.** That nothing is clipped at 200 % on a narrow
   phone, the ring's fill and its steps, the dashed column, a shadow and an outline as the
   tokens say, and Android's weight of a face whose one file is another weight. What CI's
   screenshots did show is above: the band behind Android's navigation buttons, and a list
-  row's title at 200 %.
+  row's title at 200 % as it stood before the row was mended, which no screenshot has shown
+  since.
