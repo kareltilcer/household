@@ -428,7 +428,11 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         timeout-minutes: 30
         env:
-          STACK: ${{ steps.member.outcome == 'success' && '--stack' || '' }}
+          # With a member to sign in as, the flows that sign in are taken, and after the suite
+          # the one check that takes this API away and starts it again (e2e/run.ts, `--kept`;
+          # e2e/api.sh): a read the device kept is kept though the server is gone when it
+          # asks again.
+          STACK: ${{ steps.member.outcome == 'success' && '--stack --kept' || '' }}
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 29

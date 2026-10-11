@@ -1,0 +1,34 @@
+# A read that was kept is kept though its re-read fails (06-clients, offline-first; src/api/keep.ts):
+# with the server gone and the device still online, the app is brought to the front, where it
+# asks again for what it holds and is refused; stopped and started after that, it still opens
+# at the member's household, from what it kept. It once did not: a kept read whose re-read
+# failed was written out of the device a second later, and the next start had nothing.
+#
+# The second half of the check (e2e/run.ts, `--kept`): kept-signed-in.yaml left the app
+# signed in and behind the launcher, and the run has stopped the API since. Taking the
+# connection away would not do: offline, the app does not ask at all.
+appId: com.kareltilcer.household.dev
+---
+# To the front, as it was left: the same process, which asks again as it is looked at.
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: 'route:household'
+    timeout: 30000
+# Time for the refusal to be answered, and for what once followed it a second later. Nothing
+# is waited for here but that: the screen is to stay as it is.
+- extendedWaitUntil:
+    notVisible:
+      id: 'route:household'
+    timeout: 6000
+    optional: true
+# Stopped and started, with no server to ask.
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'route:household'
+    timeout: 60000
+- assertVisible:
+    id: 'household-frame'
+- takeScreenshot: kept-without-server

@@ -1,4 +1,4 @@
-// `pnpm --filter @household/mobile run e2e <android|ios> [--stack]`: Maestro's flows (e2e/flows)
+// `pnpm --filter @household/mobile run e2e <android|ios> [--stack [--kept]]`: Maestro's flows (e2e/flows)
 // over the app's end-to-end build, on the emulator or the simulator that is up with that build
 // installed (PL-3, 06-clients §8). The build is a release one of the development variant with
 // the dev screens in it (`EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS=1`), which is what the flows walk:
@@ -41,6 +41,13 @@ if (platform === undefined) {
   process.exit(2)
 }
 const stack = flags.includes('--stack')
+// After the suite, the check that takes the API away and brings it back (`kept`, below): for
+// a run whose API is the one api.sh knows how to stop and start, which is CI's Android job's.
+const withKept = flags.includes('--kept')
+if (withKept && !stack) {
+  console.error('e2e: --kept signs a member in, and so goes with --stack.')
+  process.exit(2)
+}
 const output = join(app, 'dist', 'e2e')
 
 /** The member the stack's flows sign in as, whom e2e/stack.ts made and the environment names. */
@@ -104,24 +111,60 @@ function leave(status: number): never {
   process.exit(status)
 }
 
-const status = maestro(run)
-const written = join(output, 'report.xml')
-const { failed, lost } = outcome(existsSync(written) ? readFileSync(written, 'utf8') : '')
-if (lost.length === 0) leave(status)
+/** The suite, and once more the flows of it that the driver's death took. */
+function suite(): number {
+  const status = maestro(run)
+  const written = join(output, 'report.xml')
+  const { failed, lost } = outcome(existsSync(written) ? readFileSync(written, 'utf8') : '')
+  if (lost.length === 0) return status
 
-// The flows the driver's death took, in a folder of their own with the steps they share: a
-// folder is what Maestro runs as a suite, with a report, as it ran the first time.
-const again = join(output, 'again')
-const taken = join(again, 'flows')
-mkdirSync(taken, { recursive: true })
-cpSync(join(flows, 'parts'), join(taken, 'parts'), { recursive: true })
-for (const name of lost) cpSync(join(flows, `${name}.yaml`), join(taken, `${name}.yaml`))
+  // The flows the driver's death took, in a folder of their own with the steps they share:
+  // a folder is what Maestro runs as a suite, with a report, as it ran the first time.
+  const again = join(output, 'again')
+  const taken = join(again, 'flows')
+  mkdirSync(taken, { recursive: true })
+  cpSync(join(flows, 'parts'), join(taken, 'parts'), { recursive: true })
+  for (const name of lost) cpSync(join(flows, `${name}.yaml`), join(taken, `${name}.yaml`))
 
-const own = failed.filter((name) => !lost.includes(name))
-console.error(
-  `e2e: Maestro's driver on the device was gone under ${lost.join(', ')}, ` +
-    'which failed for no reason of their own: they are run again, once.' +
-    (own.length === 0 ? '' : ` Failed for itself, and not run again: ${own.join(', ')}.`),
-)
-const second = maestro({ ...run, flows: taken, output: again })
-leave(own.length > 0 ? 1 : second)
+  const own = failed.filter((name) => !lost.includes(name))
+  console.error(
+    `e2e: Maestro's driver on the device was gone under ${lost.join(', ')}, ` +
+      'which failed for no reason of their own: they are run again, once.' +
+      (own.length === 0 ? '' : ` Failed for itself, and not run again: ${own.join(', ')}.`),
+  )
+  const second = maestro({ ...run, flows: taken, output: again })
+  return own.length > 0 ? 1 : second
+}
+
+/** Takes the run's API away, or brings it back (api.sh): 0 where it did. */
+function api(what: 'stop' | 'start'): number {
+  return spawnSync('bash', [join(app, 'e2e', 'api.sh'), what], { stdio: 'inherit' }).status ?? 1
+}
+
+/**
+ * A read that was kept is kept though its re-read fails (flows/after): signed in with the
+ * server there, then the server taken away, the app brought to the front and started again.
+ * Two flows, since the server goes between them, and no flow can take it; after the suite,
+ * whatever that came to, since it asks nothing of the suite. The API is started again
+ * whatever the second flow came to: the job asks it what the devices left, after this.
+ */
+function kept(): number {
+  const after = join(flows, 'after')
+  const signedIn = maestro({
+    ...run,
+    flows: join(after, 'kept-signed-in.yaml'),
+    output: join(output, 'kept', 'signed-in'),
+  })
+  if (signedIn !== 0) return signedIn
+  if (api('stop') !== 0) return 1
+  const away = maestro({
+    ...run,
+    flows: join(after, 'kept-server-away.yaml'),
+    output: join(output, 'kept', 'server-away'),
+  })
+  return api('start') === 0 ? away : 1
+}
+
+const suiteStatus = suite()
+const keptStatus = withKept ? kept() : 0
+leave(suiteStatus !== 0 ? suiteStatus : keptStatus)
