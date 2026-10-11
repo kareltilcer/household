@@ -79,6 +79,27 @@ appId: com.kareltilcer.household.dev
     direction: DOWN
     timeout: 120000
     visibilityPercentage: 20
+# A row at twice the text, on a phone: its action stands under the avatar and the words, at
+# the row's own edge, and is not squeezed in beside them, where it once left the title one
+# letter's width (src/ui/ListRow.tsx). The first row's two ends are named for this
+# (src/dev/harness/bodies.tsx). Maestro's `below` compares two things by their upper edges
+# alone, which an action set beside taller words would pass as well; that it is not to the
+# right of the avatar, which begins the row, is what tells under from beside.
+- scrollUntilVisible:
+    element:
+      id: 'list:open'
+    direction: DOWN
+    timeout: 120000
+- assertVisible:
+    id: 'list:whose'
+- assertVisible:
+    id: 'list:open'
+    below:
+      id: 'list:whose'
+- assertNotVisible:
+    id: 'list:open'
+    rightOf:
+      id: 'list:whose'
 - takeScreenshot: harness-populated-light
 - scrollUntilVisible:
     element:
@@ -138,4 +159,13 @@ appId: com.kareltilcer.household.dev
     direction: DOWN
     timeout: 120000
     visibilityPercentage: 20
+# The row in conflict, whole on the screen for a person to look at: its words above, and
+# under them its mark and its action, every glyph of each. The mark is brought up from the
+# foot of the screen, which brings the row with it.
+- scrollUntilVisible:
+    element:
+      id: 'status:conflict'
+    direction: DOWN
+    centerElement: true
+    timeout: 120000
 - takeScreenshot: harness-conflicted

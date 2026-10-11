@@ -51,11 +51,25 @@ function ListBody({ mark, writes, sample }: BodyProps) {
       <ListRow
         title={sample('Electricity, cellar meter')}
         secondary={sample('18 402 kWh · read 3 March by Petr')}
-        avatar={<Avatar initials="P" tone={2} />}
+        // The first row's two ends are named for the end-to-end flow, which reads on a device
+        // where the row's action stands: under the avatar and the words at twice the text, and
+        // not squeezed in beside them (ui/ListRow.tsx). The row names neither itself, and its
+        // words are one thing to assistive technology, whose tree a flow reads.
+        avatar={
+          <View testID="list:whose">
+            <Avatar initials="P" tone={2} />
+          </View>
+        }
         chip={<ModuleChip module="utilities" />}
         mark={mark}
         onOpenMark={mark === 'conflict' ? () => undefined : undefined}
-        trailing={open}
+        trailing={
+          writes ? (
+            <Button testID="list:open" variant="ghost">
+              {sample('Open')}
+            </Button>
+          ) : undefined
+        }
       />
       <ListRow
         title={sample('Gas, hallway meter')}
