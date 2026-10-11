@@ -6,28 +6,23 @@
 //
 // So what a device's bundle is made of is read here for the built-ins its engine is known to
 // lack, with no device: the app's sources and those of the workspace's packages it bundles,
-// fixtures and dev screens among them, since the end-to-end build holds those too. That the
-// engine has what the app needs of it otherwise, the fonts and `Intl` among it, is the engine
-// screen's to show on a device (src/dev/engine, e2e/flows/engine.yaml).
+// fixtures and dev screens among them, since the end-to-end build holds those too. The list
+// is the engine screen's (src/dev/engine/builtins.ts, which says where each name was read),
+// and that screen asks the engine itself whether the list is right, on a device
+// (e2e/flows/engine.yaml): what is read here is held to a run there.
+//
+// The list is of what is absent, and no longer than what could be confirmed so. Four that a
+// reader might add are there on a device, and are in the list's other half for the screen to
+// confirm: `Promise.withResolvers` is Hermes's own at this version, and `structuredClone`,
+// `AbortSignal.timeout` and `AbortSignal.any` are installed by Expo's runtime as the app
+// starts.
 import { describe, expect, it } from '@jest/globals'
 import { globSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { held, lacking } from '../src/dev/engine/builtins.ts'
 
 /** apps/mobile: Jest runs in it. */
 const app = resolve('.')
-
-/**
- * What Hermes lacks, at the version the build compiles for (`hermes-compiler` 250829098.0.17,
- * React Native 0.86): each a method of its arrays, objects or maps, which it implements
- * natively and names in one list (`include/hermes/VM/PredefinedStrings.def`); these are in
- * none. The first was also met on a device. Read the list again when React Native moves:
- * a name the engine has gained leaves this one, and its neighbours are worth a look.
- */
-const lacking: readonly { readonly name: string; readonly call: RegExp }[] = [
-  { name: 'Array.prototype.toSorted', call: /\.toSorted\(/ },
-  { name: 'Array.fromAsync', call: /\bArray\.fromAsync\b/ },
-  { name: 'Object.groupBy, Map.groupBy', call: /\b(?:Object|Map)\.groupBy\b/ },
-]
 
 /** The workspace's packages the app bundles: those its manifest depends on, and no tool's. */
 function bundled(): string[] {
@@ -64,10 +59,18 @@ describe('what a device runs', () => {
   })
 
   it('calls no built-in the device’s engine lacks, which Node would let pass', () => {
-    const calls = sources().flatMap((file) => {
-      const source = readFileSync(join(app, file), 'utf8')
-      return lacking.filter(({ call }) => call.test(source)).map(({ name }) => `${file}: ${name}`)
-    })
+    const calls = sources()
+      // The list itself names each, in the pattern that finds it.
+      .filter((file) => file !== 'src/dev/engine/builtins.ts')
+      .flatMap((file) => {
+        const source = readFileSync(join(app, file), 'utf8')
+        return lacking.filter(({ call }) => call.test(source)).map(({ name }) => `${file}: ${name}`)
+      })
     expect(calls).toEqual([])
+  })
+
+  it('names a built-in in one half of its list alone', () => {
+    const names = [...lacking, ...held].map(({ name }) => name)
+    expect(new Set(names).size).toBe(names.length)
   })
 })
