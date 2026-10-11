@@ -223,12 +223,34 @@ to the server, and `stack`'s sign-in is still there for the job to find whatever
   that is there from the start. The one such thing a flow does scroll to, the device's word
   that it is offline, which the bar that comes above it moves down the screen, is in the last
   part of a narrowed page: a swipe made early leads no further than to it.
+- **Brought up from the foot of the screen before it is pressed.** The app draws under
+  Android's navigation bar, and what stands in that strip is on the screen as Maestro counts
+  it, while a press there is the bar's. In the seventh run a scroll stopped with its control
+  whole under the bar (`[87,2223][642,2347]` of a screen whose bar begins at 2274), the press
+  at its middle went to the bar, and the flow waited for a sheet nobody had asked for; the
+  same flow passed on the simulator. So a downward scroll that the next command presses says
+  `centerElement: true`, which has it go on until the control's middle is clear of the lowest
+  three tenths of the screen, and `flows.test.ts` fails one that does not. Where the page
+  ends first, the scroll gives up after five more swipes and takes the control where it is.
 - **What stays a few seconds is looked for at once.** After a tap Maestro waits for the screen
   to come to rest before the next command, which on a slow emulator is seconds of a toast's
   five: the tap that brings one says `waitToSettleTimeoutMs: 500`.
 - **The connection is given back whatever became of the flow** (`onFlowComplete`, in
   `replica`): a flow that failed with the emulator in aeroplane mode would fail every flow after
   it that asks the server.
+- **A limit is set by the slowest run seen, with room.** A wait can pass after its limit, where
+  the one look under way when the limit came returns with the screen: whichever flow a
+  simulator runs first starts the app for the first time, and its wait for sign-in took 73
+  seconds of 60 in the seventh run, so that wait has three minutes. In the same run the
+  harness's longest scroll took 53 of its 60 seconds, and now has two minutes. A limit costs
+  nothing in a run that passes. How long each command took is in the flow's `commands.json`,
+  in the artifact.
+
+**What the job asks the server after the flows** (`e2e:stack devices`, `e2e:stack clients`) is
+asked wherever the flows ran, whatever became of them: what a device left at the server is
+true or false of itself. One flow that failed for something else once took both answers with
+it. A flow that failed has failed the job already; where it is the flow that signs in, or the
+one that reports, its step fails too and prints what the server holds instead.
 
 **The way to a dev screen is by presses, and not by a link.** The sign-in screen has a control that
 leads to the dev sign-in form (`sign-in:dev`), and every dev screen leads to their index
