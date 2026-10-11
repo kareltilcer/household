@@ -18,6 +18,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'dev-index:devPrimitives'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'dev-index:devPrimitives'
 - extendedWaitUntil:
@@ -28,6 +29,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'primitives:only:hold'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'primitives:only:hold'
 - scrollUntilVisible:
@@ -35,6 +37,7 @@ appId: com.kareltilcer.household.dev
       id: 'hold:idle'
       index: 0
     direction: DOWN
+    centerElement: true
     timeout: 60000
 # Let go early: nothing is completed, and the control says to keep holding. It says so for
 # as long as a toast stays, five seconds, so it is looked for at once, and not after the

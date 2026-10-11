@@ -8,7 +8,7 @@ appId: com.kareltilcer.household.dev
 - extendedWaitUntil:
     visible:
       id: 'route:signIn'
-    timeout: 60000
+    timeout: 180000
 - tapOn:
     id: 'sign-in:dev'
 - extendedWaitUntil:
@@ -23,6 +23,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'dev-sign-in:password'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'dev-sign-in:password'
 - inputText: ${PASSWORD}
@@ -30,5 +31,6 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'dev-sign-in:submit'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'dev-sign-in:submit'

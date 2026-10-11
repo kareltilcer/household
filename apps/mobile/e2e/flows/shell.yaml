@@ -18,6 +18,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'dev-index:devShell'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'dev-index:devShell'
 - extendedWaitUntil:
@@ -30,12 +31,14 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'shell:only:bars'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'shell:only:bars'
 - scrollUntilVisible:
     element:
       id: 'shell:bar:five:light:phone:1:today'
     direction: DOWN
+    centerElement: true
     timeout: 60000
 - tapOn:
     id: 'shell:bar:five:light:phone:1:today'
@@ -76,6 +79,7 @@ appId: com.kareltilcer.household.dev
       id: 'arrange:menu:tasks'
       index: 0
     direction: DOWN
+    centerElement: true
     timeout: 60000
 - tapOn:
     id: 'arrange:menu:tasks'
@@ -140,6 +144,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'not-available:home'
     direction: DOWN
+    centerElement: true
     timeout: 60000
 - tapOn:
     id: 'not-available:home'

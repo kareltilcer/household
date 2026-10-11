@@ -162,4 +162,33 @@ describe('the flows', () => {
       expect([name, loose]).toEqual([name, []])
     }
   })
+
+  it('bring a control up from the foot of the screen before they press it', () => {
+    // What stands under Android's navigation bar is on the screen as Maestro counts it, and a
+    // press there is the bar's: a scroll that stopped with its control whole in that strip
+    // was followed by a press that opened nothing (run 38070872439). `centerElement` has a
+    // scroll go on until the control is clear of the lowest part of the screen.
+    const pressedLow: string[] = []
+    const said = (command: string, key: string) =>
+      new RegExp(`^\\s+${key}: '?([^'\\n]+?)'?$`, 'm').exec(command)?.[1]
+    for (const { name, steps } of [...flows, ...parts]) {
+      const commands = steps
+        .split('\n')
+        .filter((line) => !line.startsWith('#'))
+        .join('\n')
+        .split(/^(?=- )/m)
+      commands.forEach((command, at) => {
+        const next = commands[at + 1] ?? ''
+        if (!command.startsWith('- scrollUntilVisible:') || said(command, 'direction') !== 'DOWN')
+          return
+        if (!/^- (tapOn|longPressOn):/.test(next)) return
+        if (said(next, 'id') !== said(command, 'id')) return
+        if (said(next, 'index') !== said(command, 'index')) return
+        if (said(command, 'centerElement') !== 'true') {
+          pressedLow.push(`${name}: ${String(said(command, 'id'))}`)
+        }
+      })
+    }
+    expect(pressedLow).toEqual([])
+  })
 })
