@@ -735,14 +735,16 @@ The development variant may speak plain `http` on Android, which the template al
 build alone. The flows (`e2e/flows`) select by `testID` and never by a word, and
 `e2e/flows.test.ts` holds each to the app's own names, since nothing where they are written
 runs them: its `appId`, a link's scheme and address, and each piece of each `id`. The flows are
-twenty-one. Sixteen carry no tag, ask nothing of a server and run on both platforms: the
+twenty-two. Seventeen carry no tag, ask nothing of a server and run on both platforms: the
 launch, the engine, the theme, the harness, the primitives, the hold, the shell and the
-resolvers, and eight that each read one thing only a device shows, a flow of its own so that
+resolvers, and nine that each read one thing only a device shows, a flow of its own so that
 it fails for that alone: a list row at twice the text (`row`), a sync mark that arrives after
 its row (`mark`), a drag that begins on a stepper's count (`stepper`), a stepper in a sheet at
 twice the text (`sheet`), a select's choices opened with a field's keyboard up (`keyboard`), a
 toast with Undo at twice the text (`toast`), a tab bar whose room changes under it
-(`turned`), and what the app's own formatters write on a device's `Intl` (`formats`). That
+(`turned`), a sheet, a dialog and a toast with the device turned on its side (`sides`,
+written after the fifth review round and run on no device yet), and what the app's own
+formatters write on a device's `Intl` (`formats`). That
 last holds each sample to who writes it (`src/dev/engine/checks.ts`): a number, an amount and
 a size, which FormatJS writes on every device, to the very string Node writes, and a date,
 which the device's own ICU writes, to its fields in their order, with the spaces, a comma, a
@@ -1465,8 +1467,8 @@ platform.
   fields. On the emulator the two flows of the kept read's check passed and all twenty-one of
   the suite, `turned` and `formats` among them, two of them, `harness` and `link`, at a second
   asking after the driver had gone, as in the runs before. What the fifth round changed, a
-  sheet and the toasts kept clear of a device's sides, has been on no device, and no flow
-  turns one on its side.
+  sheet and the toasts kept clear of a device's sides, has been on no device: the flow that
+  turns one on its side (`sides`) was written after that run, and has run on none.
   In the eighth run, on the iOS simulator all eight of its
   flows passed: the app opens at sign-in with nothing kept; the engine screen's checks hold on
   Hermes, the vectors' 87 format cases and 8 match cases under the polyfills, the five families
