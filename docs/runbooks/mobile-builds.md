@@ -213,6 +213,7 @@ job of its own.
 | `formats` | the app's own formatters on the device's `Intl`: a sample of each thing they write, a number as Node writes it and a date by its fields | both |
 | `hold` | hold to complete: let go early, and held | both |
 | `shell` | a tab bar's slot opens its place and says so, Add is a sheet over it; a module is hidden from its row's menu; one pane at a phone's width and two at a tablet's; *not available* leads home | both |
+| `turned` | a tablet's tab bar told the narrowest room: laid out anew as a phone's, both its ends whole on the screen | both |
 | `resolvers` | a change that was not accepted is given up: its sheet, the confirmation inside it, both gone and a toast | both |
 | `link` | a link opens the app at its address | Android |
 | `stack` | a member signs in against the real server, in their household's frame over its tab bar, and is signed in still after a restart. The job then asks the server for the account's devices (`e2e:stack devices`) | Android, with the stack |
@@ -282,6 +283,21 @@ any ICU. What a device wrote another way and was let is drawn under the line
   middle is clear of the three tenths of the screen it came in by, and `flows.test.ts` fails
   one that does not. Where the page ends first, the scroll gives up after five more swipes
   and takes the control where it is, so such a scroll is given a minute.
+- **Whole on the screen is asked of a scroll, and not asserted.** `assertVisible` passes an
+  element any part of whose frame is on the screen, and on iOS a frame is the element's own,
+  whatever the room it stands in cuts off: in run 38152216148 the tablet's panes were found
+  832 pt wide on a screen of 402, and a cell still below the screen was not found until its
+  first points were on it. `scrollUntilVisible` measures the frame against the screen, asks
+  for all of it where it is told nothing, and swipes nothing where it has it. That is what
+  `turned` asks of a bar's two ends: a slot past its room's edge with ten points of its
+  frame on the screen would pass an assertion. **A percentage under a hundred asks for
+  nothing**: at Maestro 2.11.0 the same log says `visibilityPercentageNormalized: 0.0` for
+  each scroll told 90, 20 or 10, and `1.0` for one told nothing, so such a scroll ends as soon
+  as its element is found, with whatever part of it on the screen. On Android the bounds a
+  flow reads are cut to the screen already, so no percentage says anything there, and what a
+  room cuts off altogether is in no tree a flow reads *(both as Maestro's Android driver and
+  Android's `View.isVisibleToUser` are remembered: read in no source for this, and seen in
+  no run, the Android artifact not having been opened)*.
 - **One thing a flow, where the thing may fail.** A line added to the end of a flow is not
   run where an earlier line of it fails, and one added to its middle takes what follows with
   it: in the tenth run a wrong reading of the dev toolbar kept the stepper's drag from ever
