@@ -8,7 +8,7 @@ import { fonts } from '@household/tokens'
 import { screen, userEvent } from '@testing-library/react-native'
 import { router } from 'expo-router'
 import { paths } from '../app/paths.ts'
-import { createFormatters } from '../i18n/format.ts'
+import { createFormatters, type Formatters } from '../i18n/format.ts'
 import { expectAccessible } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
 import { held, lacking } from './engine/builtins.ts'
@@ -73,13 +73,102 @@ describe('the engine’s checks', () => {
   })
 
   it('write a sample of each thing the app formats as Node writes it, and name what differs', () => {
-    // What the check holds a device to is what Node writes here: this is where it is held.
-    expect(formats()).toEqual({ id: 'formats', cases: 10, failed: [], apart: true })
+    // What the check holds a device to is what Node writes here: this is where it is held, to
+    // the very string, a date's as a number's. Nothing varied, so nothing is said to have.
+    const here = formats()
+    expect(here).toEqual({ id: 'formats', cases: 10, failed: [], apart: true })
+    expect(here.found).toBeUndefined()
     // An engine that writes another way is named with what it wrote.
     const german = formats(() => createFormatters('de'))
     expect(german.failed).toContain('en day: 3. März 2026')
     // Every sample but one: German writes a size as Czech does.
     expect(german.failed).toHaveLength(9)
+    expect(german.found).toBeUndefined()
+  })
+
+  // The spaces a device's `Intl` writes, by code point: none of them shows in a source.
+  const nbsp = String.fromCharCode(0x00a0)
+  const thin = String.fromCharCode(0x2009)
+  const narrow = String.fromCharCode(0x202f)
+
+  /** The app's formatters, but for what `written` says a device's own `Intl` wrote instead. */
+  const device =
+    (written: Partial<Record<keyof Formatters, Readonly<Record<string, string>>>>) =>
+    (locale: string): Formatters => ({
+      ...createFormatters(locale),
+      ...Object.fromEntries(
+        Object.entries(written).map(([name, by]) => [name, () => by[locale] ?? 'no sample']),
+      ),
+    })
+
+  it('let a date be written as a device’s own ICU writes it, and say what was written', () => {
+    // What the simulator of iOS 26 wrote (run 38152216148): a word between the day and its
+    // time where Node writes a comma, and a narrow no-break space where Node writes a plain one.
+    const iphone = formats(
+      device({
+        instant: {
+          en: `Mar 3, 2026 at 6:41${narrow}PM`,
+          cs: `3.${narrow}3.${narrow}2026 18:41`,
+        },
+      }),
+    )
+    expect(iphone.failed).toEqual([])
+    expect(iphone.found?.split('\n')).toEqual([
+      `en instant: Mar 3, 2026 at 6:41${narrow}PM`,
+      `cs instant: 3.${narrow}3.${narrow}2026 18:41`,
+    ])
+    // A comma that is not there, a no-break space, an abbreviation's full stop.
+    const other = formats(
+      device({
+        day: { en: 'March 3 2026', cs: `3.${nbsp}března 2026` },
+        instant: { en: `Mar. 3, 2026, 6:41${thin}PM`, cs: '3.3.2026 18:41' },
+        list: { en: 'Petr, Jana and Tomáš', cs: 'Petr, Jana a Tomáš' },
+      }),
+    )
+    expect(other.failed).toEqual([])
+    expect(other.found?.split('\n')).toHaveLength(6)
+  })
+
+  it('fail a date that is wrong in substance, however it is spaced', () => {
+    // The hour of another zone than the one named; a day that is one off; a month named in
+    // another language; the day and the month the other way round; a time of another clock.
+    const wrong = {
+      'the hour': { en: 'Mar 3, 2026, 5:41 PM', cs: '3. 3. 2026 17:41' },
+      'the day': { en: 'Mar 2, 2026, 6:41 PM', cs: '2. 3. 2026 18:41' },
+      'the month': { en: 'bře 3, 2026, 6:41 PM', cs: '3. Mar 2026 18:41' },
+      'the order': { en: '3 Mar 2026, 6:41 PM', cs: '2026 3. 3. 18:41' },
+      'the clock': { en: 'Mar 3, 2026, 18:41', cs: '3. 3. 2026 6:41 PM' },
+    }
+    for (const [what, instant] of Object.entries(wrong)) {
+      const { failed, found } = formats(device({ instant }))
+      expect([what, failed]).toEqual([
+        what,
+        [`en instant: ${instant.en}`, `cs instant: ${instant.cs}`],
+      ])
+      expect([what, found]).toEqual([what, undefined])
+    }
+    // A joining word is the language's own: English's is no part of a Czech date.
+    const joined = { en: 'Mar 3, 2026, 6:41 PM', cs: '3. 3. 2026 at 18:41' }
+    expect(formats(device({ instant: joined })).failed).toEqual(['cs instant: 3. 3. 2026 at 18:41'])
+  })
+
+  it('hold what FormatJS writes to the very string: a number written another way is a defect', () => {
+    // A device's own `Intl.NumberFormat`, were the polyfill not reached: a narrow no-break
+    // space where FormatJS groups with a no-break one, and a no-break one before a unit where
+    // it writes a plain one. Folded, each would be the sample's own fields.
+    const native = formats(
+      device({
+        money: { en: `CZK${narrow}1,240.00`, cs: `1${narrow}240,00${nbsp}CZK` },
+        bytes: { en: `1.5${nbsp}MB`, cs: `1,5${nbsp}MB` },
+      }),
+    )
+    expect(native.failed).toEqual([
+      `en money: CZK${narrow}1,240.00`,
+      `cs money: 1${narrow}240,00${nbsp}CZK`,
+      `en bytes: 1.5${nbsp}MB`,
+      `cs bytes: 1,5${nbsp}MB`,
+    ])
+    expect(native.found).toBeUndefined()
   })
 })
 
