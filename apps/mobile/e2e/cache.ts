@@ -11,7 +11,8 @@
 // emulator is asked as root, by `su`, which the image CI boots has (`target: default`) and one
 // with Google Play has not. Not by `adb root`, which starts the device's adb again, under
 // whatever is following its log and before the suite's flows *(that `su` is there and takes a
-// command so is recalled of Android's own images; seen in no run yet)*.
+// command so was recalled of Android's own images; CI's seventeenth run, 38178021709, showed
+// it: root answered, and the folder was there)*.
 //
 // What OkHttp writes there is recalled, its source being in no file of the repository: a
 // `journal` (with `journal.tmp` and `journal.bkp` while it is rewritten) from the client's

@@ -176,7 +176,10 @@ export function Surface({
               // sheet as wide as the screen stood under by all but its own padding, and a
               // sheet's most is 30 rem of the reader's text, the whole of such a screen from
               // some 180 % *(read: the insets are the device's word for it; seen on no
-              // device)*.
+              // device: CI's seventeenth run, 38178021709, turned one on its side under a
+              // sheet and a dialog on both platforms and took a screenshot of each, the
+              // `sides` flow's, which nobody has read for an edge under the housing or the
+              // band)*.
               style={{
                 flex: 1,
                 justifyContent: sheet ? 'flex-end' : 'center',

@@ -14,10 +14,13 @@
 // `fetch` keeps one on disk by itself, OkHttp's under React Native on Android and the shared
 // `URLCache` on iOS, `expo/fetch` hands neither a request's cache mode, and nothing in
 // JavaScript empties either when a sign-in ends *(read: `ExpoFetchModule.kt`,
-// `OkHttpClientProvider.kt`, `ExpoFetchModule.swift`, `expo/src/winter/fetch/fetch.ts`; run on
-// no device)*. So the API says it of every answer, `Cache-Control: no-store`
-// (server/internal/platform/httpx, `NoStore`): a route served from anywhere else, or by a
-// handler that says otherwise, is kept on the device past its member's sign-out.
+// `OkHttpClientProvider.kt`, `ExpoFetchModule.swift`, `expo/src/winter/fetch/fetch.ts`; an
+// answer kept in either has been seen on no device)*. So the API says it of every answer,
+// `Cache-Control: no-store` (server/internal/platform/httpx, `NoStore`): a route served from
+// anywhere else, or by a handler that says otherwise, is kept on the device past its member's
+// sign-out. What a run reads is Android's cache after a member's reads (e2e/run.ts, `--cache`;
+// e2e/cache.ts): CI's seventeenth run, 38178021709, found no answer in the emulator's. iOS's
+// `URLCache` is read by no run.
 import { readProblem } from '@household/api'
 import { ApiProblemError } from './problem.ts'
 
