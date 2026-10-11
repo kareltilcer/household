@@ -27,13 +27,43 @@ export interface QueryClientOptions {
   readonly onProblem?: (problem: ApiProblem | UnreadableProblem) => void
 }
 
+/**
+ * Lets go of what `absent` held, and of every read filed under its key: the API's own *not
+ * found* has just answered it, and the server's word stands over what was read before. The
+ * query client keeps the last answer through a failure, so left where it was, the next re-read
+ * that failed any other way, a server that could not be reached, would leave that answer with
+ * no *not found* over it: drawn again as kept, and written to the device again (`isKept`).
+ *
+ * The read itself stays, emptied: removed, the reader still on it would build it anew at its
+ * next render and ask again, be answered *not found* again and removed again, without end.
+ * What is filed under it is removed: emptied where it stands it would be a success that holds
+ * nothing, which the query client has no meaning for, and its readers stand under the reader
+ * of the read that is gone, which stops drawing them. One that is read from elsewhere asks
+ * again at its next render, and is answered for itself.
+ */
+function letGo(cache: QueryCache, absent: Query<unknown, unknown, unknown>): void {
+  for (const query of cache.findAll({ queryKey: absent.queryKey })) {
+    if (query.queryHash === absent.queryHash) absent.setState({ data: undefined, dataUpdatedAt: 0 })
+    else cache.remove(query)
+  }
+}
+
 export function createQueryClient({ onProblem }: QueryClientOptions = {}): QueryClient {
   const report = (error: unknown) => {
     const problem = problemIn(error)
     if (problem !== undefined) onProblem?.(problem)
   }
+  const queryCache: QueryCache = new QueryCache({
+    // Told once a read has failed for good, its failure already held: what is let go here is
+    // gone before anything is drawn or written of it.
+    onError: (error, query) => {
+      report(error)
+      const problem = problemIn(error)
+      if (problem !== undefined && isAbsent(problem)) letGo(queryCache, query)
+    },
+  })
   return new QueryClient({
-    queryCache: new QueryCache({ onError: report }),
+    queryCache,
     mutationCache: new MutationCache({ onError: report }),
     defaultOptions: {
       queries: {
@@ -93,7 +123,9 @@ declare module '@tanstack/react-query' {
  * as TanStack's own rule drops whatever is not a success, an app opened once while the server
  * was away would write out everything the device kept, and open on nothing at its next start
  * with no connection. The server's own word that the thing is not there for this caller, the
- * API's `404`, is its answer, and stands over what was kept (household/data.ts).
+ * API's `404`, is its answer, and stands over what was kept (household/data.ts): the query
+ * client lets go of what such a read held as it is answered (`letGo`), so a failure of another
+ * kind after it finds nothing to keep.
  */
 export function isKept(query: Query): boolean {
   if (query.state.data === undefined || query.meta?.persist === false) return false

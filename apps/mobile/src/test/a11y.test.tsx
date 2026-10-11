@@ -428,7 +428,9 @@ describe('the accessibility rules', () => {
     expect(broken('by-width')).toEqual([])
     // A share of the row is resolved once too, against the width the row then had.
     expect(broken('a-share')).toEqual(['room'])
-    // `flex: n` sets no `flexBasis` in a style; `auto` and nothing ask for no room.
+    // `flex: n` and a basis of nothing are computed once too, and are passed: nothing is what
+    // they give at any text size, to an element that had them from its first layout, and that
+    // one was given them later is no part of a drawn tree (a11y.ts). `auto` asks for no room.
     expect(broken('the-rest')).toEqual([])
     expect(() => {
       expectAccessible(screen.getByTestId('as-it-stood'))

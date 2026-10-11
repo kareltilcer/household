@@ -143,10 +143,13 @@ export type HouseholdRead =
  * either: no household has such an address.
  *
  * The server's `404` is its last word, whether or not the device kept the household from when
- * it was its member's, and it stands while the household is asked for again with nothing kept
- * of it, as it is each time the app is looked at again: the query client puts the answer away
- * as it asks, and what stood in the household's place would be taken down and built again
- * around a wait, the focus on it lost. Only an answer that is no `404` ends it.
+ * it was its member's: what was kept is let go of as it is answered (api/query.ts). And it
+ * stands while the household is asked for again, as it is each time the app is looked at
+ * again, and where asking again came to nothing: the query client puts the answer away as it
+ * asks, and what stood in the household's place would be taken down and built again around a
+ * wait, the focus on it lost; and a re-read that got no answer, or that the server failed,
+ * has said nothing of the household, so it is not *could not be read* in the place of what
+ * the server said last. Only an answer that is no `404` ends it.
  */
 export function useHousehold(household: string): HouseholdRead {
   const api = useApi()
@@ -158,14 +161,19 @@ export function useHousehold(household: string): HouseholdRead {
   // proxy that lost its upstream, has said nothing of the household, and is a read that failed.
   const problem = problemIn(read.error)
   const refused = problem !== undefined && isAbsent(problem)
-  const [wasRefused, setWasRefused] = useState(false)
-  const asking = read.data === undefined && read.status === 'pending'
-  if (refused !== wasRefused && !asking) setWasRefused(refused)
+  // The household the server last said is not found, by its id: what was said of one address
+  // is not said of the next one this reader is given.
+  const [absent, setAbsent] = useState<string | null>(null)
+  const wasRefused = sameId(absent, household)
+  // An answer that is no `404`: nothing else has said anything of the household since.
+  const answered = read.status === 'success'
+  if (refused && !wasRefused) setAbsent(household)
+  else if (answered && wasRefused) setAbsent(null)
   const { refetch } = read
   const retry = useCallback(() => {
     void refetch()
   }, [refetch])
-  if (!named || refused || (wasRefused && asking)) return { status: 'gone' }
+  if (!named || refused || (wasRefused && !answered)) return { status: 'gone' }
   if (!member) return { status: 'reading' }
   if (read.data !== undefined) return { status: 'read', household: read.data }
   return couldNotBeRead(read) ? { status: 'unread', retry } : { status: 'reading' }

@@ -459,7 +459,17 @@ export const controlsWithinReach: Rule = (tree) =>
  * that a row's one flexible child had been given, nothing, stayed nothing when a second child
  * arrived. Seen in CI's tenth run (38131404522), on both platforms: a list row at 200 % broke
  * no line, its words' part 160 pt and what was left over, the room of a scale of one
- * (ui/ListRow.tsx). `flex: n` sets no `flexBasis` in a style, and is no part of this.
+ * (ui/ListRow.tsx).
+ *
+ * `flex: n` and a `flexBasis` of nothing are passed, and are computed once all the same: Yoga
+ * takes `flex: n` for a basis of nothing through that very branch *(read:
+ * `Node::processFlexBasis`, node/Node.cpp:329-339)*. Nothing is what they give at any text
+ * size, so an element that has had one from its first layout is drawn as it says. One that is
+ * given `flex: n` later is not: it keeps the basis its earlier layout measured, its own width
+ * or height there, and grows from that. That is an element's history, which no drawn tree
+ * holds and this rule cannot see: an element whose style has `flex` in one state and not in
+ * another is drawn anew between the two, by a key, and its own test holds that it is
+ * (shell/TabBar.tsx, the flow's two sides in ui/charts/Charts.tsx).
  */
 export const roomByWidth: Rule = (tree) =>
   elementsOf(tree)

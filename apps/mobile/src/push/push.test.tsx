@@ -271,6 +271,48 @@ describe('registering again, for a member who is signed in', () => {
     expect(await AsyncStorage.getItem(tokenKey)).toBeNull()
   })
 
+  // A device that will not say whether its member turned notifications off has not said that
+  // they did not: registered for that, their choice would be undone and its note removed.
+  it('registers nothing where the device would not say whether its member turned notifications off, and tells nobody', async () => {
+    allows('granted')
+    await AsyncStorage.setItem(offKey, '1')
+    jest
+      .mocked(AsyncStorage.getItem)
+      .mockImplementationOnce(() => Promise.reject(new Error('the store would not open')))
+    const { api, client } = server()
+    const hub = createProblemHub()
+    const heard = jest.fn()
+    hub.subscribe(heard)
+    await expect(renewPush(registration(client), hub)).resolves.toBeUndefined()
+    expect(api.asked).toEqual([])
+    expect(device.expoToken).not.toHaveBeenCalled()
+    expect(heard).not.toHaveBeenCalled()
+    expect(await AsyncStorage.getItem(offKey)).toBe('1')
+  })
+
+  // Expo may answer after a sign-out and the next member's sign-in. The request is signed for
+  // whoever is signed in as it leaves: the device would be registered in their name.
+  it('registers nothing once its member is no longer the one it was asked for, though Expo answered', async () => {
+    allows('granted')
+    let answer: (token: string) => void = () => undefined
+    jest.mocked(device.expoToken).mockReturnValue(
+      new Promise<string>((resolve) => {
+        answer = resolve
+      }),
+    )
+    const { api, client } = server()
+    let here = true
+    const renewing = renewPush(registration(client), createProblemHub(), () => !here)
+    await waitFor(() => {
+      expect(device.expoToken).toHaveBeenCalled()
+    })
+    here = false
+    answer(token)
+    await renewing
+    expect(api.asked).toEqual([])
+    expect(await AsyncStorage.getItem(tokenKey)).toBeNull()
+  })
+
   it('leaves a build alone that belongs to no project', async () => {
     allows('granted')
     const { api, client } = server()
@@ -337,17 +379,36 @@ describe('a sign-out', () => {
   })
 
   // The sign-out follows at once and is told its own refusal.
-  it('never rejects, and tells nobody what it was refused with', async () => {
+  it('never rejects, tells nobody what it was refused with, and keeps the note of a registration the server still holds', async () => {
     await AsyncStorage.setItem(tokenKey, token)
     const { client } = server({
       'DELETE /push/subscriptions': () => problem(401, 'unauthenticated'),
     })
     await expect(forgetPush(client, ids.member)).resolves.toBeUndefined()
-    // The sign-in's end removes it at the server, and the device has let go of it.
-    expect(await AsyncStorage.getItem(tokenKey)).toBeNull()
-    await AsyncStorage.setItem(tokenKey, token)
+    // The server took no removal: the sign-in's end removes it there, and the note with it here.
+    expect(await AsyncStorage.getItem(tokenKey)).toBe(token)
     const { client: away } = server({ 'DELETE /push/subscriptions': unanswered })
     await expect(forgetPush(away, ids.member)).resolves.toBeUndefined()
+    expect(await AsyncStorage.getItem(tokenKey)).toBe(token)
+  })
+
+  // With no connection the sign-out that follows fails too, and its member is signed in still:
+  // without the note they would read as not subscribed while the server went on sending, and
+  // turning notifications off would find no token to remove there.
+  it('leaves a member whose sign-out then failed subscribed, and able to turn notifications off at the server', async () => {
+    allows('granted')
+    await AsyncStorage.setItem(tokenKey, token)
+    const { client: away } = server({ 'DELETE /push/subscriptions': unanswered })
+    await forgetPush(away, ids.member)
+    expect(await readPushState(ids.member, project)).toEqual({
+      permission: 'granted',
+      subscribed: true,
+    })
+    const { api, client } = server()
+    await unsubscribePush(client, ids.member, project)
+    expect(api.sent('DELETE /push/subscriptions')).toHaveLength(1)
+    expect(await AsyncStorage.getItem(tokenKey)).toBeNull()
+    expect(await AsyncStorage.getItem(offKey)).toBe('1')
   })
 })
 
@@ -588,6 +649,40 @@ describe('what the app does about push wherever it is open', () => {
     } finally {
       onlineManager.setOnline(true)
     }
+  })
+
+  // Expo may take seconds, and its member may sign out meanwhile and another sign in: the
+  // registration that waited would leave signed as theirs.
+  it('registers nothing for a member who left while Expo was asked', async () => {
+    allows('granted')
+    let answer: (token: string) => void = () => undefined
+    jest.mocked(device.expoToken).mockReturnValue(
+      new Promise<string>((resolve) => {
+        answer = resolve
+      }),
+    )
+    const { api, client } = server()
+    const { rerender } = await render(
+      <SessionFixture api={client}>
+        <Push />
+      </SessionFixture>,
+    )
+    await waitFor(() => {
+      expect(device.expoToken).toHaveBeenCalled()
+    })
+    await rerender(
+      <SessionFixture api={client} state={{ status: 'visitor' }}>
+        <Push />
+      </SessionFixture>,
+    )
+    await act(async () => {
+      answer(token)
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 20)
+      })
+    })
+    expect(api.asked).toEqual([])
+    expect(await AsyncStorage.getItem(tokenKey)).toBeNull()
   })
 
   // Never at sign-in: the system's question is a press's alone.

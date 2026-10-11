@@ -4,7 +4,9 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { catalogs } from '@household/i18n'
 import { act, screen, userEvent } from '@testing-library/react-native'
+import { useEffect, type ReactNode } from 'react'
 import { Linking } from 'react-native'
+import { useI18n } from '../i18n/I18nProvider.tsx'
 import { expectAccessible } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
@@ -99,6 +101,37 @@ describe('please update', () => {
     expect(open).toHaveBeenCalledTimes(2)
     expect(screen.queryByTestId('banner:danger')).toBeNull()
     expectAccessible()
+  })
+
+  // The app's language follows the account's whenever that is learned, under whatever is
+  // drawn: the same sentence in another language has not arrived a second time.
+  it('is said once as it arrives, and not again where only its language changes', async () => {
+    const said = jest.spyOn(announcer, 'announceNow').mockImplementation(() => undefined)
+    /** Has the app follow an account's language from when it is told one. */
+    function Following({ tag, children }: { readonly tag?: string; readonly children: ReactNode }) {
+      const { followAccount } = useI18n()
+      useEffect(() => {
+        followAccount(tag)
+      }, [tag, followAccount])
+      return children
+    }
+    const view = await render(
+      <Following>
+        <UpdateRequired />
+      </Following>,
+    )
+    expect(said.mock.calls).toEqual([
+      [`${catalogs.en['ui.update.required.title']}\n${catalogs.en['device.update.body']}`],
+    ])
+    await view.rerender(
+      <Following tag="de-DE">
+        <UpdateRequired />
+      </Following>,
+    )
+    expect(
+      screen.getByRole('header', { name: catalogs.de['ui.update.required.title'] }),
+    ).toBeOnTheScreen()
+    expect(said).toHaveBeenCalledTimes(1)
   })
 
   it('survives the largest text, in the longest language', async () => {

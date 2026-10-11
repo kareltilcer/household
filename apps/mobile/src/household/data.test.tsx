@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-query'
 import { act, screen, waitFor } from '@testing-library/react-native'
 import { createKeep } from '../api/keep.ts'
-import { createQueryClient } from '../api/query.ts'
+import { createQueryClient, isKept } from '../api/query.ts'
 import { answering, json, problem, testClient, unanswered } from '../api/testing.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { householdOf, households, ids, summaryOf } from '../test/fixtures.ts'
@@ -40,11 +40,14 @@ const household = householdOf({ my_grants: { shopping: 'contribute' } })
 
 let read: HouseholdRead | undefined
 let queries: QueryClient | undefined
+/** What each drawing of the frame came to, in order. */
+const drawn: string[] = []
 
 /** Reads the household an address names, and says what that came to. */
 function Frame({ id }: { readonly id: string }) {
   const current = useHousehold(id)
   read = current
+  drawn.push(current.status)
   queries = useQueryClient()
   const name = current.status === 'read' ? ` ${current.household.name}` : ''
   return <Text testID="read">{`${current.status}${name}`}</Text>
@@ -70,6 +73,7 @@ beforeEach(async () => {
   await AsyncStorage.clear()
   read = undefined
   queries = undefined
+  drawn.length = 0
 })
 
 describe('the household an address names', () => {
@@ -196,6 +200,90 @@ describe('the household an address names', () => {
       release(json(200, household))
     })
     await comesTo(`read ${households.own.name}`)
+  })
+
+  // The query client keeps the last answer through a failure: a re-read that got no answer
+  // after the server's *not found* left the household it was taken from drawn again as kept,
+  // its replica opened and its answer written back to the device.
+  it('stays not available though asking again came to nothing, with nothing of it kept, until the server answers', async () => {
+    let answer: () => Response | Promise<Response> = () => json(200, household)
+    const api = answering({ [route]: () => answer() })
+    // The app's own query client, which lets go of what a `404` stands over.
+    const own = createQueryClient()
+    const key = householdKey(ids.household)
+    const kept = () =>
+      own
+        .getQueryCache()
+        .findAll({ queryKey: key })
+        .map((each) => [each.queryKey.length, isKept(each)])
+    try {
+      await render(
+        <QueryClientProvider client={own}>
+          <SessionFixture api={testClient(api.transport)}>
+            <Frame id={ids.household} />
+          </SessionFixture>
+        </QueryClientProvider>,
+      )
+      await comesTo(`read ${households.own.name}`)
+      // Something read of the household, filed under it.
+      own.setQueryData([...key, 'members'], [])
+      expect(kept()).toEqual([
+        [2, true],
+        [3, true],
+      ])
+
+      answer = () => problem(404, 'not_found')
+      await act(() => own.invalidateQueries({ queryKey: key, exact: true }))
+      await comesTo('gone')
+      expect(kept()).toEqual([[2, false]])
+
+      // Asked again, as it is each time the app is looked at again, of a server that is away:
+      // neither a wait nor *could not be read* is drawn in its place, at any drawing.
+      answer = unanswered
+      drawn.length = 0
+      await act(() => own.invalidateQueries({ queryKey: key, exact: true }))
+      await waitFor(() => {
+        expect(own.getQueryState(key)?.error).toBeInstanceOf(TypeError)
+      })
+      // The readers are told a turn after the read is held as failed.
+      await act(async () => {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 20)
+        })
+      })
+      expect(drawn.length).toBeGreaterThan(0)
+      expect([...new Set(drawn)]).toEqual(['gone'])
+      expect(kept()).toEqual([[2, false]])
+
+      answer = () => json(200, household)
+      await act(() => own.invalidateQueries({ queryKey: key, exact: true }))
+      await comesTo(`read ${households.own.name}`)
+      expect(kept()).toEqual([[2, true]])
+    } finally {
+      own.clear()
+    }
+  })
+
+  // What the server said of one address is not said of the next one its reader is given.
+  it('is read anew for another address, whatever the server said of the last', async () => {
+    const client = testClient(
+      answering({
+        [route]: () => problem(404, 'not_found'),
+        [`GET /households/${ids.otherHousehold}`]: unanswered,
+      }).transport,
+    )
+    const { rerender } = await render(
+      <SessionFixture api={client}>
+        <Frame id={ids.household} />
+      </SessionFixture>,
+    )
+    await comesTo('gone')
+    await rerender(
+      <SessionFixture api={client}>
+        <Frame id={ids.otherHousehold} />
+      </SessionFixture>,
+    )
+    await comesTo('unread')
   })
 
   it('asks the server nothing for an address that names no household', async () => {

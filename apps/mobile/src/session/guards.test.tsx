@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { catalogs } from '@household/i18n'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { screen, userEvent } from '@testing-library/react-native'
+import { useEffect, type ReactNode } from 'react'
 import { paths } from '../app/paths.ts'
+import { useI18n } from '../i18n/I18nProvider.tsx'
 import { heldDestination, holdDestination, takeDestination } from '../links/destination.ts'
 import { expectAccessible } from '../test/a11y.ts'
 import { ids } from '../test/fixtures.ts'
@@ -279,6 +281,76 @@ describe('what could not be read', () => {
     await view.rerender(<Waiting />)
     await view.rerender(unread)
     expect(said).toHaveBeenCalledTimes(2)
+  })
+
+  // The app's language follows the account's whenever that is learned or changes, under
+  // whatever is drawn: the same sentence in another language has not arrived a second time.
+  it('is not said again where only its language changes', async () => {
+    const said = jest.spyOn(announcer, 'announceNow').mockImplementation(() => undefined)
+    /** Has the app follow an account's language from when it is told one. */
+    function Following({ tag, children }: { readonly tag?: string; readonly children: ReactNode }) {
+      const { followAccount } = useI18n()
+      useEffect(() => {
+        followAccount(tag)
+      }, [tag, followAccount])
+      return children
+    }
+    const unreachable = (
+      <SessionFixture state={{ status: 'unreachable' }}>
+        <Signed>
+          <Inside />
+        </Signed>
+      </SessionFixture>
+    )
+    const view = await render(<Following>{unreachable}</Following>)
+    expect(said.mock.calls).toEqual([
+      [`${catalogs.en['session.unreachable.title']}\n${catalogs.en['session.unreachable.body']}`],
+    ])
+    await view.rerender(<Following tag="cs-CZ">{unreachable}</Following>)
+    expect(
+      screen.getByRole('header', { name: catalogs.cs['session.unreachable.title'] }),
+    ).toBeOnTheScreen()
+    expect(said).toHaveBeenCalledTimes(1)
+  })
+
+  // A household that another was opened over stays mounted underneath with its guard: what
+  // arrives there is told to nobody, and is read in its place when its member comes back.
+  it('is said by a screen in front alone, and not when it comes to the front later', async () => {
+    const said = jest.spyOn(announcer, 'announceNow').mockImplementation(() => undefined)
+    const view = await render(
+      <Unread title={title} body={body} retry={() => undefined} inFront={false} />,
+    )
+    expect(screen.getByRole('header', { name: title })).toBeOnTheScreen()
+    expect(said).not.toHaveBeenCalled()
+    await view.rerender(<Unread title={title} body={body} retry={() => undefined} inFront />)
+    expect(said).not.toHaveBeenCalled()
+  })
+
+  it('is told by its guard whether its screen is in front, as the navigator says', async () => {
+    const said = jest.spyOn(announcer, 'announceNow').mockImplementation(() => undefined)
+    mockAt.front = false
+    const view = await render(
+      <SessionFixture state={{ status: 'unreachable', device: true }}>
+        <Signed>
+          <Inside />
+        </Signed>
+      </SessionFixture>,
+    )
+    expect(
+      screen.getByRole('header', { name: catalogs.en['device.session.unread.title'] }),
+    ).toBeOnTheScreen()
+    expect(said).not.toHaveBeenCalled()
+    await view.unmount()
+
+    mockAt.front = true
+    await render(
+      <SessionFixture state={{ status: 'unreachable', device: true }}>
+        <Signed>
+          <Inside />
+        </Signed>
+      </SessionFixture>,
+    )
+    expect(said).toHaveBeenCalledTimes(1)
   })
 
   it('survives the largest text', async () => {

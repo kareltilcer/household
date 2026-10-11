@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { drawsNothing } from './nothing.ts'
 import { Text } from './Text.tsx'
 
 export interface Pair {
@@ -18,11 +19,6 @@ export interface Pair {
    */
   readonly value?: ReactNode
   readonly numeric?: boolean
-}
-
-/** Whether React would draw nothing for `value`: the empty cell the block never shows. */
-function drawsNothing(value: ReactNode): boolean {
-  return value === undefined || value === null || value === '' || typeof value === 'boolean'
 }
 
 export function KeyValue({ pairs }: { readonly pairs: readonly Pair[] }) {
@@ -58,7 +54,8 @@ export function KeyValue({ pairs }: { readonly pairs: readonly Pair[] }) {
               {pair.key}
             </Text>
             {drawsNothing(value) ? (
-              // The dash is the cell's face; the word is what it says, and all a screen reader reads.
+              // The empty cell the block never shows (ui/nothing.ts says what is one). The dash
+              // is the cell's face; the word is what it says, and all a screen reader reads.
               <Text color="text-muted" accessibilityLabel={none} style={{ flexShrink: 1 }}>
                 {`— ${none}`}
               </Text>

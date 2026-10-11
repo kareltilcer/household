@@ -1,8 +1,23 @@
 // A stepper (02-components §1; the web's is in apps/web/src/ui/Field.tsx): a whole number with a
-// button either side of it, each named for what it does to what. A whole number typed in is
-// given to `onChange` as soon as it is within the bounds. A fraction is no value of it and is
-// given to nobody: when the field is left, what it holds is made the nearest whole number and
-// held to the bounds, and the keyboard's own key for *done* settles it as leaving it does.
+// button either side of it, each named for what it does to what. What is typed is shown as it
+// was typed until the field is left, and at each key `onChange` is given what leaving the field
+// would make of it: the nearest whole number, held to the bounds. An emptied field and a number
+// on its way to a fraction, "2," before its "5", are no number yet and give nothing. Leaving the
+// field, and the keyboard's own key for *done*, then show what its owner already holds.
+//
+// The web's gives a typed number only once it is within the bounds, and can: a press on Save
+// there takes the focus from the field first, which settles it. A press on a device does not
+// *(read in React Native 0.86.3, and run on no device)*. A screen and a dialog keep the keyboard
+// up for a press that a control takes (`keyboardShouldPersistTaps="handled"`, ui/Screen.tsx,
+// ui/Dialog.tsx), and their scroll view takes the focus from a field only for a press that no
+// control took (`_handleStartShouldSetResponder` and `_handleResponderRelease`,
+// Libraries/Components/ScrollView/ScrollView.js); a pressable asks nothing of a field. iOS's
+// number pad has no key that ends the typing, React Native adding one only where a field names
+// its return key (`setDefaultInputAccessoryView`, RCTTextInputComponentView.mm). And a form that
+// puts the keyboard away as it is pressed has read its number by then: the field is left by a
+// command sent to the platform, and hears of it afterwards (TextInputState.js, `blurTextInput`).
+// Given only what was within the bounds, a form sent another number than its field showed and
+// than leaving it would have made: "15" typed under a most of 12 was sent as 1, its first key.
 //
 // At a bound a button has nothing to do and stays where it is, saying that it cannot go
 // further: taken away under a finger that was stepping, the next press would land on whatever
@@ -100,14 +115,20 @@ export function Stepper({
   const up = () => {
     if (value < high) stepTo(value + step)
   }
-  // What the field holds is made a value of it. Between two whole numbers, it is the nearer;
-  // outside its bounds, it is held to them. Empty, it is what it was.
-  const settle = () => {
-    const next = typed === undefined ? Number.NaN : typedNumber(typed)
-    setTyped(undefined)
+  // What `text` is made as a value of the field, given to its owner where it is another than
+  // the one held. Between two whole numbers, it is the nearer; outside its bounds, it is held
+  // to them. What is no number, an emptied field among it, gives nothing: it is what it was.
+  const give = (text: string) => {
+    const next = typedNumber(text)
     if (!Number.isFinite(next)) return
     const whole = held(Math.round(next))
     if (whole !== value) onChange(whole)
+  }
+  // The field shows its value again, and no longer what was typed. Each key gave what this
+  // gives, so it gives again only to an owner that did not take it.
+  const settle = () => {
+    setTyped(undefined)
+    if (typed !== undefined) give(typed)
   }
   const decrease = t(controls.decrease.labelKey, { name: label })
   const increase = t(controls.increase.labelKey, { name: label })
@@ -162,16 +183,18 @@ export function Stepper({
             readOnly={readOnly}
             value={typed ?? String(value)}
             onChangeText={(text) => {
-              // Kept as typed until the field is left. The "1" of "12" is under a least of 5,
-              // and an emptied field is on its way to any value: held to the bounds at each
-              // key, neither could be typed. A fraction is no value of it, and is not given.
+              // Shown as typed until the field is left. The "1" of "12" is under a least of 5,
+              // and an emptied field is on its way to any value: with what is shown held to
+              // the bounds at each key, neither could be typed. What is given is held to them
+              // at each key, and made a whole number: a press on Save or on one of the two
+              // buttons does not leave the field first (the head of this file), and what its
+              // owner holds at that press is what leaving it would have shown.
               setTyped(text)
-              const next = typedNumber(text)
-              if (Number.isInteger(next) && next >= low && next <= high) onChange(next)
+              give(text)
             }}
             onBlur={settle}
-            // The keyboard's own key ends the typing before the field is left: settled here,
-            // what a form then sends is what the field shows.
+            // The keyboard's own key ends the typing where a keyboard has one, before the
+            // field is left: it then shows what its owner holds.
             onSubmitEditing={settle}
             // The two steps again, for a screen reader's own list of actions on the field, by
             // the buttons' names: an action with no label is offered under its English name.

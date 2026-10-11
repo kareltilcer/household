@@ -23,7 +23,7 @@ import { createKeep, keepKey, keptMembers, keptShape, writeEvery } from './keep.
 import { ApiProblemError, isRetryable, problemIn, retryAt, unwrap } from './problem.ts'
 import { createProblemHub, type Problem } from './problems.ts'
 import { useProblemText } from './problemText.ts'
-import { askedNow, createQueryClient, useOnline, watchConnection } from './query.ts'
+import { askedNow, createQueryClient, isKept, useOnline, watchConnection } from './query.ts'
 import { answering, empty, json, problem, testApi, testClient, unanswered } from './testing.ts'
 
 const day = 24 * 60 * 60 * 1000
@@ -200,6 +200,55 @@ describe('the query client', () => {
     expect(heard.map((each) => each.code)).toEqual(['internal'])
   })
 
+  // The query client keeps the last answer through a failure. Left under the server's *not
+  // found*, the next re-read that failed another way would leave it with no *not found* over
+  // it: a household its member was taken out of, drawn again as kept and written back.
+  it('lets go of what a read held once the server says it is not there, and of what is filed under it: a failure after it puts nothing back', async () => {
+    const client = queryClient()
+    client.mount()
+    const keep = createKeep(ids.member)
+    const stop = keep.watch(client)
+    const key = ['households', ids.household]
+    const read = { updatedAt: Date.now() - 60_000 }
+    client.setQueryData(key, { id: ids.household }, read)
+    client.setQueryData([...key, 'members'], [{ display_name: 'a name' }], read)
+    client.setQueryData(['households', ids.otherHousehold], { id: ids.otherHousehold }, read)
+    const answers: Error[] = [
+      new ApiProblemError({ type: '', title: '', status: 404, code: 'not_found' }),
+      new TypeError('Network request failed'),
+    ]
+    const again = new QueryObserver(client, {
+      queryKey: key,
+      queryFn: () => Promise.reject(answers.shift() ?? new Error('asked once too often')),
+      retryDelay: 0,
+    })
+    const unsubscribe = again.subscribe(() => undefined)
+    await waitFor(() => {
+      expect(client.getQueryState(key)).toMatchObject({ status: 'error', fetchStatus: 'idle' })
+    })
+    expect(problemIn(client.getQueryState(key)?.error)?.status).toBe(404)
+    expect(client.getQueryData(key)).toBeUndefined()
+    expect(client.getQueryState([...key, 'members'])).toBeUndefined()
+    // Another household's own answer is nothing of this one's.
+    expect(client.getQueryData(['households', ids.otherHousehold])).toEqual({
+      id: ids.otherHousehold,
+    })
+
+    // Asked again, of a server that cannot be reached: nothing is said of it, and nothing is back.
+    await again.refetch()
+    expect(client.getQueryState(key)?.error).toBeInstanceOf(TypeError)
+    expect(client.getQueryData(key)).toBeUndefined()
+    expect(client.getQueryCache().findAll({ queryKey: key }).map(isKept)).toEqual([false])
+    await keep.flush()
+    unsubscribe()
+    stop()
+    client.unmount()
+    const stored = (await AsyncStorage.getItem(keepKey(ids.member))) ?? ''
+    expect(stored).toContain(ids.otherHousehold)
+    expect(stored).not.toContain(ids.household)
+    expect(stored).not.toContain('a name')
+  })
+
   // What is written to the device is what the cache holds: a read let go after a day, the web's
   // rule, would be written out of the device with it.
   it('holds a read nobody observes for as long as its member’s sign-in, and so does the device', async () => {
@@ -291,6 +340,31 @@ describe('what the device keeps of what was read', () => {
     // And nothing more until something is read again.
     await jest.advanceTimersByTimeAsync(writeEvery * 3)
     expect(written).toHaveBeenCalledTimes(1)
+    stop()
+  })
+
+  // Every reader says how it reads at each render: written for that, the device would be
+  // written to once a second for as long as anything on screen is drawn anew.
+  it('is written for a read that changed, and not for what a reader says of itself', async () => {
+    jest.useFakeTimers()
+    const written = jest.mocked(AsyncStorage.setItem)
+    const client = queryClient()
+    const keep = createKeep(ids.member)
+    const stop = keep.watch(client)
+    client.setQueryData(['me'], { id: ids.member })
+    await jest.advanceTimersByTimeAsync(writeEvery)
+    written.mockClear()
+    // A reader arrives, says anew how it reads, and leaves.
+    const reader = new QueryObserver(client, {
+      queryKey: ['me'],
+      queryFn: () => 'one',
+      enabled: false,
+    })
+    const leave = reader.subscribe(() => undefined)
+    reader.setOptions({ queryKey: ['me'], queryFn: () => 'two', enabled: false })
+    leave()
+    await jest.advanceTimersByTimeAsync(writeEvery * 3)
+    expect(written).not.toHaveBeenCalled()
     stop()
   })
 
@@ -409,8 +483,8 @@ describe('what the device keeps of what was read', () => {
   })
 
   /**
-   * A read the device kept, asked for again by a run of the app and answered by `failure`, and
-   * what the next start reads back of it.
+   * A read the device kept, asked for again by a run of the app and answered by `failure`:
+   * what its screen draws of it then, and what the next start reads back of it.
    */
   async function reReadWith(failure: Error) {
     const client = queryClient()
@@ -431,15 +505,14 @@ describe('what the device keeps of what was read', () => {
         fetchStatus: 'idle',
       })
     })
-    // What its screen still draws: the last answer.
-    expect(client.getQueryData(['households'])).toEqual([{ id: ids.household }])
+    const drawn = client.getQueryData(['households'])
     await keep.flush()
     unsubscribe()
     stop()
     client.unmount()
     const next = queryClient()
     await createKeep(ids.member).restore(next)
-    return next.getQueryState(['households'])
+    return { drawn, kept: next.getQueryState(['households']) }
   }
 
   // A server away while the device says it has a connection is every re-read failing at once:
@@ -456,7 +529,10 @@ describe('what the device keeps of what was read', () => {
       new ApiProblemError({ type: '', title: '', status: 429, code: 'rate_limited' }),
     ],
   ])('keeps a read whose re-read %s, as the answer it last was', async (_, failure) => {
-    expect(await reReadWith(failure)).toMatchObject({
+    const { drawn, kept } = await reReadWith(failure)
+    // What its screen still draws: the last answer.
+    expect(drawn).toEqual([{ id: ids.household }])
+    expect(kept).toMatchObject({
       data: [{ id: ids.household }],
       status: 'success',
       error: null,
@@ -471,7 +547,60 @@ describe('what the device keeps of what was read', () => {
   // has left would be theirs again at the next start with no connection.
   it('keeps nothing of a read the server has since said is not there', async () => {
     const gone = new ApiProblemError({ type: '', title: '', status: 404, code: 'not_found' })
-    expect(await reReadWith(gone)).toBeUndefined()
+    expect(await reReadWith(gone)).toEqual({ drawn: undefined, kept: undefined })
+  })
+
+  // What the device would not give it holds still. Written over with what this run read, which
+  // with no connection is nothing, every kept read would be out of the device a second after
+  // one such start, and the next would open on *could not be read*.
+  it('writes nothing over what the device would not give, for the rest of that run, and removes it all the same', async () => {
+    const before = queryClient()
+    const first = createKeep(ids.member)
+    const stopFirst = first.watch(before)
+    before.setQueryData(['households'], [{ id: ids.household }])
+    await first.flush()
+    stopFirst()
+    const stored = await AsyncStorage.getItem(key)
+    expect(stored).toContain(ids.household)
+
+    jest
+      .mocked(AsyncStorage.getItem)
+      .mockImplementationOnce(() => Promise.reject(new Error('the store would not open')))
+    const written = jest.mocked(AsyncStorage.setItem)
+    written.mockClear()
+    const client = queryClient()
+    const keep = createKeep(ids.member)
+    const stop = keep.watch(client)
+    await expect(keep.restore(client)).resolves.toBeUndefined()
+    expect(client.getQueryData(['households'])).toBeUndefined()
+    client.setQueryData(['me'], { id: ids.member })
+    await keep.flush()
+    expect(written).not.toHaveBeenCalled()
+    expect(await AsyncStorage.getItem(key)).toBe(stored)
+    // The next start, on a device that gives it, opens on what was kept.
+    const next = queryClient()
+    await createKeep(ids.member).restore(next)
+    expect(next.getQueryData(['households'])).toEqual([{ id: ids.household }])
+    // And it goes with its member's sign-in, read or not.
+    await keep.remove()
+    expect(await AsyncStorage.getItem(key)).toBeNull()
+    stop()
+  })
+
+  // In the shape and no state this app wrote: left to reject, the session would never learn
+  // who is signed in, at this start or at any after it.
+  it('takes what it cannot put back for nothing kept, goes on, and writes over it', async () => {
+    const unreadable = { shape: keptShape, at: 1, state: { mutations: [], queries: [{}] } }
+    await AsyncStorage.setItem(key, JSON.stringify(unreadable))
+    const client = queryClient()
+    const keep = createKeep(ids.member)
+    const stop = keep.watch(client)
+    await expect(keep.restore(client)).resolves.toBeUndefined()
+    expect(client.getQueryCache().getAll()).toEqual([])
+    client.setQueryData(['me'], { id: ids.member })
+    await keep.flush()
+    stop()
+    expect(await AsyncStorage.getItem(key)).toContain(ids.member)
   })
 
   it('says whom it keeps reads of, by what they are kept under', async () => {

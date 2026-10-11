@@ -8,6 +8,7 @@ import { View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { BaseIcon, StatusIcon } from './Icon.tsx'
+import { drawsNothing } from './nothing.ts'
 import { Text } from './Text.tsx'
 
 export interface Trend {
@@ -32,11 +33,6 @@ export interface MetricTileProps {
 }
 
 const arrows = { up: 'chevron-up', down: 'chevron-down' } as const
-
-/** Whether React would draw nothing for `node`: an action its owner left out, or decided against. */
-function drawsNothing(node: ReactNode): boolean {
-  return node === undefined || node === null || typeof node === 'boolean'
-}
 
 export function MetricTile({ label, value, unit, trend, missing, action }: MetricTileProps) {
   const t = useTranslate()

@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { catalogs, createTranslator } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
 import { fireEvent, screen, userEvent, within } from '@testing-library/react-native'
+import { useEffect, type ReactNode } from 'react'
 import { Platform, StyleSheet } from 'react-native'
+import type { TestInstance } from 'test-renderer'
+import { useDisplay } from '../display/DisplayProvider.tsx'
 import { drawingsOf, expectAccessible } from '../test/a11y.ts'
 import { render, styleOf } from '../test/render.tsx'
 import { TabBar, type TabBarProps } from './TabBar.tsx'
@@ -224,5 +227,51 @@ describe('the tab bar on a tablet', () => {
     await view.unmount()
     await render(bar({ width: 744 }))
     expect(styleOf(slot('home')).flex).toBeUndefined()
+  })
+
+  // A device keeps the basis an element had before it was given `flex: 1` (TabBar.tsx says
+  // where that is read): a slot that was a tablet's would stay as wide as it was there. Jest
+  // lays nothing out, so what is held here is that no element is ever in both layouts. What a
+  // query answers is one object for one drawn element, and another for one drawn anew; which
+  // of the two is told as a word, a drawn element being too much for a failure to print.
+  const drawn = () => five.map(slot)
+  const since = (before: readonly TestInstance[]) =>
+    drawn().map((each, at) => (each === before[at] ? 'kept' : 'anew'))
+  const all = (word: 'kept' | 'anew') => five.map(() => word)
+
+  it('draws every slot anew as the room crosses 744 pt, either way, and keeps it within a layout', async () => {
+    const view = await render(bar({ width: 743 }))
+    const narrow = drawn()
+    await view.rerender(bar({ width: phone }))
+    expect(since(narrow)).toEqual(all('kept'))
+
+    // A phone's bar to a tablet's: a device turned on its side.
+    await view.rerender(bar({ width: 744 }))
+    expect(since(narrow)).toEqual(all('anew'))
+    const wide = drawn()
+    await view.rerender(bar({ width: tablet }))
+    expect(since(wide)).toEqual(all('kept'))
+
+    // And back: turned upright, or another app opened beside this one.
+    await view.rerender(bar({ width: 743 }))
+    expect(since(wide)).toEqual(all('anew'))
+    for (const each of five) expect(styleOf(slot(each))).toMatchObject({ flex: 1 })
+    expectAccessible()
+  })
+
+  it('draws every slot anew where it is the text that outgrows the room', async () => {
+    /** Holds the text at `scale` from when it is told to, as a device's own setting changes under the app. */
+    function Sized({ scale, children }: { readonly scale?: number; readonly children: ReactNode }) {
+      const { hold } = useDisplay()
+      useEffect(() => (scale === undefined ? undefined : hold({ scale })), [scale, hold])
+      return children
+    }
+    const view = await render(<Sized>{bar({ width: tablet })}</Sized>)
+    const wide = drawn()
+    expect(styleOf(slot('home')).flex).toBeUndefined()
+    // 834 pt is a tablet's room at the text's own size, and at twice the text a phone's.
+    await view.rerender(<Sized scale={2}>{bar({ width: tablet })}</Sized>)
+    expect(since(wide)).toEqual(all('anew'))
+    for (const each of five) expect(styleOf(slot(each))).toMatchObject({ flex: 1 })
   })
 })

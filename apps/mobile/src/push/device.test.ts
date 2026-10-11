@@ -170,6 +170,43 @@ describe('a pressed notification', () => {
     expect(pressed.mock.calls).toEqual([[data], [{ url: '/' }]])
   })
 
+  // The system keeps the last press it gave, one given while the app was open among them, and
+  // hands it to whoever listens next as the press that opened the app: the links, mounted
+  // anew in the same run, would open its address a second time.
+  it('while the app is open is taken from the system too: whoever listens next is not handed it again', () => {
+    let last: Notifications.NotificationResponse | null = null
+    jest.mocked(Notifications.getLastNotificationResponse).mockImplementation(() => last)
+    jest.mocked(Notifications.clearLastNotificationResponse).mockImplementation(() => {
+      last = null
+    })
+    const first = jest.fn()
+    const stop = onPressed(first)
+    const listener = jest.mocked(Notifications.addNotificationResponseReceivedListener).mock
+      .calls[0]?.[0]
+    // As the system gives one: kept as its last, and handed to whoever listens.
+    const given = response('one', data)
+    last = given
+    listener?.(given)
+    expect(first).toHaveBeenCalledTimes(1)
+    stop()
+    const second = jest.fn()
+    onPressed(second)
+    expect(second).not.toHaveBeenCalled()
+    jest.mocked(Notifications.clearLastNotificationResponse).mockReset()
+  })
+
+  it('is handed on though the system will not take it', () => {
+    jest.mocked(Notifications.clearLastNotificationResponse).mockImplementationOnce(() => {
+      throw new Error('no such method')
+    })
+    const pressed = jest.fn()
+    onPressed(pressed)
+    const listener = jest.mocked(Notifications.addNotificationResponseReceivedListener).mock
+      .calls[0]?.[0]
+    listener?.(response('one', data))
+    expect(pressed).toHaveBeenCalledWith(data)
+  })
+
   // Some systems give the press that opened the app both ways.
   it('is handed on once where the system gives it twice', () => {
     jest.mocked(Notifications.getLastNotificationResponse).mockReturnValue(response('one', data))

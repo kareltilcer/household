@@ -40,6 +40,7 @@ import { remPx } from '@household/tokens'
 import { Children, Fragment, isValidElement, type ReactNode, type Ref } from 'react'
 import { View } from 'react-native'
 import { useDisplay, useTarget, useTheme } from '../display/DisplayProvider.tsx'
+import { drawsNothing } from './nothing.ts'
 import { SyncMark, useLongEnough, type SyncState } from './StatusMark.tsx'
 import { Text } from './Text.tsx'
 
@@ -114,11 +115,6 @@ export interface ListRowProps {
  * them, in rem.
  */
 const wordsRem = 10
-
-/** Whether React would draw nothing for `node`: a part its owner left out, or decided against. */
-function drawsNothing(node: ReactNode): boolean {
-  return node === undefined || node === null || typeof node === 'boolean'
-}
 
 export function ListRow({
   title,

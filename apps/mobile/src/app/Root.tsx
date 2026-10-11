@@ -20,9 +20,8 @@ import type { DisplayPreferences } from '../display/modes.ts'
 import { I18nProvider, useTranslate } from '../i18n/I18nProvider.tsx'
 import { readLocale } from '../i18n/locale.ts'
 import { SessionProviders } from '../session/Providers.tsx'
-import { announceNow } from '../ui/announce.ts'
 import { Button } from '../ui/Button.tsx'
-import { Screen } from '../ui/Screen.tsx'
+import { Screen, useSaidOnArrival } from '../ui/Screen.tsx'
 import { Text } from '../ui/Text.tsx'
 import { ToastProvider } from '../ui/Toast.tsx'
 
@@ -142,10 +141,9 @@ function Failed({ retry }: ErrorBoundaryProps) {
   const body = t('device.app.error.body')
   // It opens no screen: it takes the place of whatever was drawn when a route failed, so it is
   // said as it arrives, at once, as what could not be read is (session/guards.tsx): the title, a
-  // line break, the sentence.
-  useEffect(() => {
-    announceNow(`${title}\n${body}`)
-  }, [title, body])
+  // line break, the sentence, once. Whether the route that failed was the one in front is not
+  // asked: the navigator that would say may be what failed.
+  useSaidOnArrival(title, body)
   return (
     <Screen title={title} testID="route-error">
       <Text color="text-muted">{body}</Text>

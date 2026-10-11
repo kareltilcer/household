@@ -6,6 +6,7 @@ import { catalogs, pseudolocalize } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
 import { screen, userEvent, within } from '@testing-library/react-native'
 import { Platform } from 'react-native'
+import type { TestInstance } from 'test-renderer'
 import { expectAccessible } from '../../test/a11y.ts'
 import { render, styleOf } from '../../test/render.tsx'
 import * as announcer from '../../ui/announce.ts'
@@ -98,6 +99,53 @@ describe('the shell’s dev screen', () => {
       expect(screen.getByTestId(`${id}:today`)).toBeSelected()
       expect(screen.getByTestId(`${id}:home`)).not.toBeSelected()
     }
+  })
+
+  // The one bar of the page that is in both layouts in its life, which is what a tablet turned
+  // upright does to the bar under a household's screens (shell/TabBar.tsx): the flow reads on a
+  // device where its two ends stand afterwards. The page keeps the bar drawn across the press,
+  // or a flow would read a bar that was only ever a phone's; the slots are the bar's to draw
+  // anew.
+  it('turns one bar from a tablet’s room to the narrowest and back, the bar drawn all the while', async () => {
+    await render(<DevShell />)
+    const bar = () => screen.getByTestId('shell:turned:bar')
+    const slots = () =>
+      within(bar())
+        .getAllByRole(/^(tab|button)$/)
+        .map((slot) => String(slot.props.testID).replace('shell:turned:bar:', ''))
+    // What the bar's ground stands in is its room, which says how wide it is.
+    const room = () =>
+      styleOf(screen.getByTestId(/^shell:turned:(wide|narrow)$/).parent as TestInstance)
+    const home = () => screen.getByTestId('shell:turned:bar:home')
+
+    expect(slots()).toEqual(['home', 'today', 'add', 'chat', 'more'])
+    expect(screen.getByTestId('shell:turned:wide')).toBeOnTheScreen()
+    expect(room().width).toBe(widths.tablet)
+    expect(styleOf(home())).toMatchObject({ minWidth: 144 })
+    expect(styleOf(home()).flex).toBeUndefined()
+    const [drawn, wide] = [bar(), home()]
+
+    await userEvent.press(screen.getByTestId('shell:turned:turn'))
+    expect(screen.getByTestId('shell:turned:narrow')).toBeOnTheScreen()
+    expect(screen.queryByTestId('shell:turned:wide')).toBeNull()
+    // A room that is on a phone's screen whole.
+    expect(room().width).toBe(320)
+    expect(styleOf(home())).toMatchObject({ flex: 1 })
+    // Told as words: a drawn element is too much for a failure to print.
+    expect(bar() === drawn ? 'kept' : 'anew').toBe('kept')
+    expect(home() === wide ? 'kept' : 'anew').toBe('anew')
+    expectAccessible(screen.getByTestId('shell:turned:narrow'))
+
+    await userEvent.press(screen.getByTestId('shell:turned:turn'))
+    expect(screen.getByTestId('shell:turned:wide')).toBeOnTheScreen()
+    expect(bar() === drawn ? 'kept' : 'anew').toBe('kept')
+    expect(styleOf(home()).flex).toBeUndefined()
+    expectAccessible(screen.getByTestId('shell:turned:wide'))
+
+    // The page is narrowed to it, as to any part, and a flow has forty bars fewer to scroll past.
+    await userEvent.press(screen.getByTestId('shell:only:turned'))
+    expect(screen.getByTestId('shell:turned:bar')).toBeOnTheScreen()
+    expect(screen.queryByTestId('shell:bar:five:light:phone:1')).toBeNull()
   })
 
   // Add is a sheet and no place: the bar still says which place is open.

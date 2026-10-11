@@ -438,6 +438,18 @@ export function Flow({ caption, sourcesLabel, sources, targetsLabel, targets, to
   return (
     <Chart testID="chart:flow" onWidth={setWidth}>
       <View
+        // The two sides are drawn anew when they go from one under the other to beside each
+        // other, which every flow with the room does once, after its first layout. Beside,
+        // a side has half the room by `flex: 1`, and Yoga takes `flex: 1` for a basis of
+        // nothing through the branch that is computed once in an element's life, while it has
+        // none (`Node::processFlexBasis`, ReactCommon/yoga/yoga/node/Node.cpp:329-339;
+        // `computeFlexBasisForChild`, algorithm/CalculateLayout.cpp:101-117; ui/ListRow.tsx
+        // says why React Native's renderer never takes it away again). A side that was laid
+        // out under the other has one, its height there (CalculateLayout.cpp:284-287), and
+        // would keep it as its width's: two sides unequal by as much as their heights were,
+        // and, `flex: 1` not shrinking, a long one past the chart's edge *(read, and run on no
+        // device: no device in CI gives a flow 28 rem)*. An element that is new has no basis.
+        key={beside ? 'beside' : 'stacked'}
         testID="chart:flow:sides"
         style={{
           flexDirection: beside ? 'row' : 'column',

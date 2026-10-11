@@ -215,6 +215,25 @@ describe('the address held through a sign-in', () => {
     expect(heldDestination()).toBeNull()
   })
 
+  // A device that would not give what it kept holds it still: left there, the next start would
+  // read it back, and lead whoever signs in then to where a member who has since signed out
+  // was going.
+  it('is taken from the device too where it could not be read back, and the device is asked no more than that', async () => {
+    await AsyncStorage.setItem(destinationKey, today)
+    jest
+      .mocked(AsyncStorage.getItem)
+      .mockImplementationOnce(() => Promise.reject(new Error('the store would not open')))
+    await restoreDestination()
+    expect(heldDestination()).toBeNull()
+    expect(takeDestination()).toBeNull()
+    expect(await AsyncStorage.getItem(destinationKey)).toBeNull()
+    // Every guard takes what is held at each address: nothing more is asked of the device.
+    const removed = jest.mocked(AsyncStorage.removeItem)
+    removed.mockClear()
+    takeDestination()
+    expect(removed).not.toHaveBeenCalled()
+  })
+
   it('tells the sign-in screen as it is held and as it is taken', async () => {
     function Held() {
       return <Text testID="held">{String(useHeldDestination())}</Text>

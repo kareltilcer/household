@@ -607,6 +607,39 @@ describe('signing out', () => {
     expect(vault.held()[vaultKeys.signIn(ids.otherMember)]).toContain('refresh-b')
   })
 
+  // And the server is asked once more, to end the sign-in: whoever is in use once that has
+  // answered is not shown the sign-in screen for a press that was not theirs.
+  it('signs out nobody else: another member who signed in while the server was asked to end the sign-in stays', async () => {
+    let ended: (response: Response) => void = () => undefined
+    let asked = 0
+    const { api, vault } = await signedIn({
+      'POST /auth/logout': () => {
+        asked += 1
+        // The press's own request waits; the one the next sign-in ends the first with is answered.
+        if (asked > 1) return empty()
+        return new Promise<Response>((resolve) => {
+          ended = resolve
+        })
+      },
+    })
+    let leaving: Promise<void> = Promise.resolve()
+    await act(() => {
+      leaving = the().signOut()
+    })
+    await waitFor(() => {
+      expect(api.sent('POST /auth/logout')).toHaveLength(1)
+    })
+    await act(() => the().signedIn({ user: jiri, tokens: pair('b') }))
+    await who(`member ${ids.otherMember}`)
+    await act(async () => {
+      ended(empty())
+      await leaving
+    })
+    expect(screen.getByTestId('who')).toHaveTextContent(`member ${ids.otherMember}`)
+    expect(screen.getByTestId('notes')).toHaveTextContent(/^ended false left false/)
+    expect(vault.held()[vaultKeys.signIn(ids.otherMember)]).toContain('refresh-b')
+  })
+
   it('is done where the server no longer knows the sign-in, and is not said to have ended', async () => {
     const { vault } = await signedIn({
       'POST /auth/logout': () => problem(401, 'unauthenticated'),

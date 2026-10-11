@@ -76,7 +76,10 @@ async function keep(key: string, value: string | null): Promise<void> {
     if (value === null) await AsyncStorage.removeItem(key)
     else await AsyncStorage.setItem(key, value)
   } catch {
-    // Kept for this run alone: the next start registers a device that allows it.
+    // Not kept, and nothing holds it for this run either. A device whose registration could not
+    // be noted reads as not subscribed until it is registered again, at the next start or as a
+    // connection returns; a choice to turn notifications off that could not be noted holds
+    // until then, and no longer.
   }
 }
 
@@ -137,7 +140,9 @@ export interface Registration {
 /**
  * Registers the device: Expo's token for the installation, told to the server with the device
  * it is signed in on. `unless` is asked once Expo has answered, which may be seconds later, and
- * where it says so nothing is told to the server and nothing is changed.
+ * where it says so nothing is told to the server and nothing is changed. The request is signed
+ * as it leaves, for whoever is signed in then: nothing is awaited between what `unless` says
+ * and the request.
  */
 async function register(
   { api, member, device: installation, channel, project }: Registration,
@@ -194,18 +199,34 @@ export async function unsubscribePush(
  * as they are. It never rejects: a device that could not be registered is tried when it is next
  * called. It asks the server outside any query or mutation, so what it is refused with is told
  * to `problems` here.
+ *
+ * `left` says that its member is no longer the one it was called for, a sign-out or another
+ * member's sign-in since: it is asked once Expo has answered, and where it says so nothing is
+ * registered. The request is signed for whoever is signed in as it leaves, and a registration
+ * that waited on Expo through a sign-out and the next sign-in would be made in that member's
+ * name, over their own choice where they had turned notifications off here.
  */
-export async function renewPush(registration: Registration, problems: ProblemHub): Promise<void> {
+export async function renewPush(
+  registration: Registration,
+  problems: ProblemHub,
+  left: () => boolean = () => false,
+): Promise<void> {
   const { member, project } = registration
   // Their own choice, read as the renewal begins and again once Expo has answered: turned off
-  // meanwhile, by a press while this waited, it would be turned on again behind the press.
-  const off = async () => (await kept(offKey(member))) !== null
+  // meanwhile, by a press while this waited, it would be turned on again behind the press. Read
+  // from the device itself, and not as a note that is absent where it could not be read: taken
+  // for not turned off, a device that would not say would be registered over a choice it could
+  // not read, and a registration removes the note of that choice.
+  const off = async () => (await AsyncStorage.getItem(offKey(member))) !== null
   try {
     if (project === undefined || (await device.permission()) !== 'granted') return
     if (await off()) return
-    await register(registration, off)
+    // Whether they are still here is asked last, with nothing awaited after it.
+    await register(registration, async () => (await off()) || left())
   } catch (error) {
-    // Left as it was. A token the server refused outright it will refuse again: forgotten.
+    // Left as it was, a choice that could not be read among it, which is told to nobody: it
+    // is asked again when this is. A token the server refused outright it will refuse again:
+    // forgotten.
     if (error instanceof ApiProblemError && error.status === 422) {
       await keep(tokenKey(member), null)
     }
@@ -220,19 +241,23 @@ export async function renewPush(registration: Registration, problems: ProblemHub
  * last one's. The member's own choice is not touched. It never rejects: the server ends a
  * registration with its sign-in whether or not it heard. What it is refused with is told to
  * nobody: the sign-out follows at once and is told its own refusal.
+ *
+ * The note of the registration goes only where the server took the removal. Where it did not,
+ * the server holds the registration still, and the note says so: the sign-out that follows
+ * removes it with everything else kept of its member where it succeeds (the forgetter above),
+ * and where it fails too, a member who is signed in still reads as subscribed, which they are,
+ * and turning notifications off finds the token to remove. Where the removal went through and
+ * the sign-out then failed, the device is registered again at its next start, or as a
+ * connection returns (Push.tsx).
  */
 export async function forgetPush(api: ApiClient, member: string): Promise<void> {
   try {
     const token = await kept(tokenKey(member))
     if (token === null) return
-    try {
-      unwrap(await api.DELETE('/push/subscriptions', { params: { query: { endpoint: token } } }))
-    } catch {
-      // The sign-in's end removes it at the server.
-    }
+    unwrap(await api.DELETE('/push/subscriptions', { params: { query: { endpoint: token } } }))
     await keep(tokenKey(member), null)
   } catch {
-    // A device that will not let go of it keeps a token no sign-in answers for.
+    // The server was not told, or would not take it: the sign-in's end removes it there.
   }
 }
 

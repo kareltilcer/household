@@ -90,7 +90,7 @@ describe('a stepper', () => {
     expect(shows()).toBe('')
     await retype('12')
     expect(shows()).toBe('12')
-    // The "1" on the way was under the least, and was no value yet.
+    // The "1" on the way was under the least, which is what its owner held already.
     expect(onChange.mock.calls).toEqual([[12]])
     await leave()
     expect(shows()).toBe('12')
@@ -102,16 +102,70 @@ describe('a stepper', () => {
     expect(onChange).toHaveBeenCalledTimes(1)
   })
 
+  // A press on a device takes no focus from the field (Stepper.tsx says where that is read), so
+  // a form's Save reads what the field was last given: that is what leaving it would show.
+  describe('gives at each key what leaving the field would make of what is typed', () => {
+    it('holds a number typed past its most to the most, with the field not left', async () => {
+      const onChange = jest.fn()
+      await render(<Count start={3} min={1} max={12} onChange={onChange} />)
+      await retype('15')
+      // Not the "1" it was on its way through, which is what a form sent.
+      expect(onChange.mock.lastCall).toEqual([12])
+      expect(shows()).toBe('15')
+      await leave()
+      expect(shows()).toBe('12')
+      expect(onChange.mock.lastCall).toEqual([12])
+    })
+
+    it('holds a number typed under its least to the least, with the field not left', async () => {
+      const onChange = jest.fn()
+      await render(<Count start={7} min={5} max={50} onChange={onChange} />)
+      await retype('3')
+      // Not the 7 it was before, which is what a form sent.
+      expect(onChange.mock.calls).toEqual([[5]])
+      expect(shows()).toBe('3')
+      await leave()
+      expect(shows()).toBe('5')
+    })
+
+    it('shows what is typed throughout: the "1" of "12" under a least of 5 is typed as it was', async () => {
+      const onChange = jest.fn()
+      await render(<Count start={7} min={5} max={50} onChange={onChange} />)
+      await fireEvent.changeText(field(), '')
+      expect(shows()).toBe('')
+      await fireEvent.changeText(field(), '1')
+      expect(shows()).toBe('1')
+      expect(onChange.mock.calls).toEqual([[5]])
+      await fireEvent.changeText(field(), '12')
+      expect(shows()).toBe('12')
+      expect(onChange.mock.calls).toEqual([[5], [12]])
+    })
+
+    it('steps by its buttons from that number, and not from one the field no longer shows', async () => {
+      await render(<Count start={3} min={1} max={12} />)
+      await retype('15')
+      await userEvent.press(screen.getByRole('button', { name: decrease }))
+      expect(shows()).toBe('11')
+
+      await retype('0')
+      await userEvent.press(screen.getByRole('button', { name: increase }))
+      expect(shows()).toBe('2')
+    })
+  })
+
   it.each(['.', ','])(
-    'holds a whole number alone: a fraction typed with "%s" is no value, and is the nearest one once left',
+    'holds a whole number alone: a fraction typed with "%s" is given as the nearest one, and shown as it once left',
     async (mark) => {
       const onChange = jest.fn()
       await render(<Count start={2} min={1} max={12} onChange={onChange} />)
+      await retype(`2${mark}`)
+      // The "2" on the way is what its owner holds, and "2," is no number yet.
+      expect(onChange).not.toHaveBeenCalled()
       await retype(`2${mark}5`)
-      // The "2" on the way is a whole number; the fraction is not, and is given to nobody.
-      expect(onChange.mock.calls).toEqual([[2]])
+      expect(onChange.mock.calls).toEqual([[3]])
+      expect(shows()).toBe(`2${mark}5`)
       await leave()
-      expect(onChange.mock.calls).toEqual([[2], [3]])
+      expect(onChange.mock.calls).toEqual([[3]])
       expect(shows()).toBe('3')
 
       // Rounded first and held to the bounds after: 12.6 is no 13 over a most of 12.

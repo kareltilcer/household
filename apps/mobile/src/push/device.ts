@@ -107,11 +107,22 @@ function dataOf(response: Notifications.NotificationResponse): unknown {
  * Listens for a notification being pressed: `listener` is handed what the notification carried,
  * for the one whose press opened the app and for each pressed while it is open, once each,
  * until the function this returns is called.
+ *
+ * Each is taken from the system as it is handed on. The system keeps the last press it gave,
+ * one given while the app was open among them (read in expo-notifications' sources, run on
+ * nothing), and whoever listens next is given it as the press that opened the app: the links,
+ * mounted anew in the same run after a route failed and was tried again (app/Root.tsx), would
+ * open its address a second time.
  */
 export function onPressed(listener: (data: unknown) => void): () => void {
   // A press that opened the app is given by both ways of asking on some systems.
   let last: string | undefined
   const pressed = (response: Notifications.NotificationResponse) => {
+    try {
+      Notifications.clearLastNotificationResponse()
+    } catch {
+      // A build that cannot take it hands it on all the same.
+    }
     const id = response.notification.request.identifier
     if (id === last) return
     last = id
@@ -119,11 +130,8 @@ export function onPressed(listener: (data: unknown) => void): () => void {
   }
   try {
     const opening = Notifications.getLastNotificationResponse()
-    if (opening !== null) {
-      // Taken, so that the next start of the app does not open it again.
-      Notifications.clearLastNotificationResponse()
-      pressed(opening)
-    }
+    // Taken as it is handed on, so that the next start of the app does not open it again.
+    if (opening !== null) pressed(opening)
     const subscription = Notifications.addNotificationResponseReceivedListener(pressed)
     return () => {
       subscription.remove()

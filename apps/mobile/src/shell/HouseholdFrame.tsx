@@ -89,6 +89,10 @@ export function HouseholdFrame({ household, children }: HouseholdFrameProps) {
   const read = useHousehold(household)
   // Asked of the device beside the household, and not after it: both are there before the shell.
   const [arrangement, arrange] = useKeptArrangement(me.id, household)
+  // Whether this household is the one in front, for what stands in its place where it could
+  // not be read: one that another was opened over while it was still being read says nothing
+  // of its own failure over the other's screens. No `Screen` stands above the frame to tell it.
+  const inFront = useIsFocused()
   switch (read.status) {
     case 'reading':
       return <Waiting />
@@ -98,6 +102,7 @@ export function HouseholdFrame({ household, children }: HouseholdFrameProps) {
           title={t('shell.household.error.title')}
           body={t('shell.household.error.body')}
           retry={read.retry}
+          inFront={inFront}
         />
       )
     case 'gone':

@@ -149,4 +149,23 @@ describe('a route that failed', () => {
     )
     said.mockRestore()
   })
+
+  // Once for each time it arrives. It stands on providers of its own, which follow no
+  // account, so its language is the device's for as long as it is drawn; what is held here is
+  // that a draw is no arrival, whatever it is drawn again for.
+  it('is not said again for being drawn again, and is said again where it is drawn anew', async () => {
+    const said = jest.spyOn(announcer, 'announceNow').mockImplementation(() => undefined)
+    const failed = (error: string) => (
+      <SafeAreaProvider initialMetrics={metrics}>
+        <RouteError retry={() => Promise.resolve()} error={new Error(error)} />
+      </SafeAreaProvider>
+    )
+    const view = await render(failed('a screen failed'))
+    await view.rerender(failed('it failed again'))
+    expect(said).toHaveBeenCalledTimes(1)
+    await view.rerender(<View />)
+    await view.rerender(failed('another screen failed'))
+    expect(said).toHaveBeenCalledTimes(2)
+    said.mockRestore()
+  })
 })

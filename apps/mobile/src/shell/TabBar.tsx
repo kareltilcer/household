@@ -226,7 +226,21 @@ export function TabBar({
           const counted = slot === 'more' ? attention : undefined
           return (
             <Slot
-              key={slot}
+              // A slot of one layout is never given the other's style: it is drawn anew when
+              // the bar goes from a tablet's to a phone's, as a device turned upright, an app
+              // opened beside this one or a larger text makes it. A phone's slot has its share
+              // of the bar by `flex: 1`, which Yoga takes for a basis of nothing
+              // (`Node::processFlexBasis`, ReactCommon/yoga/yoga/node/Node.cpp:329-339) through
+              // the branch that is computed once in an element's life, while it has none
+              // (`computeFlexBasisForChild`, algorithm/CalculateLayout.cpp:101-117; ui/ListRow.tsx
+              // says why React Native's renderer never takes it away again). A slot that was a
+              // tablet's has one, the width it was measured at there (CalculateLayout.cpp:284-287),
+              // 9 rem at the least, and would keep it; and `flex: 1` does not shrink. So three
+              // slots would stay 432 pt in the 320 pt an iPad leaves an app that another stands
+              // beside, with Home and More past the bar's two edges *(read, and run on no
+              // device: no device in CI is a tablet)*. An element that is new has no basis yet.
+              // What goes with the old one is a focus that was on it as the device turned.
+              key={`${slot}:${wide ? 'wide' : 'narrow'}`}
               testID={`${testID}:${slot}`}
               slot={slot}
               label={labels[slot]}

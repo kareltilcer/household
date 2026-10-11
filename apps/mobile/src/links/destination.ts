@@ -10,12 +10,22 @@ import { isOwnPath } from '../app/paths.ts'
 export const destinationKey = 'household.destination'
 
 let held: string | null = null
+/**
+ * Whether the device may keep an address this run does not hold: until it has been read, and
+ * where it would not be. One kept there is then taken from it all the same, by whoever takes
+ * what is held: left, it would be read back at the next start and lead whoever signs in then
+ * to where a member who has signed out since was going.
+ */
+let unread = true
 const listeners = new Set<() => void>()
 
 function set(path: string | null): void {
-  if (held === path) return
+  const same = held === path
+  if (same && !(path === null && unread)) return
   held = path
-  for (const listener of [...listeners]) listener()
+  unread = false
+  // Nobody is told of an address that is as it was.
+  if (!same) for (const listener of [...listeners]) listener()
   const written =
     path === null
       ? AsyncStorage.removeItem(destinationKey)
@@ -31,12 +41,14 @@ function set(path: string | null): void {
 export async function restoreDestination(): Promise<void> {
   try {
     const kept = await AsyncStorage.getItem(destinationKey)
+    unread = false
     if (held === null && kept !== null && isOwnPath(kept)) {
       held = kept
       for (const listener of [...listeners]) listener()
     }
   } catch {
-    // What this run holds itself is all there is.
+    // What this run holds itself is all there is, and what the device keeps is not known.
+    unread = true
   }
 }
 

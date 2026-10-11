@@ -254,10 +254,15 @@ describe('a list row', () => {
   })
 
   it('draws no second part where it has neither a mark nor an action', async () => {
+    // A word that may be none, as a condition on one comes to where there is none: what
+    // `named && <Button />` hands a row is the empty string.
+    const none = ''
     await render(
       <List testID="list" label={words.meters}>
         <ListRow title={words.electricity} avatar={<Avatar initials="P" tone={2} />} />
         <ListRow title={words.gas} trailing={false} />
+        {/* Nothing in every component that asks (ui/nothing.ts): no part, and no line under it. */}
+        <ListRow title={words.gas} trailing={none} under={none} />
       </List>,
     )
     for (const row of byRole(screen.getByTestId('list'), 'listitem')) {
@@ -687,6 +692,14 @@ describe('a metric tile', () => {
     const said = screen.getByText(words.period).parent
     expect(said?.parent?.children).toEqual([said])
   })
+
+  it('takes an action that is the empty string for none, as a row and a pair do', async () => {
+    // What `named && <Button />` comes to where the word is none.
+    const none = ''
+    await render(<MetricTile label={words.period} missing={words.missing} action={none} />)
+    const said = screen.getByText(words.period).parent
+    expect(said?.parent?.children).toHaveLength(1)
+  })
 })
 
 describe('a time series', () => {
@@ -938,6 +951,39 @@ describe('a flow', () => {
     await fireEvent(screen.getByTestId('chart:flow'), 'layout', laid(896))
     expect(sides()).toBe('row')
     expectAccessible()
+  })
+
+  // Beside each other a side has half the room by `flex: 1`, and a device keeps the basis an
+  // element had before it was given that (Charts.tsx says where that is read): a side laid out
+  // under the other would keep its height there as its width. Jest lays nothing out, so what
+  // is held here is that no side is ever in both layouts: a query answers one object for one
+  // drawn element, and another for one drawn anew, which is told here as a word, a drawn
+  // element being too much for a failure to print.
+  it('draws its two sides anew as they go beside each other and back, and keeps them within a layout', async () => {
+    await render(flow)
+    const chart = () => screen.getByTestId('chart:flow')
+    /** The two sides: what each list of the chart stands in. */
+    const sides = () => byRole(chart(), 'list').map((list) => list.parent as TestInstance)
+    const since = (before: readonly TestInstance[]) =>
+      sides().map((side, at) => (side === before[at] ? 'kept' : 'anew'))
+    const laid = (width: number) => ({
+      nativeEvent: { layout: { x: 0, y: 0, width, height: 300 } },
+    })
+    const stacked = sides()
+    expect(stacked).toHaveLength(2)
+    await fireEvent(chart(), 'layout', laid(358))
+    expect(since(stacked)).toEqual(['kept', 'kept'])
+
+    await fireEvent(chart(), 'layout', laid(448))
+    expect(since(stacked)).toEqual(['anew', 'anew'])
+    const beside = sides()
+    for (const side of beside) expect(styleOf(side)).toMatchObject({ flex: 1 })
+    await fireEvent(chart(), 'layout', laid(600))
+    expect(since(beside)).toEqual(['kept', 'kept'])
+
+    await fireEvent(chart(), 'layout', laid(447))
+    expect(since(beside)).toEqual(['anew', 'anew'])
+    for (const side of sides()) expect(styleOf(side).flex).toBeUndefined()
   })
 
   it('gives a label its room before its figure goes under it, at 200 % text', async () => {

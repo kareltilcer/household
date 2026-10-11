@@ -34,7 +34,13 @@ function Renewal({ member }: { readonly member: string }) {
     device()
       .then(async ({ id }) => {
         if (!wanted) return
-        await renewPush({ api, member, device: id, channel, project: pushProject() }, problems)
+        // And asked again once Expo has answered, which may be a sign-out and another member's
+        // sign-in later: the registration would be made in their name (registration.ts).
+        await renewPush(
+          { api, member, device: id, channel, project: pushProject() },
+          problems,
+          () => !wanted,
+        )
         // A screen that read this device's state before the renewal registered it reads it again.
         await queries.invalidateQueries({ queryKey: pushStateKey(member) })
       })

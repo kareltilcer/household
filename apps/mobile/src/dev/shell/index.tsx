@@ -1,7 +1,8 @@
 // The shell's dev screen: what a household's screens stand in, drawn with no household. The tab
 // bar in each drawing a member may have, in both themes, at 100 % and at 200 % text, at a
-// phone's width and a tablet's; the app bar; More and arranging over a build that has modules,
-// which no build has yet; the two panes; the neutral screen; and the notice of a switch.
+// phone's width and a tablet's, and one whose room a press changes under it; the app bar; More
+// and arranging over a build that has modules, which no build has yet; the two panes; the
+// neutral screen; and the notice of a switch.
 // Its words are fixtures (D-154); what a component of the shell says itself is the catalogs'.
 import { remPx } from '@household/tokens'
 import type { Theme } from '@household/tokens/native'
@@ -18,7 +19,7 @@ import { noArrangement } from '../../shell/navigation.ts'
 import { Panes } from '../../shell/Panes.tsx'
 import { SwitchedBanner } from '../../shell/Switched.tsx'
 import { TabBar } from '../../shell/TabBar.tsx'
-import type { Place } from '../../shell/tabs.ts'
+import type { Destination, Place } from '../../shell/tabs.ts'
 import { Button } from '../../ui/Button.tsx'
 import { Sheet } from '../../ui/Sheet.tsx'
 import { Text } from '../../ui/Text.tsx'
@@ -34,7 +35,16 @@ const scales = [1, 2] as const
 const rooms: readonly Width[] = ['phone', 'tablet']
 
 /** What the page can be narrowed to (Only.tsx): forty bars are a long way to scroll past. */
-const parts = ['bars', 'app-bar', 'more', 'arrange', 'panes', 'not-available', 'switched'] as const
+const parts = [
+  'bars',
+  'turned',
+  'app-bar',
+  'more',
+  'arrange',
+  'panes',
+  'not-available',
+  'switched',
+] as const
 
 function Heading({ children }: { readonly children: string }) {
   return (
@@ -126,6 +136,63 @@ function Bars() {
           'Add opens over the place that is open, and the bar still says which one that is.',
         )}
       />
+    </>
+  )
+}
+
+/**
+ * The narrowest room an app is given: a small phone's, and what an iPad leaves an app that
+ * another stands beside. It is on the screen whole on any phone, so a flow reads the two ends
+ * of a bar drawn in it.
+ */
+const narrowest = 320
+
+/** A bar of the most slots a bar has: the one that has least room for each. */
+const most: readonly Destination[] = ['home', 'today', 'add', 'chat', 'more']
+
+/**
+ * One bar whose room a press turns from a tablet's to the narrowest and back, the bar drawn all
+ * the while: what a tablet turned upright, or an app opened beside this one, does to the bar
+ * under a household's screens. Every other bar of the page stands in one room for good, and a
+ * bar that is in one layout alone shows nothing of what going to the other does to it: the
+ * slots of a tablet's bar, each as wide as its words from 9 rem, would keep that width as a
+ * phone's shares (shell/TabBar.tsx says why, as it was read). Five of them are 720 pt in the
+ * 304 this room leaves them, laid out from its middle: Home would end 64 pt before the room
+ * begins, past the edge of the screen, and More begin 64 pt after it ends. Nothing here draws
+ * the bar anew: the room, the ground and the bar are the same elements in both rooms, and only
+ * the width they are told changes. The text is the page's own, and at the toolbar's 200 % a
+ * tablet's room is a phone's already, with nothing to turn.
+ */
+function Turned() {
+  const sample = useSample()
+  const [narrow, setNarrow] = useState(false)
+  const [open, setOpen] = useState<Place | null>('home')
+  const width = narrow ? narrowest : widths.tablet
+  return (
+    <>
+      <Heading>{sample('A bar whose room changes')}</Heading>
+      <Button
+        testID="shell:turned:turn"
+        onPress={() => {
+          setNarrow((now) => !now)
+        }}
+      >
+        {sample(narrow ? 'To a tablet’s room' : 'To the narrowest room')}
+      </Button>
+      <Room width={width}>
+        {/* Named for the room it is in, which is how a flow knows the press was taken. */}
+        <Ground id={narrow ? 'shell:turned:narrow' : 'shell:turned:wide'}>
+          <TabBar
+            testID="shell:turned:bar"
+            slots={most}
+            open={open}
+            onOpen={setOpen}
+            // Add's sheet is the bars' own, above: this bar is here for where its slots stand.
+            onAdd={() => undefined}
+            width={width}
+          />
+        </Ground>
+      </Room>
     </>
   )
 }
@@ -246,6 +313,9 @@ export default function DevShell() {
     <DevScreen page="shell" title={sample('Shell')} parts={parts}>
       <Shown part="bars">
         <Bars />
+      </Shown>
+      <Shown part="turned">
+        <Turned />
       </Shown>
       <Shown part="app-bar">
         <AppBars />

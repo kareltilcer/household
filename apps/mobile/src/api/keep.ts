@@ -1,7 +1,9 @@
 // What the query client read, kept on the device for its member: one entry of the device's
 // key-value store a member, named for them, so that a tablet several profiles are signed in to
 // keeps each one's apart, and removed with their sign-in however it ends (D-161's twin on a
-// device). A device that will not store keeps nothing, and the app reads from the server.
+// device). A device that will not store keeps nothing, and the app reads from the server. One
+// that would not give what it kept holds it still, and it is not written over: nothing is
+// written for the rest of that run, and the next start reads it back.
 //
 // It is kept for as long as its member's sign-in, and read back however old it is and whichever
 // build of the app wrote it: the account, the member's households and a household's own answer
@@ -101,7 +103,8 @@ export interface Keep {
    * Puts what the device kept into `queries`: what was written in this shape, however long ago
    * and by whichever build of the app. What was kept in another shape is dropped rather than
    * shown, and read from the server; so is what a build kept before the shape had a number,
-   * which it named for itself.
+   * which it named for itself. Where the device would not give what it kept, nothing is put
+   * in, and nothing is written from then on: what it holds is not written over unread.
    */
   readonly restore: (queries: QueryClient) => Promise<void>
   /** Writes `queries` as it changes, at most once a second, until the function it returns is called. */
@@ -127,11 +130,19 @@ export function createKeep(
   let watched: QueryClient | undefined
   let waiting = false
   let removed = false
+  /**
+   * Whether the device would not give what it kept, when it was asked: what it holds is then
+   * not known, which is not the same as nothing. Written over with what this run has read, a
+   * start with no connection would write every kept read out of the device a second later, and
+   * the next one would open on nothing. Nor is it read back later in the run: the server may
+   * have said since that something of it is not there.
+   */
+  let unread = false
   let timer: ReturnType<typeof setTimeout> | undefined
 
   const write = async () => {
     timer = undefined
-    if (!waiting || removed || watched === undefined) return
+    if (!waiting || removed || unread || watched === undefined) return
     waiting = false
     // What was read, and no write: left to itself TanStack stores a write that waits for a
     // connection, with everything it was to send, and a start that loads it back cannot send
@@ -154,21 +165,36 @@ export function createKeep(
 
   return {
     restore: async (queries) => {
+      let text: string | null
+      try {
+        text = await AsyncStorage.getItem(key)
+      } catch {
+        unread = true
+        return
+      }
       let stored: unknown
       try {
-        const text = await AsyncStorage.getItem(key)
         stored = text === null ? undefined : JSON.parse(text)
       } catch {
         return
       }
       if (removed || !isStored(stored)) return
       if (stored.shape !== shape) return
-      hydrate(queries, stored.state)
+      try {
+        hydrate(queries, stored.state)
+      } catch {
+        // No state this app could have written: nothing is kept, and it is written over. Left
+        // to reject, the session would never learn who is signed in, at this start or the next.
+      }
     },
     watch: (queries) => {
       watched = queries
-      const stop = queries.getQueryCache().subscribe(() => {
-        if (removed) return
+      const stop = queries.getQueryCache().subscribe((event) => {
+        if (removed || unread) return
+        // Only what changes what is held: a read that arrived, went, or was answered. What a
+        // reader says of itself changes nothing that is written, and every reader says it at
+        // each render.
+        if (event.type !== 'added' && event.type !== 'removed' && event.type !== 'updated') return
         waiting = true
         timer ??= setTimeout(() => void write(), writeEvery)
       })

@@ -11,12 +11,11 @@
 // On a device an update is the store's. The one action opens the app's page there, where the
 // build was told of one for the platform it runs on (store.ts); a build that was told none
 // draws no control, a control that cannot act being absent.
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
-import { announceNow } from '../ui/announce.ts'
 import { Banner } from '../ui/Banner.tsx'
 import { Button } from '../ui/Button.tsx'
-import { Screen } from '../ui/Screen.tsx'
+import { Screen, useSaidOnArrival } from '../ui/Screen.tsx'
 import { Text } from '../ui/Text.tsx'
 import { openStore, storeUrl } from './store.ts'
 
@@ -34,10 +33,9 @@ export function UpdateRequired({ store = storeUrl() }: UpdateRequiredProps) {
   const body = t('device.update.body')
   // It never opens a screen: it takes the place of whatever was drawn when a request was
   // answered so, and of everything under it, so it is said as it arrives, as what could not be
-  // read is (session/guards.tsx).
-  useEffect(() => {
-    announceNow(`${title}\n${body}`)
-  }, [title, body])
+  // read is (session/guards.tsx): once, and not again in another language. It is the one
+  // screen there is then, and so the one in front.
+  useSaidOnArrival(title, body)
   return (
     <Screen title={title} testID="update-required">
       <Text color="text-muted">{body}</Text>

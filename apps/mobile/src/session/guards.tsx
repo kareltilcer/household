@@ -10,9 +10,8 @@ import { useEffect, type ReactNode } from 'react'
 import { paths } from '../app/paths.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { heldDestination, holdDestination, takeDestination } from '../links/destination.ts'
-import { announceNow } from '../ui/announce.ts'
 import { Button } from '../ui/Button.tsx'
-import { Screen } from '../ui/Screen.tsx'
+import { Screen, useSaidOnArrival } from '../ui/Screen.tsx'
 import { Skeleton, type SkeletonBar } from '../ui/Skeleton.tsx'
 import { Text } from '../ui/Text.tsx'
 import { useSession } from './context.ts'
@@ -43,6 +42,12 @@ export interface UnreadProps {
   readonly body: string
   /** Asks again. */
   readonly retry: () => void
+  /**
+   * Whether the screen whose place this stands in is the one in front. Left out, it is. A
+   * household that another was opened over stays mounted underneath, guard and frame, and
+   * each says which it is, as the navigator tells it.
+   */
+  readonly inFront?: boolean | undefined
 }
 
 /**
@@ -54,15 +59,16 @@ export interface UnreadProps {
  * as it did, nothing is drawn anew and nothing is said: the press changed nothing. And where
  * asking again brings the screen, the screen is what is drawn: nothing here says so, there
  * being no words for it but the screen's own (ADR 0029).
+ *
+ * Said once for each time it arrives, and by a screen in front alone (`useSaidOnArrival`): its
+ * words in the account's language, once that is learned, are not said a second time, and a
+ * household underneath whose first read failed says nothing over the one its member is in.
  */
-export function Unread({ title, body, retry }: UnreadProps) {
+export function Unread({ title, body, retry, inFront = true }: UnreadProps) {
   const t = useTranslate()
-  useEffect(() => {
-    // The title, a line break, the sentence: as a banner says its own (ui/Banner.tsx).
-    announceNow(`${title}\n${body}`)
-  }, [title, body])
+  useSaidOnArrival(title, body, inFront)
   return (
-    <Screen title={title} testID="unread">
+    <Screen title={title} inFront={inFront} testID="unread">
       <Text color="text-muted">{body}</Text>
       <Button
         variant="primary"
@@ -80,6 +86,8 @@ export interface UnreachableProps {
   readonly retry: () => void
   /** Whether it is the device that would not say, and not the server that could not be asked. */
   readonly device?: boolean | undefined
+  /** Whether the screen it stands in the place of is the one in front (`Unread`). Left out, it is. */
+  readonly inFront?: boolean | undefined
 }
 
 /**
@@ -88,13 +96,14 @@ export interface UnreachableProps {
  * own words: a member told to check their connection for a keychain that is shut would check
  * the wrong thing.
  */
-export function Unreachable({ retry, device = false }: UnreachableProps) {
+export function Unreachable({ retry, device = false, inFront }: UnreachableProps) {
   const t = useTranslate()
   return (
     <Unread
       title={device ? t('device.session.unread.title') : t('session.unreachable.title')}
       body={device ? t('device.session.unread.body') : t('session.unreachable.body')}
       retry={retry}
+      inFront={inFront}
     />
   )
 }
@@ -133,7 +142,7 @@ export function Signed({ children }: { readonly children: ReactNode }) {
     case 'unknown':
       return <Waiting />
     case 'unreachable':
-      return <Unreachable retry={retry} device={state.device} />
+      return <Unreachable retry={retry} device={state.device} inFront={inFront} />
     case 'visitor':
       return <Redirect href={paths.signIn.path} />
   }

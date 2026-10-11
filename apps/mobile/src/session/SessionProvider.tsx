@@ -251,19 +251,26 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
     const id = tokens.member()
     if (id === null) return
     const client = api()
-    // While the server can still be told, and not put back if what follows fails: the next
-    // start registers the device again.
+    // While the server can still be told. A sign-out that did not reach the server leaves
+    // everything kept, the note of the registration among it; where the removal went through
+    // and what follows fails, the device is registered again at the next start, or as a
+    // connection returns (push/registration.ts).
     await forgetPush(client, id)
     // Theirs no longer, while the server was asked that: it ended under the press, which is
     // said and removed for already, or another member's is the one in use by now, and the
     // request below would end theirs.
     if (tokens.member() !== id) return
     const answer = await client.POST('/auth/logout')
+    // And again, the server having been asked once more: another member's sign-in is the one
+    // in use by now, and what follows would show them the sign-in screen while they are
+    // signed in. What this device kept of the one who left went as theirs was taken.
+    const now = tokens.member()
+    if (now !== null && now !== id) return
     // A sign-in the server no longer knows has ended already: what was asked for is so. That
     // is a `401` whose renewal the server refused, which removed the pair (tokens.ts). A `401`
     // that left the pair where it was is a token that lapsed and a renewal that failed for
     // another reason, a server in trouble: the sign-in lives there still, and so here.
-    if (answer.response.status !== 401 || tokens.member() === id) {
+    if (answer.response.status !== 401 || now === id) {
       // Asked outside a query or a mutation, so what it was refused with is told here.
       const refusal = problemOf(answer)
       if (refusal !== undefined) problems.report(refusal)

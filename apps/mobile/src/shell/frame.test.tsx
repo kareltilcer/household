@@ -161,6 +161,32 @@ describe('a household’s frame, while its household is not read', () => {
     expect(api.sent(route)).toHaveLength(2)
   })
 
+  // No `Screen` stands above the frame to say whether it is in front: the frame asks the
+  // navigator and tells what stands in its place. A household that another was opened over
+  // while it was still being read says nothing of its own failure over the other's screens.
+  it('says aloud that it could not be read only where it is the household in front', async () => {
+    const aloud = jest.mocked(announcer.announceNow)
+    const sentence = `${en['shell.household.error.title']}\n${en['shell.household.error.body']}`
+    const unread = async () => {
+      await waitFor(() => {
+        expect(
+          screen.getByRole('header', { name: en['shell.household.error.title'] }),
+        ).toBeOnTheScreen()
+      })
+    }
+    mockFront.is = false
+    const api = answering({ [route]: unanswered })
+    const view = await render(<Frame api={api} />)
+    await unread()
+    expect(aloud).not.toHaveBeenCalled()
+    await view.unmount()
+
+    mockFront.is = true
+    await render(<Frame api={answering({ [route]: unanswered })} />)
+    await unread()
+    expect(aloud.mock.calls).toEqual([[sentence]])
+  })
+
   // F-17: a household they left, one that never was and one the platform suspended read the same.
   it('is not available where the server answers that it is not found, and says no more', async () => {
     await opened(() => problem(404, 'not_found'))

@@ -10,11 +10,11 @@
 // browser is rid of a database it was asked to delete; a device is rid of a file only if the
 // deletion went through, so each replica is noted before it is opened, a member's are marked as
 // leaving the moment their sign-in ends, and whatever could not be removed then is tried again
-// at the next start. Removal is two steps, each kept once it is done: the replica is emptied
-// (wiped through the library, which is the removal that counts), and then its file and its
-// files' directory are deleted. One that could not be emptied has its file deleted all the
-// same, and is gone if that went through. And a replica whose note could not be written is not
-// opened at all.
+// at the next start. Removal is two steps, and how far it came is noted once, after both: the
+// replica is emptied (wiped through the library, which is the removal that counts), and then its
+// file and its files' directory are deleted. One that could not be emptied has its file deleted
+// all the same, and is gone if that went through. And a replica whose note could not be written
+// is not opened at all.
 //
 // Notes the device will not read are never taken for no notes. Read as none, the next note
 // written would be written over every other, and a replica with no note is one that nothing
