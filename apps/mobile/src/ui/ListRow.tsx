@@ -9,7 +9,7 @@
 // The first is the avatar with the words, which says how much room it is to have before anything
 // goes under it; the second is the mark with the action, and it may shrink. All of the reading
 // below is of React Native 0.86.3's ReactCommon/yoga/yoga and its renderer; that a row breaks
-// its line at 200 % has been seen on no device yet.
+// its line at 200 % is what CI's `row` flow reads on both platforms.
 //
 // - That it is two *(read)*. Yoga takes a row's one child that both grows and shrinks for a
 //   child whose room it need not ask, counts it as nothing wide, and breaks the row's lines by
