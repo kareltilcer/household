@@ -202,8 +202,11 @@ job of its own.
 | `launch` | with nobody signed in, the app opens at sign-in | both |
 | `engine` | the engine screen's checks all hold on Hermes itself: the i18n vectors, the fonts, the random source, the client's name, and the built-ins as `src/dev/engine/builtins.ts` lists them, none of what it says a device lacks and all of what it says one has | both |
 | `theme` | the theme changes at a press | both |
-| `harness` | a cell of each kind of the twelve-state harness, at 200 % text, in both themes; a row's action under its avatar and words, and not beside them; the row in conflict whole in a screenshot | both |
-| `primitives` | a sheet opens and closes; a menu's item opens a confirmation; a toast with Undo at 200 % text, in a screenshot; a drag that begins on a stepper's count takes the page with it | both |
+| `harness` | a cell of each kind of the twelve-state harness, at 200 % text, in both themes; the populated row and the row in conflict each whole in a screenshot | both |
+| `row` | a list row at 200 % text: its action under its avatar and words, at the row's own edge, and not beside them | both |
+| `primitives` | a sheet opens and closes; a menu's item opens a confirmation | both |
+| `stepper` | a drag that begins on a stepper's count takes the page with it | both |
+| `toast` | a toast with Undo at 200 % text, in a screenshot for a person | both |
 | `hold` | hold to complete: let go early, and held | both |
 | `shell` | a tab bar's slot opens its place and says so, Add is a sheet over it; a module is hidden from its row's menu; one pane at a phone's width and two at a tablet's; *not available* leads home | both |
 | `resolvers` | a change that was not accepted is given up: its sheet, the confirmation inside it, both gone and a toast | both |
@@ -255,10 +258,20 @@ to the server, and `stack`'s sign-in is still there for the job to find whatever
   it, while a press there is the bar's. In the seventh run a scroll stopped with its control
   whole under the bar (`[87,2223][642,2347]` of a screen whose bar begins at 2274), the press
   at its middle went to the bar, and the flow waited for a sheet nobody had asked for; the
-  same flow passed on the simulator. So a downward scroll that the next command presses says
-  `centerElement: true`, which has it go on until the control's middle is clear of the lowest
-  three tenths of the screen, and `flows.test.ts` fails one that does not. Where the page
-  ends first, the scroll gives up after five more swipes and takes the control where it is.
+  same flow passed on the simulator. The head of the screen is the same under the status bar:
+  in the tenth run a scroll up left a control of the dev toolbar at `[16,26][139,73]` on the
+  simulator, the press at its middle was the status bar's, which on iOS scrolls the page to
+  its head, and nothing was pressed. So a scroll that the next command presses says
+  `centerElement: true`, whichever way it scrolls, which has it go on until the control's
+  middle is clear of the three tenths of the screen it came in by, and `flows.test.ts` fails
+  one that does not. Where the page ends first, the scroll gives up after five more swipes
+  and takes the control where it is, so such a scroll is given a minute.
+- **One thing a flow, where the thing may fail.** A line added to the end of a flow is not
+  run where an earlier line of it fails, and one added to its middle takes what follows with
+  it: in the tenth run a wrong reading of the dev toolbar kept the stepper's drag from ever
+  running, and a row that had not wrapped kept the harness from its last five cells. What is
+  to be proven of a fix has a flow of its own (`stepper`, `toast`, `row`, `held`), at the cost
+  of the app's start.
 - **What stays a few seconds is looked for at once.** After a tap Maestro waits for the screen
   to come to rest before the next command, which on a slow emulator is seconds of a toast's
   five: the tap that brings one says `waitToSettleTimeoutMs: 500`.
