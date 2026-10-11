@@ -87,6 +87,13 @@ info:
     with the replica, which is where an owner reads the household's clients and their versions
     (`GET /households/{household_id}/clients`).
 
+    Every answer says `Cache-Control: no-store`, a problem document among them: what the API
+    answers is its caller's, and no cache, on the way or in a client, is to keep it past the
+    request. A device's HTTP client and a browser each keep a cache on disk by themselves, which
+    no client of Household's empties when its member signs out (D-197). The one answer that says
+    otherwise is the keys' (`GET /sync/jwks`), which is `no-cache`: PowerSync keeps them, and
+    asks the API again before it answers with a set it holds.
+
     An unsafe request whose `Origin` (or, lacking one, `Referer`) names an origin that is not
     Household's own web client's is refused `403` (`csrf_failed`), whatever it carries: a page on
     another site sent it. So is an unsafe request the session cookie authenticates that names no
@@ -2356,6 +2363,8 @@ paths:
       responses:
         '200':
           description: The keys
+          headers:
+            Cache-Control: { description: '`no-cache`: a cache that holds an earlier set asks the API again before it answers with it.', schema: { type: string } }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/JsonWebKeySet' }

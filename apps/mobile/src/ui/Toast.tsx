@@ -216,7 +216,9 @@ function Toast({
 
 /**
  * The toasts, one under another, each apart, clear of the device's own foot and of `foot`,
- * what else stands there. Nothing at all while there is none.
+ * what else stands there, and of the device's sides, which a phone on its side has: at the
+ * larger text sizes a toast is as wide as the screen leaves it (ui/Dialog.tsx says the same of
+ * a sheet). Nothing at all while there is none.
  */
 function Region({ foot }: { readonly foot: number }) {
   const theme = useTheme()
@@ -231,6 +233,8 @@ function Region({ foot }: { readonly foot: number }) {
         alignItems: 'center',
         gap: theme.space['space-1'],
         padding: theme.space['space-2'],
+        paddingLeft: theme.space['space-2'] + insets.left,
+        paddingRight: theme.space['space-2'] + insets.right,
         paddingBottom: theme.space['space-2'] + insets.bottom + foot,
       }}
     >

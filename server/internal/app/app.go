@@ -299,7 +299,8 @@ func NewRouter(d Deps) (*chi.Mux, error) {
 	})
 
 	root := chi.NewRouter()
-	root.Use(httpx.RequestScope, httpx.AccessLog(d.Logger), httpx.Recover(d.Logger), httpx.BodyDeadline(d.BodyTimeout))
+	root.Use(httpx.RequestScope, httpx.AccessLog(d.Logger), httpx.Recover(d.Logger), httpx.NoStore,
+		httpx.BodyDeadline(d.BodyTimeout))
 	root.NotFound(httpx.NotFound)
 	root.MethodNotAllowed(httpx.MethodNotAllowed)
 

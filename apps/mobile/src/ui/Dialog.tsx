@@ -169,12 +169,20 @@ export function Surface({
             <View
               // Only what is drawn in it takes a press: around it, the press is the ground's.
               pointerEvents="box-none"
+              // A sheet reaches the foot of the screen and, on a phone held upright, both its
+              // sides, where the device keeps nothing clear. It keeps clear of whatever the
+              // device does at its sides, as a dialog does and every screen: on a phone on its
+              // side those are the housing of its camera and the band of its buttons, which a
+              // sheet as wide as the screen stood under by all but its own padding, and a
+              // sheet's most is 30 rem of the reader's text, the whole of such a screen from
+              // some 180 % *(read: the insets are the device's word for it; seen on no
+              // device)*.
               style={{
                 flex: 1,
                 justifyContent: sheet ? 'flex-end' : 'center',
                 paddingTop: insets.top + theme.space['space-4'],
-                paddingLeft: sheet ? 0 : insets.left + theme.space['space-2'],
-                paddingRight: sheet ? 0 : insets.right + theme.space['space-2'],
+                paddingLeft: insets.left + (sheet ? 0 : theme.space['space-2']),
+                paddingRight: insets.right + (sheet ? 0 : theme.space['space-2']),
                 paddingBottom: sheet ? 0 : insets.bottom + theme.space['space-2'],
               }}
             >

@@ -20,6 +20,7 @@ import {
   type View,
   type ViewStyle,
 } from 'react-native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { elementsOf, expectAccessible } from '../test/a11y.ts'
 import { render, type DrawOptions } from '../test/render.tsx'
 import * as announcer from './announce.ts'
@@ -359,5 +360,40 @@ describe('a sheet', () => {
     expect(elementsOf(screen.getByTestId('editor'))).toContain(screen.getByTestId('question'))
     expect(screen.getByRole('header', { name: sample.discard })).toBeOnTheScreen()
     expectAccessible()
+  })
+
+  // A phone on its side keeps its two sides, for the housing of its camera and for its own
+  // buttons, and says so by its insets. A sheet reached both edges of the screen whatever they
+  // were, and at the larger text sizes, where it is as wide as the screen, what it held stood
+  // under them by all but its own padding. Jest lays nothing out: this holds what is declared.
+  it('keeps clear of the device’s sides, as a dialog does, and of its foot by its own padding', async () => {
+    await render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 852, height: 393 },
+          insets: { top: 0, left: 59, right: 47, bottom: 21 },
+        }}
+      >
+        <Sheet open onClose={() => undefined} title={sample.edit} testID="sheet" />
+        <Dialog open onClose={() => undefined} title={sample.discard} testID="dialog" />
+      </SafeAreaProvider>,
+    )
+    const { space } = nativeThemes.light
+    const stageOf = (surface: string) => {
+      const stage = screen.getByTestId(surface).parent
+      if (stage == null) throw new Error('no stage')
+      return styled(stage)
+    }
+    expect(stageOf('sheet:surface')).toMatchObject({
+      paddingLeft: 59,
+      paddingRight: 47,
+      paddingBottom: 0,
+    })
+    expect(styled(screen.getByTestId('sheet:surface')).paddingBottom).toBe(space['space-3'] + 21)
+    expect(stageOf('dialog:surface')).toMatchObject({
+      paddingLeft: 59 + space['space-2'],
+      paddingRight: 47 + space['space-2'],
+      paddingBottom: 21 + space['space-2'],
+    })
   })
 })

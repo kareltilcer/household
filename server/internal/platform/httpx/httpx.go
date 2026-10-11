@@ -38,6 +38,21 @@ func RequestScope(next http.Handler) http.Handler {
 	})
 }
 
+// NoStore says of every answer that no cache is to keep it, unless its handler says otherwise
+// of its own answer, as the keys PowerSync asks for do. What the API answers is its caller's,
+// read under their sign-in, and a cache holds it past that sign-in's end, where nothing of a
+// client's removes it: a device's HTTP client keeps a cache on disk by itself, OkHttp's under
+// React Native on Android and the shared URLCache on iOS, which a client written in JavaScript
+// cannot empty as its member signs out, and a browser keeps one of its own. Left unsaid, a
+// device kept each account's and household's last answers there after everything else it held
+// of its member was removed (ADR 0029).
+func NoStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // AccessLog writes one line per request as it finishes: its method, the route pattern it
 // matched, its status, its duration and the bytes written. Never the path or the query,
 // which carry ids the pattern does not need and search terms (logging's allowlist would
@@ -142,10 +157,12 @@ func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 					panic(http.ErrAbortHandler)
 				}
 				// Headers the handler set for the response it meant to send do not describe
-				// the problem that replaces it.
+				// the problem that replaces it, which no cache keeps either (NoStore, whose
+				// word went with the handler's).
 				for _, key := range handlerHeaders {
 					ww.Header().Del(key)
 				}
+				ww.Header().Set("Cache-Control", "no-store")
 				problem.Write(ww, reqctx.RequestID(r.Context()), problem.Internal())
 			}()
 			next.ServeHTTP(ww, r)

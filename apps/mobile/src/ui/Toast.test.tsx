@@ -8,6 +8,7 @@ import { nativeThemes } from '@household/tokens/native'
 import { act, fireEvent, screen } from '@testing-library/react-native'
 import { useState } from 'react'
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import type { TestInstance } from 'test-renderer'
 import { forget } from '../session/forget.ts'
 import { elementsOf, expectAccessible, nameOf, takesPress, textOf } from '../test/a11y.ts'
@@ -18,7 +19,7 @@ import { Button } from './Button.tsx'
 import { sample } from './controls.fixtures.ts'
 import { Dialog } from './Dialog.tsx'
 import { Sheet } from './Sheet.tsx'
-import { useToast, useToastsAbove } from './Toast.tsx'
+import { ToastProvider, useToast, useToastsAbove } from './Toast.tsx'
 
 const undoWord = catalogs.en['ui.toast.undo']
 const dismiss = catalogs.en[controls.dismiss.labelKey]
@@ -196,6 +197,34 @@ describe('a toast', () => {
     )
     // And takes no press but on a toast: the screen beside it is the screen's.
     expect(region.props.pointerEvents).toBe('box-none')
+  })
+
+  // A phone on its side keeps its two sides as it keeps its foot, and says so by its insets:
+  // a toast as wide as the screen leaves it, as one is at the larger text sizes, stood under
+  // the housing of the camera there. The toasts drawn here are a provider's of the test's own,
+  // under a device that has sides.
+  it('keeps clear of the device’s sides as of its foot, which a phone on its side has', async () => {
+    await render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 852, height: 393 },
+          insets: { top: 0, left: 59, right: 47, bottom: 21 },
+        }}
+      >
+        <ToastProvider>
+          <Raise />
+        </ToastProvider>
+      </SafeAreaProvider>,
+    )
+    await raise()
+    const region = screen.getByTestId('toast').parent
+    if (region == null) throw new Error('no region')
+    const space = nativeThemes.light.space['space-2']
+    expect(StyleSheet.flatten(region.props.style as StyleProp<ViewStyle>)).toMatchObject({
+      paddingLeft: space + 59,
+      paddingRight: space + 47,
+      paddingBottom: space + 21,
+    })
   })
 
   it.each(['light', 'dark'] as const)(

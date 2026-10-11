@@ -188,6 +188,28 @@ func TestAnUnknownPathIsANotFoundProblem(t *testing.T) {
 	}
 }
 
+// No cache keeps an answer, a problem document among them, unless its handler says otherwise of
+// its own: the keys PowerSync asks for are answered no-cache, and stay so.
+func TestNoCacheKeepsAnAnswerUnlessItsHandlerSaysSo(t *testing.T) {
+	r, _ := router(t)
+	r.Get("/answers", func(w http.ResponseWriter, _ *http.Request) {
+		httpx.WriteJSON(w, http.StatusOK, map[string]string{"name": "Jana"})
+	})
+	r.Get("/keys", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		httpx.WriteJSON(w, http.StatusOK, map[string]string{})
+	})
+	for path, want := range map[string]string{
+		"/answers": "no-store", "/keys": "no-cache", "/api/v1/no-such-thing": "no-store",
+	} {
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, get(t, path))
+		if got := rec.Header().Get("Cache-Control"); got != want {
+			t.Errorf("%s: Cache-Control %q, want %q", path, got, want)
+		}
+	}
+}
+
 func TestAnUnservedMethodIs405WithAllow(t *testing.T) {
 	r, _ := router(t)
 	rec := testsupport.Serve(t, r, httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/api/v1/healthz", nil))
@@ -298,10 +320,14 @@ func TestAPanicIsA500Problem(t *testing.T) {
 	if !strings.Contains(logs.String(), `"status":500`) {
 		t.Fatalf("the access log missed the 500:\n%s", logs)
 	}
-	for _, key := range []string{"ETag", "Content-Encoding", "Cache-Control", "Set-Cookie"} {
+	for _, key := range []string{"ETag", "Content-Encoding", "Set-Cookie"} {
 		if v := rec.Header().Get(key); v != "" {
 			t.Errorf("the problem carries the handler's %s: %q", key, v)
 		}
+	}
+	// Not the handler's hour: no cache keeps the problem, as none keeps any other answer.
+	if v := rec.Header().Get("Cache-Control"); v != "no-store" {
+		t.Errorf("the problem's Cache-Control: %q", v)
 	}
 }
 

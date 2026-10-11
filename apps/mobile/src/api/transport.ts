@@ -9,6 +9,15 @@
 // `signal`, is the class's own whichever sends it. Both send the device's cookies unless they
 // are told not to, so every request says so. transport.test.ts runs this file over each of
 // them, with only their native half stood in for.
+//
+// What no request can say is that its answer be kept by no cache. The client under either
+// `fetch` keeps one on disk by itself, OkHttp's under React Native on Android and the shared
+// `URLCache` on iOS, `expo/fetch` hands neither a request's cache mode, and nothing in
+// JavaScript empties either when a sign-in ends *(read: `ExpoFetchModule.kt`,
+// `OkHttpClientProvider.kt`, `ExpoFetchModule.swift`, `expo/src/winter/fetch/fetch.ts`; run on
+// no device)*. So the API says it of every answer, `Cache-Control: no-store`
+// (server/internal/platform/httpx, `NoStore`): a route served from anywhere else, or by a
+// handler that says otherwise, is kept on the device past its member's sign-out.
 import { readProblem } from '@household/api'
 import { ApiProblemError } from './problem.ts'
 

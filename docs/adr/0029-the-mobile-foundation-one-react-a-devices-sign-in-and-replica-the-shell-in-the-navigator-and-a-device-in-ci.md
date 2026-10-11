@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-10
 - **Plan item:** 28
-- **Decides for:** [06-clients](../prd/06-clients.md) §1 to §8; [02-identity](../prd/02-identity-and-access.md) FR-ID3, FR-ID4, FR-ID7; [03-platform-strands](../prd/03-platform-strands.md) §2, FR-NT1, §9; [05-privacy](../prd/05-privacy-and-compliance.md) FR-PR1; design [01-foundations](../design/01-foundations.md), [02-components](../design/02-components.md), [03-patterns](../design/03-patterns.md) §1, §2, §8, [04-navigation](../design/04-navigation.md) §1, §5, §8, §9, DD-11; D-23, D-25, D-36, D-38, D-98, D-99, D-104, D-105, D-154, D-155, D-178, D-183 to D-196; PL-3, PL-5, PL-13; plan Q6, Q18; the consequences of [ADR 0007](0007-shared-packages-client-catalogs-and-vectors.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md), [ADR 0024](0024-design-tokens-icons-and-the-illustration-kit.md), [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md), [ADR 0026](0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md) and [ADR 0028](0028-the-catalog-in-parts-the-payment-form-the-entitlement-in-the-shell-and-what-a-household-shows-of-its-data.md) for item 28
+- **Decides for:** [06-clients](../prd/06-clients.md) §1 to §8; [02-identity](../prd/02-identity-and-access.md) FR-ID3, FR-ID4, FR-ID7; [03-platform-strands](../prd/03-platform-strands.md) §2, FR-NT1, §9; [05-privacy](../prd/05-privacy-and-compliance.md) FR-PR1; design [01-foundations](../design/01-foundations.md), [02-components](../design/02-components.md), [03-patterns](../design/03-patterns.md) §1, §2, §8, [04-navigation](../design/04-navigation.md) §1, §5, §8, §9, DD-11; D-23, D-25, D-36, D-38, D-98, D-99, D-104, D-105, D-154, D-155, D-178, D-183 to D-197; PL-3, PL-5, PL-13; plan Q6, Q18; the consequences of [ADR 0007](0007-shared-packages-client-catalogs-and-vectors.md), [ADR 0010](0010-mobile-tokens-second-step-providers-and-client-versions.md), [ADR 0019](0019-the-sync-client-library.md), [ADR 0024](0024-design-tokens-icons-and-the-illustration-kit.md), [ADR 0025](0025-the-web-foundation-policy-harness-budget-and-build-id.md), [ADR 0026](0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md) and [ADR 0028](0028-the-catalog-in-parts-the-payment-form-the-entitlement-in-the-shell-and-what-a-household-shows-of-its-data.md) for item 28
 
 ## Context
 
@@ -371,6 +371,21 @@ over until the next start. That is what a run closed between a pair's removal an
 left behind, what a keystore that lost a pair left, and what a restore from a backup brought,
 which carries what
 was kept and never the pair. Where the vault would not say what it holds, nothing is removed.
+**And the device's own HTTP cache holds nothing of what the API answers** *(read on both
+platforms; what each cache stores is recalled of OkHttp and of `URLCache`, whose sources are
+not in the repository; run on no device)*. The client that `expo/fetch` asks through keeps a
+cache on disk by itself: on Android React Native's OkHttp client, ten megabytes under the
+app's cache directory (`OkHttpClientProvider.kt`, which `ExpoFetchModule.kt` builds its client
+from), and on iOS the default session's shared `URLCache` (`ExpoFetchModule.swift`). Each
+keeps the `200` of a `GET` that does not forbid it, one asked with a token among them, and
+nothing of the app's can empty either. So the account's, the households', a household's and
+its members' last answers stayed on the device after their member signed out, beside
+everything the app removes, which the fifth review round found by reading what the app links.
+`expo/fetch` hands neither platform a request's cache mode, so the answer says it: **the API
+answers everything `Cache-Control: no-store`**, unless a handler says otherwise of its own
+answer (`NoStore`, `server/internal/platform/httpx/httpx.go`), for a browser as for a device,
+and a test holds a device's answers to it (`server/internal/app/device_test.go`). The contract
+says so (`docs/api/openapi.yaml`, *Clients*), and D-197.
 The query client is one member's at a time: its keys are the web's, without the member in them,
 what it kept is restored under the member whose sign-in is in use, and an account it holds is
 taken for the one signed in only where its id is theirs. Its keep is the app's own, over
@@ -641,7 +656,15 @@ the innermost open modal, in a row at its foot, and by the root where none is op
 under a modal an Undo could not be pressed: the hosts are a stack by depth, and a toast's
 dwell is the provider's and not the drawn toast's, so it runs on through a modal that opens or closes around it. A toast with
 Undo wraps: its sentence says how much room it is to have, and its controls go under it where
-a phone at 200 % has not the room for both. The toasts on screen go with their member when a
+a phone at 200 % has not the room for both. What is drawn over the whole window keeps clear of
+the device's sides as of its foot, by the device's own insets, as every screen and bar does: a
+modal's ground reaches every edge, and a sheet, a dialog and the toasts' row stand inside them
+(`src/ui/Dialog.tsx`, `src/ui/Toast.tsx`). A phone on its side has the housing of its camera at
+one side and, on Android with three buttons, their band at the other; on a phone 852 pt
+long a sheet's edge was inside such a side from some 150 % of the text and a toast's a little
+sooner, each as wide as the screen from 180 % and 160 %, and each stood under what is there by
+all but its own padding *(read: the insets are the device's word for what it keeps, and the
+arithmetic is the tokens'; seen on no device)*. The toasts on screen go with their member when a
 sign-in ends (`onForget`): one names a row of theirs, and its Undo writes to their replica.
 **While a
 screen reader is on, no toast's dwell runs** (D-188): a toast stays until its Undo or its
@@ -856,10 +879,13 @@ platform.
 | A refused form's first field found by asking the tree; by measuring where each field is; by its owner passing the order | There is no document to ask. Measuring is asynchronous, and Jest lays nothing out. The third is a second list of a form's fields. Known limit: a field drawn later than its neighbours enters after them |
 | A refusal focusing the field for the keyboard too | The keyboard would rise over the error a sighted member is reading |
 | The keyboard left for the platform to put away as the screen holding its field is replaced; `Button` putting it away whenever it turns busy; the router's stacks putting it away at each change of address | On Android whether it goes is a race *(seen in CI's tenth run: after the dev form's sign-in it stood over the household's tab bar for as long as the flow waited, where three other sign-ins of the same run left none; read: React Native blurs a focused field in the commit that deletes its view, and Android hides the keyboard only for a view still attached to its window)*. A control that is busy is not always its screen's last: one that saves and stays would take the keyboard from a member who is still typing beside it. And at a change of address the field has gone already: `Keyboard.dismiss()` blurs the field that has the focus, and there is none left to ask. The press that leads away knows that it does, and puts the keyboard away itself, while its field is still mounted: the dev form's does, and item 29's forms do (Consequences) |
+| `Screen` making room for the keyboard under a field of its own now: `automaticallyAdjustKeyboardInsets` on its scroll view, which is iOS's alone, with a root padded by the keyboard's height or `softwareKeyboardLayoutMode: 'pan'` for Android; a `KeyboardAvoidingView` in `Screen`, as a modal and the toasts stand in one | No screen of this build holds a field, the dev pages apart. The mend is another on each platform, Android's a choice for the whole build, and neither can be run where this was written. A `KeyboardAvoidingView` counts from its place in its parent and not on the screen *(read: `_relativeKeyboardHeight`, `Libraries/Components/Keyboard/KeyboardAvoidingView.js`)*, so in a screen under the frame's bars it would leave their height under the keyboard: a modal's and the toasts' stand at the top of their window, where the two are one. Item 29's first form makes the room, where a device's screenshot can show it (Consequences) |
 | A status's word as a hidden text beside its glyph | React Native has no visually hidden text, only clipped or transparent text, which a screen reader may or may not read. The mark is one accessible element, named by its word |
 | Every text of a row a stop of its own; the whole row one accessible element | A row of four swipes. The second would put its trailing action and its conflict control out of a screen reader's reach on iOS *(read)*. A row's words are one element, and its mark and its action each their own |
 | One constant for the pair of props that hides an element from a screen reader on both platforms | Every place that hides one writes the pair, and none writes half of it; a wrapper is an element more in each |
+| One hook for *said once, and not again where only the language changed*, told by a sentence's key and its arguments, in place of the four places that decide what is said again (`stood` in `Banner`, `drawnIn` in `OfflineBar`, `told` in the hold, `useSaidOnArrival`) | They are four answers to four questions. A banner says whatever its sentence becomes, and keeps the language it was last said in, as the offline bar keeps the one it arrived in (`stood`, `drawnIn`): two lines in each. The hold keeps the phase it last told, and what stands in a screen's place says what it arrived as, once, by an effect that runs once: neither keeps a language at all. So one hook would hold two of them. And a banner is handed its sentence as words, which is what it announces: a key beside them would be a second prop on every banner, there for this alone. What it would mend is a banner whose sentence changes in the very draw its language does, which is taken for the same one and not said, where the language changes as the account's is learned or changed |
 | The `Request` unpacked into an address and its options; `expo/fetch` imported by name; React Native's `fetch` forced (`EXPO_PUBLIC_USE_RN_FETCH`) | A body would be read as text, which refuses the form an upload sends. The second pins what the runtime already chose, and under Jest its native half is a stand-in. The third is a build-wide switch for no gain |
+| The device's HTTP cache kept empty by the app: its requests saying `Cache-Control: no-store` themselves; the device's client built without a cache, by `OkHttpClientProvider.setOkHttpClientFactory` on Android and the session configuration `expo/fetch` takes from its host on iOS; the cache emptied as a sign-in ends. Or the API's header for a device's requests alone | OkHttp heeds such a request *(recalled)*, and whether iOS's cache does is not known here: half a mend, on the platform no flow signs in on. A client with no cache is native code in the application's own class on each platform, of which this app writes none: two config plugins that write Kotlin and Swift, to turn off what one header of the answer turns off. Nothing in JavaScript reaches either cache to empty it. And a browser's cache keeps the same answers no better: the rule is the API's, for every client, held by the server's tests, and the web's own suites, the end-to-end one among them, pass with it where this was written |
 | A renewal on any `401` | A sign-in that failed, `invalid_credentials`, would rotate the refresh token of whoever is signed in, for nothing. A second step whose challenge is gone is answered `unauthenticated` all the same, which the answer cannot tell from a refused token: a screen that signs somebody in beside a sign-in in use asks through a client that signs nothing, as the renewal does (item 29) |
 | A renewal with no answer handing its request's `401` back; a renewal answered with another problem thrown | A member offline would be told that something went wrong at our end. And a problem thrown from the transport is taken by its caller for an answer that never came: a renewal the server had answered, with a `429`, would be said as a server out of reach |
 | A request failed where its token could not be renewed before it lapsed | The token held is sent as it is, and the server says whether it still stands: an answered problem thrown from the transport would be taken for a lost answer |
@@ -1220,9 +1246,11 @@ platform.
   each slot would be 144 pt and the two ends past the screen's edges. A flow of its own reads
   it now, on both platforms (`turned`, `e2e/flows/turned.yaml`): it presses the control and
   asks for each end of the bar whole on the screen, by a scroll that swipes nothing where it
-  has it, an assertion passing an element any part of whose frame is on the screen. It is
-  written, and has run on no device yet. No flow can reach the flow chart, which no phone
-  held upright gives 28 rem.
+  has it, an assertion passing an element any part of whose frame is on the screen. **The
+  sixteenth run (38170218040, on `9448e7a`) passed it on both platforms**: the mended bar
+  within its room, which is what a device has shown, the bar unmended having been drawn on
+  none. No flow can reach
+  the flow chart, which no phone held upright gives 28 rem.
 - **Item 29** takes the seams this leaves: the sign-in screen's place (`src/session/SignIn.tsx`)
   and `signedIn`, which a sign-in the server answered is handed to; several profiles' sign-ins
   in the token store, of which one is in use; the household's name in the app bar as the
@@ -1248,7 +1276,19 @@ platform.
   (`Keyboard.dismiss()`), while its field is still mounted, as the dev form does: on Android
   a keyboard whose field leaves with its screen stays or goes by a race, and in CI's tenth run
   it stood over the household's tab bar after a sign-in, the bar out of a member's reach and
-  out of the tree a flow reads, until something put it away.
+  out of the tree a flow reads, until something put it away. **And `Screen` makes no room for
+  the keyboard under a field of its own** *(read, and seen on no device)*. On iOS a scroll view
+  is inset for the keyboard only where it asks to be (`automaticallyAdjustKeyboardInsets`, off
+  unless set: `_keyboardWillChangeFrame`, `RCTScrollViewComponentView.mm`), and on Android the
+  app is drawn edge to edge, where the keyboard resizes nothing and stands over what is drawn
+  *(read: `Window.enableEdgeToEdge`, `WindowUtil.kt`; recalled of Android, and seen of the tab
+  bar in that run)*. So a field in the part of a screen the keyboard covers is typed in unseen,
+  and its page scrolls no further than its own end, which is under the keyboard too; a modal's
+  fields are clear of it, a modal standing in a `KeyboardAvoidingView`. No screen of this build
+  holds a field. Item 29's first form makes the room (Alternatives rejected says what was
+  weighed), and what shows it is a flow's line: with the text at 200 %, press the last field
+  of its longest form, and a screenshot taken with the keyboard up shows that field above it,
+  on both platforms.
 - **Item 30** makes the first EAS project and build: nothing of `eas.json` has run, nor the
   script that generates on the builder (`eas-build-post-install`), and until a project exists
   no build can ask for a push token. It gives the app a link host and its association files,
@@ -1315,7 +1355,61 @@ platform.
   no longer asks; Expo's push service; and Expo's asset host, which `expo-asset` falls back to
   inside Expo Go alone. `setAutoServerRegistrationEnabledAsync(false)` ends it: whether a
   sign-out, or a turning-off here, calls it is **item 30**'s to decide with the first project,
-  where it can first run.
+  where it can first run. The library names the device to Expo by an id of its own making,
+  kept in the app's files that no backup takes on Android and in the keychain on iOS, beside
+  the last token it sent *(read: `serverregistration/InstallationId.java`,
+  `ServerRegistrationModule.swift`)*: no sign-out removes either, and neither says anything of
+  a member.
+- **expo-notifications links Firebase Messaging on Android, which asks nobody while the build
+  holds no `google-services.json`** *(read: `firebase-messaging` in the library's
+  `android/build.gradle`, and `PushTokenModule.kt`, which catches the app Firebase then lacks;
+  Firebase's own code is in no file of the repository, and no build was made)*. A push on
+  Android needs that file. With it, by Firebase's documented default and read in no source,
+  Firebase registers the installation with Google as the app first starts, before any member
+  was asked anything and whether or not one ever turns notifications on: a request to a third
+  party that nobody caused, of the kind turned off in NetInfo. **Item 30**, which adds the
+  file, turns that off with it (`firebase_messaging_auto_init_enabled` false in the manifest,
+  a token being asked for at a member's press all the same), or says why not.
+- **What the fifth review round read of everything else the app links** *(read in
+  `node_modules`, each library's JavaScript and its native half where it is there; the
+  bytecode's addresses once more; nothing run on a device)*: nothing else asks a host by
+  itself in a build of this configuration, and no `expo-updates` is linked. `expo-dev-client`
+  compiles to stubs in an Android release and into no iOS configuration but Debug;
+  `expo-application` reads the device's ids only where it is asked, and nothing asks;
+  `expo-constants` makes no installation id. What the libraries keep by themselves holds
+  nothing of a member: flags of which permissions were asked for, a background colour
+  (`expo-system-ui`), an empty directory op-sqlite has Android make in the app's external
+  files. And the sync SDK's own requests are not the app's: the stream and what goes with it
+  leave by the SDK's own `expo/fetch` (`@powersync/react-native`, `lib/sync/stream/fetch.js`),
+  to the one endpoint the API's credentials name, with the device's cookies allowed, a
+  request the app does not make having no `credentials: 'omit'`, with a header of the SDK's
+  that names its version, React Native's and the operating system's, and with the replica's
+  own id. The sync service sets no cookie. The stream is a `POST`, which neither cache above
+  keeps; after an upload the SDK also asks the service for a write checkpoint by a `GET` that
+  carries the replica's id (`getLegacyWriteCheckpoint`, `@powersync/shared-internals`), whose
+  answer, a number, is the service's own to forbid the keeping of, the API's header being no
+  part of it *(what the service answers it with is not read)*. Handing the SDK the app's own
+  transport is a change to `@household/sync` that nothing here needed. A built APK's manifest holds more than its permissions, which are
+  all `build/asked.ts` reads: the `<queries>`, services, receivers and providers its libraries
+  merge, Firebase's among them, and on iOS the notifications' plugin writes `aps-environment`
+  as `development` in every variant: **item 30**'s first build reads both, and **item 93**'s
+  table.
+- **A member's picture is kept by whatever cache its reader has, past their sign-out, on a
+  device as in a browser** *(read: `objectstore.go`, `FrescoModule.kt`, `RCTImageLoader.mm`;
+  no member's screen of the app draws a picture yet)*. The object store answers every object
+  `private, max-age=31536000, immutable`, its bytes never changing (ADR 0015), and a picture
+  is asked of it by the link the API hands out, so the API's `no-store` is no part of that
+  answer. `Portrait` (`src/ui/Chip.tsx`) draws one with React Native's `Image`, whose loader
+  keeps it on disk, Fresco's cache on Android and the shared `URLCache` on iOS; the web's
+  `<img>` leaves it in the browser's cache the same way. Neither is emptied when a sign-in
+  ends. Whether a member's picture is among what a sign-in's end removes (D-187, D-161) was
+  decided nowhere: **item 29**, whose screens first draw one on a device, puts it to the
+  product's rules, for both clients, a link that answers otherwise being the object store's
+  `ResponseCacheControl` to sign.
+- **No device run reads the HTTP cache.** That the API's header keeps it empty is held on the
+  server and read of the two clients. The line that would show it is the emulator job's, after
+  the stack's flows, as root: no file under the app's `cache/http-cache` but the cache's own
+  journal.
 - `expo-localization`'s `supportedLocales`, by which the operating system offers the app's
   language in its own settings, is not set: the UI language is the member's (PRD 03 §9), and
   whether the system's setting may choose it is undecided.
@@ -1361,10 +1455,18 @@ platform.
   month and the hour of the named zone right in both. Every sample FormatJS writes was Node's
   very string there, and on the emulator the whole line passed. So a date is the device's own
   to write, and that was no defect: the line holds a date to its fields now, and what FormatJS
-  writes to the string still (`src/dev/engine/checks.ts`), which has run on no device.
+  writes to the string still (`src/dev/engine/checks.ts`).
   `stepper` and `shell` passed on both, the second reading nothing of the bar whose room
-  turns, which `turned` was written to read since, and has run on no device either. What the
-  fourth round changed has been on no device.
+  turns, which `turned` was written to read since. What the fourth review round changed
+  (`9f8dd82`) was first on a device in the sixteenth run (38170218040, on `9448e7a`), **which
+  passed whole, every job, as the eighth had**. All sixteen of the simulator's flows passed: `launch`,
+  with the library that says whether there is a connection configured as the app starts,
+  `shell`, with the two panes one tree, `turned`, and `formats` with its date held to its
+  fields. On the emulator the two flows of the kept read's check passed and all twenty-one of
+  the suite, `turned` and `formats` among them, two of them, `harness` and `link`, at a second
+  asking after the driver had gone, as in the runs before. What the fifth round changed, a
+  sheet and the toasts kept clear of a device's sides, has been on no device, and no flow
+  turns one on its side.
   In the eighth run, on the iOS simulator all eight of its
   flows passed: the app opens at sign-in with nothing kept; the engine screen's checks hold on
   Hermes, the vectors' 87 format cases and 8 match cases under the polyfills, the five families
