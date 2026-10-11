@@ -511,7 +511,12 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   push token's note and the replicas' notes do. By that the session removes, as the app
   starts and before anything is read back, what is kept of anybody the vault holds no
   sign-in of (`forgetOthers`): a removal the app was closed in the middle of, a keystore
-  that lost a pair, a restore from a backup. The note of a push registration goes with a
+  that lost a pair, a restore from a backup. The device's own HTTP cache is no keeper of the
+  app's: it is kept empty of the API's answers by the API's own header
+  ([D-197](docs/prd/09-decisions.md)), which `src/api/transport.ts` says, and a member's
+  picture, once a screen draws one (`Portrait`, `src/ui/Chip.tsx`), is in the platform's
+  image cache, which nothing empties: item 29 decides it.
+  The note of a push registration goes with a
   removal the server took, or with the sign-in (`forgetPush`, `src/push/registration.ts`):
   removed where the server was not told, a turning-off after a sign-out that failed asked
   the server nothing. Nor are notifications turned off where the device would not say
@@ -526,9 +531,12 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   (`src/sync/databases.ts`). Every request the
   app sends the API names it, `Household-Client: mobile/<version>` (`clientName`,
   `src/api/client.ts`), and every `fetch` of the app's says `credentials: 'omit'` (`platform`,
-  `src/api/transport.ts`): the replica's own leave by `namedFetch`, and an upload, which leaves
-  by expo-file-system's `File.upload` and by no `fetch`, names the app itself
-  (`src/sync/files.ts`). What the query client read is kept on the device under its member
+  `src/api/transport.ts`): what the replica asks the API leaves by `namedFetch`, and an upload,
+  which leaves by expo-file-system's `File.upload` and by no `fetch`, names the app itself
+  (`src/sync/files.ts`). The sync SDK's own requests to the sync service, the stream and a
+  write checkpoint's `GET`, are not the app's: they leave by the SDK's own `expo/fetch`, with
+  the device's cookies allowed and a header of the SDK's own (ADR 0029, *Consequences*).
+  What the query client read is kept on the device under its member
   (`src/api/keep.ts`), for one shape (`keptShape`) and not for one build, as the last answer
   each read was given: a re-read that got no answer, or that the server failed, takes
   nothing off the device, only the API's own `404` does (`isKept`, `src/api/query.ts`), and
@@ -559,7 +567,12 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   own JavaScript, with and without). A library that asks a host of its own by itself is
   configured not to where the app starts to use it; the one left is expo-notifications,
   which keeps the device's token with Expo's service once a token was asked for, and which
-  item 30 decides with the first project (ADR 0029, *Consequences*). `src/sync/open.ts` is
+  item 30 decides with the first project (ADR 0029, *Consequences*). And Firebase Messaging,
+  which expo-notifications links on Android, registers with Google at the app's first start,
+  by Firebase's documented default, once a build holds a `google-services.json`: item 30
+  turns that off with the file (`firebase_messaging_auto_init_enabled`). What else the app
+  links was read for the same in the fifth review round, and asks nobody (ADR 0029,
+  *Consequences*). `src/sync/open.ts` is
   the one source file
   that imports `@household/sync`'s values, which `src/sync/open.test.ts` holds, and the one
   that opens a replica: once on the device however many hold it, in a file named for its member
@@ -594,12 +607,22 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   gone (`src/ui/Menu.tsx`), as a select tells its owner of a choice (`src/ui/Select.tsx`), since by
   React Native's source iOS presents no modal while another of the same controller's is leaving. A
   modal that is to give the accessibility focus back names what opened it (`opener`): by the same
-  source iOS's host gives it back by itself and Android's restores none. A select's and a menu's
+  source iOS's host gives it back by itself and Android's restores none. What is drawn over the
+  whole window keeps clear of the device's sides as of its foot, by the device's own insets: a
+  sheet's stage, a dialog's and the toasts' region are padded by them (`src/ui/Dialog.tsx`,
+  `src/ui/Toast.tsx`), as `Screen`, the app bar, the frame and the tab bar are. A phone on its
+  side has them, and at the larger text sizes a sheet and a toast are as wide as its screen.
+  A select's and a menu's
   opening press put the keyboard away (`Keyboard.dismiss()`), their sheet taking the screen from
   whatever field was being typed in, and so does the press that sends the dev sign-in form and
   leads to another screen, while its field is still mounted (`src/dev/signin/index.tsx`): on
   Android a keyboard whose field leaves with its screen stays or goes by a race (CI's tenth
-  run), and stands over the next screen until something puts it away. A press on a control
+  run), and stands over the next screen until something puts it away. `Screen` makes no room
+  for the keyboard under a field of its own, on either platform, and no screen of item 28
+  holds a field, the dev pages apart: item 29's first form makes it, and a
+  `KeyboardAvoidingView` counts from its place in its parent, so it is right only where it
+  stands at the top of its window, as a modal's and the toasts' do (ADR 0029, *Alternatives
+  rejected* and *Consequences*). A press on a control
   takes no focus from a field on a device (`keyboardShouldPersistTaps="handled"`,
   `src/ui/Screen.tsx`, `src/ui/Dialog.tsx`), so a control that shows what is typed apart
   from its value gives its owner at each key what leaving the field would settle to, as
@@ -762,6 +785,17 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   (`etag.Set`, `etag.IfMatch`; `problem.Conflict` is the `409` with the current
   representation); unsafe methods accept `Idempotency-Key`, which the platform's middleware
   answers for every module route.
+- **No cache keeps what the API answers.** The root middleware `httpx.NoStore` says
+  `Cache-Control: no-store` of every answer, a problem document and a panic's among them
+  (`Recover`), and a handler with a reason of its own says otherwise of its own answer: the
+  keys PowerSync asks for are `no-cache`. A device's HTTP client keeps a cache on disk by
+  itself (OkHttp's under React Native on Android, the shared `URLCache` on iOS) and a browser
+  keeps its own, which no client can empty when its member signs out: a route served outside
+  the root router, or a handler that sets the header, is kept on a device past its member's
+  sign-out ([D-197](docs/prd/09-decisions.md),
+  [ADR 0029](docs/adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md)).
+  What the object store answers is not the API's: an object is `private` and its reader's to
+  keep ([ADR 0015](docs/adr/0015-files-object-storage-the-meter-and-pictures.md)).
 - **Migrations** are goose, one numbered block per module, forward-only and
   expand/contract: an old app in the field must keep working against the new schema.
 - **Tests hit real PostgreSQL.** No database mocks: RLS, `SET LOCAL` and the change feed
