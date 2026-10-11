@@ -128,6 +128,69 @@ describe('a request the server refuses the token of', () => {
   })
 })
 
+describe('a request whose answer was lost', () => {
+  const resent = { delays: [0, 0], sleep: () => Promise.resolve() }
+
+  // Signed anew as it is sent again, a sign-out that hung while its member left and another
+  // signed in would end the other's sign-in, and a write would be made in the other's name.
+  it('is sent again as it left: with its own token, though another member’s is the one in use by then', async () => {
+    let lost = true
+    const api = answering({
+      'POST /auth/logout': () => {
+        if (!lost) return empty()
+        lost = false
+        return unanswered()
+      },
+    })
+    const signIn = bearer('access-of-the-first')
+    const client = testClient(api.transport, {
+      bearer: signIn,
+      retry: {
+        delays: [0],
+        sleep: () => {
+          signIn.current.mockResolvedValue('access-of-the-second')
+          return Promise.resolve()
+        },
+      },
+    })
+    const answer = await client.POST('/auth/logout')
+    expect(answer.response.status).toBe(204)
+    const [first, second] = api.sent('POST /auth/logout')
+    expect(first?.headers.get('Authorization')).toBe('Bearer access-of-the-first')
+    expect(second?.headers.get('Authorization')).toBe('Bearer access-of-the-first')
+    expect(second?.headers.get('Idempotency-Key')).toBe(first?.headers.get('Idempotency-Key'))
+    expect(first?.headers.get('Idempotency-Key')).not.toBeNull()
+  })
+
+  // The renewal was sent again itself, as any request is. The request it was made for is not
+  // sent round to ask for it once more: each time would be a refusal and a renewal again.
+  it('is not sent again for a renewal that got no answer: it has none either', async () => {
+    const api = answering({ 'GET /me': () => problem(401, 'unauthenticated') })
+    const signIn = bearer('access-a')
+    signIn.renew.mockRejectedValue(new TypeError('Network request failed'))
+    await expect(
+      testClient(api.transport, { bearer: signIn, retry: resent }).GET('/me'),
+    ).rejects.toThrow('Network request failed')
+    expect(api.asked).toHaveLength(1)
+    expect(signIn.renew).toHaveBeenCalledTimes(1)
+  })
+
+  it('is sent again by the client that signs nothing, as by the one that signs', async () => {
+    let asked = 0
+    const api = answering({
+      'POST /auth/token': () => {
+        asked += 1
+        return asked < 3 ? unanswered() : json(200, {})
+      },
+    })
+    const answer = await testClient(api.transport, { retry: resent }).POST('/auth/token', {
+      body: { refresh_token: 'refresh-a' },
+    })
+    expect(answer.response.status).toBe(200)
+    expect(api.sent('POST /auth/token')).toHaveLength(3)
+  })
+})
+
 describe('the transport by itself', () => {
   it('says to send no cookie, whatever the request was made with', async () => {
     const sent: Request[] = []
@@ -468,7 +531,8 @@ describe.each(platforms)('over a device’s own fetch, $name', ({ install }) => 
     expect(started).toHaveLength(1)
   })
 
-  // @household/api resends a request whose answer was lost from a copy of it, key and all.
+  // A request whose answer was lost is sent again from a copy of it, key and all
+  // (@household/api's `retryingFetch`, under the signing: client.ts).
   it('resends a request whose answer was lost, from a copy, with the key it left with', async () => {
     const { client, started } = over((sent) => (sent.length === 1 ? null : registered))
     const answer = await client.POST('/push/subscriptions', { body: registration })

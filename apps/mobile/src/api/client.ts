@@ -4,7 +4,13 @@
 // it where the server says it has lapsed (transport.ts). An error is the contract's problem
 // document, typed by its code and thrown as an ApiProblemError, which the query client and a
 // screen switch on (problem.ts).
-import { createApiClient, readProblem, type ApiClient, type ApiClientOptions } from '@household/api'
+import {
+  createApiClient,
+  readProblem,
+  retryingFetch,
+  type ApiClient,
+  type ApiClientOptions,
+} from '@household/api'
 import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 import { version } from '../../package.json'
@@ -77,14 +83,25 @@ export interface MobileClientOptions extends Pick<ApiClientOptions, 'retry'> {
   readonly bearer?: Bearer
 }
 
-/** The client every screen of the mobile app asks the API through. */
+/**
+ * The client every screen of the mobile app asks the API through.
+ *
+ * A request whose answer was lost is sent again here, under the signing, and not by
+ * @household/api around it: a request is signed once, for the member in use as it is asked,
+ * and leaves again as it left. Signed anew at each sending, one that hung while its member
+ * signed out and another signed in would leave the second time as the other's, with the key
+ * it left with: a write made twice, once in each name, and a sign-out that ended the sign-in
+ * of whoever came next. A token that lapsed between the two is refused, and renewed by its own
+ * sign-in alone (transport.ts). And a renewal that got no answer leaves its request with none:
+ * the request is not sent round again to ask for it once more.
+ */
 export function createMobileClient(options: MobileClientOptions = {}): ApiClient {
-  const sent = platform(options.fetch)
+  const sent = retryingFetch(platform(options.fetch), options.retry)
   return createApiClient({
     baseUrl: options.baseUrl ?? apiUrl(),
     fetch: options.bearer === undefined ? sent : bearing(sent, options.bearer),
     headers: { 'Household-Client': clientName() },
-    ...(options.retry === undefined ? {} : { retry: options.retry }),
+    retry: { delays: [] },
   })
 }
 

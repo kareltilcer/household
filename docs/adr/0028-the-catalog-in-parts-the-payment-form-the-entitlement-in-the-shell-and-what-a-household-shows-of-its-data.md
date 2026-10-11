@@ -207,8 +207,13 @@ the server last said it holds (`served`): what was kept as the first of the chan
 their way was made, and then the answer to each that the server took. Never to what was kept
 as the refused change itself was made, which holds whatever another change still on its way
 had only chosen: two refused one after the other left the first one's choice drawn as saved.
+And what is drawn while changes are on their way is what the server last said with each of
+them made to it (`flying`), whichever of them was just answered or refused: the answer to one
+change, and what a refused one is put back to, hold nothing of a change made since, and drawn
+as they came that one's switch went back under its member until its own answer.
 A read of the preferences that is on its way is cancelled before a change takes anything, its
-answer being one that would be drawn over the change; and after a refusal the server is read
+answer being one that would be drawn over the change; and after a refusal, or after two changes
+that were on their way at once, whose answers come in whichever order, the server is read
 again only once no change is on its way, a read asked sooner being answered as one lands, and
 drawn over it. The account's selects of a timezone and of the first day of the week
 (`account/Account.tsx`), which save as they are changed, hold their own press as the switches

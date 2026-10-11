@@ -111,6 +111,16 @@ describe('the dev toolbar', () => {
     expect(high()).toBe(88)
     expectAccessible(screen.root, { scale: 2 })
   })
+
+  it('gives the text back to the device’s own size at the press after 200 %', async () => {
+    await render(<DevIndex />)
+    const scale = screen.getByTestId('dev-toolbar:scale')
+    await userEvent.press(scale)
+    await userEvent.press(scale)
+    expect(scale).toHaveTextContent('Text: 200')
+    await userEvent.press(scale)
+    expect(scale).toHaveTextContent('Text: device')
+  })
 })
 
 describe('a dev screen', () => {

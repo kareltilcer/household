@@ -5,16 +5,34 @@
 // mark and the action go under the avatar and the words. The contract is the web's
 // (apps/web/src/ui/ListRow.tsx).
 //
-// A row is two parts that wrap, and it matters that it is two. The first is the avatar with the
-// words, which says how much room it is to have before anything goes under it; the second is the
-// mark with the action, and it may shrink. Yoga takes a row's one child that both grows and
-// shrinks for a child whose basis it need not ask, counts it as nothing wide, and breaks the
-// row's lines by that *(read: `computeFlexBasisForChildren` in React Native's
-// ReactCommon/yoga/yoga/algorithm/CalculateLayout.cpp, and `calculateFlexLine` in FlexLine.cpp
-// beside it)*. With the mark and the action as the words' plain neighbours, neither of which
-// shrinks, no line ever broke: the title was left what they did not take, which in a row in
-// conflict at 200 % was one letter's width. A second part that can shrink is a second flexible
-// child, and the first part's basis is then what the row breaks by.
+// A row is two parts that wrap, and it matters that it is two, and how the first says its room.
+// The first is the avatar with the words, which says how much room it is to have before anything
+// goes under it; the second is the mark with the action, and it may shrink. All of the reading
+// below is of React Native 0.86.3's ReactCommon/yoga/yoga and its renderer; that a row breaks
+// its line at 200 % has been seen on no device yet.
+//
+// - That it is two *(read)*. Yoga takes a row's one child that both grows and shrinks for a
+//   child whose room it need not ask, counts it as nothing wide, and breaks the row's lines by
+//   that (`computeFlexBasisForChildren`, algorithm/CalculateLayout.cpp:585-625;
+//   `calculateFlexLine`, FlexLine.cpp). With the mark and the action as the words' plain
+//   neighbours, neither of which shrinks, no line ever broke: the title was left what they did
+//   not take, which in a row in conflict at 200 % was one letter's width. A second part that
+//   can shrink is a second flexible child, and the first part's room is then asked.
+// - That its room is a `width` *(seen, then read)*. It was a `flexBasis` at first, and CI's
+//   tenth run (38131404522) showed the row at 200 % on one line still, on both platforms: the
+//   first part 160 pt and what was left over, the room of a text scale of one, though its
+//   style said 320 by then. The harness holds its scale after its first layout. A room said by
+//   a `flexBasis` is computed once, while the node has none (`computeFlexBasisForChild`,
+//   CalculateLayout.cpp:108-116), and only `Node::markDirtyAndPropagate` takes it away again
+//   (node/Node.cpp:421-424), which the renderer never calls for a style that changed: it sets
+//   the style on a node copied with its layout (`updateYogaProps`,
+//   react/renderer/components/view/YogaLayoutableShadowNode.cpp). So neither a new text size
+//   reached it, nor a second part that arrived after a layout in which the first was alone:
+//   the nothing it was counted as then was kept. The branch a `width` takes
+//   (CalculateLayout.cpp:117-128) has no such guard and is taken at every layout; with
+//   `flexGrow` and `flexShrink` the part is sized by flexing from it, as from a basis, and is
+//   never held to it. The accessibility rules fail a `flexBasis` wherever one is drawn
+//   (src/test/a11y.ts).
 //
 // The avatar stands in the first part, beside the words, and never on a line of its own: it says
 // whose the row is, and above the title it would say that of nothing.
@@ -22,7 +40,7 @@ import { remPx } from '@household/tokens'
 import { Children, Fragment, isValidElement, type ReactNode, type Ref } from 'react'
 import { View } from 'react-native'
 import { useDisplay, useTarget, useTheme } from '../display/DisplayProvider.tsx'
-import { SyncMark, type SyncState } from './StatusMark.tsx'
+import { SyncMark, useLongEnough, type SyncState } from './StatusMark.tsx'
 import { Text } from './Text.tsx'
 
 export interface ListProps {
@@ -118,6 +136,12 @@ export function ListRow({
   const target = useTarget()
   const { textScale } = useDisplay()
   const gaps = { columnGap: theme.space['space-15'], rowGap: theme.space['space-1'] }
+  // A sync is marked only once it has taken longer than a moment, and until then its mark draws
+  // nothing. With no action beside it the second part would be an empty one for that moment,
+  // which is not nothing to a row: it costs the words a gap, and at 200 % a line of its own
+  // under them. So the row waits the moment out itself, and its mark counts from the same time.
+  const waited = useLongEnough(mark === 'syncing', syncingSince)
+  const marked = mark !== undefined && (mark !== 'syncing' || waited.shown)
   return (
     <View
       role="listitem"
@@ -138,7 +162,9 @@ export function ListRow({
           columnGap: gaps.columnGap,
           flexGrow: 1,
           flexShrink: 1,
-          flexBasis: wordsRem * remPx * textScale,
+          // The room it asks for, and no size it is held to: see the head of this file for
+          // why it is a `width`.
+          width: wordsRem * remPx * textScale,
         }}
       >
         {avatar}
@@ -157,7 +183,7 @@ export function ListRow({
           {chip}
         </View>
       </View>
-      {mark === undefined && drawsNothing(trailing) ? null : (
+      {!marked && drawsNothing(trailing) ? null : (
         // The second part, which may shrink: see the head of this file for why it must.
         <View
           style={{
@@ -173,14 +199,17 @@ export function ListRow({
               state={mark}
               name={title}
               onOpen={onOpenMark}
-              since={syncingSince}
+              since={waited.since}
               ref={markRef}
             />
           )}
           {trailing}
         </View>
       )}
-      {drawsNothing(under) ? null : <View style={{ flexBasis: '100%', flexGrow: 1 }}>{under}</View>}
+      {/* The whole of a line, by a `width` as the words' room is: a share said by a `flexBasis`
+          is resolved once too, against the width the row had then, and kept when the device
+          is turned. */}
+      {drawsNothing(under) ? null : <View style={{ width: '100%', flexGrow: 1 }}>{under}</View>}
     </View>
   )
 }

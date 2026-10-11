@@ -32,7 +32,10 @@ export function NotAvailableBody({ home }: NotAvailableBodyProps) {
         testID="not-available:home"
         variant="primary"
         onPress={() => {
-          // In the place of the address that opened nothing: going back does not return to it.
+          // In the place of the address that opened nothing. Outside a household that is a
+          // replace in the root's stack, which takes the address away. Inside one it is a jump
+          // between the household's tabs, and the tabs keep the address in their history: going
+          // back from Home returns to it, once (seen under Jest, shell/layout.test.tsx).
           router.replace(home)
         }}
       >

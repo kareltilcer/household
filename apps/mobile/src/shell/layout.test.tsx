@@ -280,6 +280,15 @@ describe('a household’s layout', () => {
     await userEvent.press(screen.getByRole('button', { name: en['ui.not_available.home'] }))
     await shows('route:household')
     await isOpen('home')
+    // Inside a household the way out is a jump between its tabs, and the tabs keep the address
+    // that opened nothing in their history: going back from Home returns to it.
+    expect(router.canGoBack()).toBe(true)
+    await act(async () => {
+      router.back()
+      await Promise.resolve()
+    })
+    await isOpen(null)
+    expect(router.canGoBack()).toBe(false)
   })
 
   it('draws nothing of the shell for a household the server says is not found', async () => {

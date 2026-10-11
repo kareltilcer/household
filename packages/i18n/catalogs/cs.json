@@ -795,6 +795,8 @@
   "device.nav.more": "Další",
   "device.push.channel": "Oznámení",
   "device.session.ended": "Na tomto zařízení jste byli odhlášeni. Co si uložilo z vašich domácností, bylo odebráno, i se změnami, které ještě nestihlo odeslat. Přihlaste se znovu a pokračujte.",
+  "device.session.unread.body": "Toto zařízení nesdělilo, kdo je tu přihlášen. Nic se nezměnilo. Zkuste to znovu.",
+  "device.session.unread.title": "Nepodařilo se zjistit, kdo je přihlášen",
   "device.shell.arrange.kept_here": "Vaše pořadí se ukládá v tomto zařízení. Jiné vaše zařízení má své vlastní.",
   "device.shell.arrange.reorder": "Změnit pořadí: {name}",
   "device.shell.panes.empty": "Nic není vybráno. Vyberte řádek ze seznamu a otevře se tady.",

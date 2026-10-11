@@ -5,9 +5,11 @@ import { controls, statusGlyphs, type StatusId } from '@household/icons'
 import { catalogs } from '@household/i18n'
 import { nativeThemes, type ColorName } from '@household/tokens/native'
 import { act, screen, userEvent, within } from '@testing-library/react-native'
+import type { ReactNode } from 'react'
 import { Animated } from 'react-native'
 import type { TestInstance } from 'test-renderer'
 import { drawingsOf, elementsOf, expectAccessible, nameOf, statusTestID } from '../test/a11y.ts'
+import { useI18n } from '../i18n/I18nProvider.tsx'
 import { render, styleOf } from '../test/render.tsx'
 import * as announcer from './announce.ts'
 import { Banner, type BannerTone } from './Banner.tsx'
@@ -43,6 +45,31 @@ async function advance(ms: number): Promise<void> {
   await act(() => {
     jest.advanceTimersByTime(ms)
   })
+}
+
+/**
+ * Draws what `children` gives in the app's language, with a control that turns the app to
+ * German: what the account's language being learned does to every screen that is drawn.
+ */
+function Spoken({
+  children,
+}: {
+  readonly children: (t: ReturnType<typeof useI18n>['t']) => ReactNode
+}) {
+  const { t, setLocale } = useI18n()
+  return (
+    <>
+      {children(t)}
+      <Button
+        testID="to-german"
+        onPress={() => {
+          setLocale('de')
+        }}
+      >
+        {t('ui.dismiss')}
+      </Button>
+    </>
+  )
 }
 
 let said: jest.SpiedFunction<typeof announcer.announce>
@@ -340,6 +367,28 @@ describe('a banner', () => {
     expect(saidNow.mock.calls).toEqual([[words.sentence]])
   })
 
+  // The app's language follows the account's on every screen that is drawn. The same sentence
+  // in another language has not changed, and is not said a second time.
+  it('is not said again where only the language it is drawn in changed', async () => {
+    const drawn = (sentence: 'ui.offline.bar' | 'sync.not_receiving') => (
+      <Spoken>
+        {(t) => (
+          <Banner tone="info" announce>
+            {t(sentence)}
+          </Banner>
+        )}
+      </Spoken>
+    )
+    const view = await render(drawn('ui.offline.bar'))
+    expect(said.mock.calls).toEqual([[en['ui.offline.bar']]])
+    await userEvent.press(screen.getByTestId('to-german'))
+    expect(screen.getByText(catalogs.de['ui.offline.bar'])).toBeOnTheScreen()
+    expect(said).toHaveBeenCalledTimes(1)
+    // Another sentence is said, in the language it is now drawn in.
+    await view.rerender(drawn('sync.not_receiving'))
+    expect(said.mock.calls).toEqual([[en['ui.offline.bar']], [catalogs.de['sync.not_receiving']]])
+  })
+
   it('draws what stands under its sentence, which is no part of what is said', async () => {
     await render(
       <Banner tone="info" announce detail={<Button>{words.add}</Button>}>
@@ -385,6 +434,22 @@ describe('the offline bar', () => {
     await view.rerender(<OfflineBar sentence={words.receiving} />)
     expect(screen.getByText(words.receiving)).toBeOnTheScreen()
     expect(said.mock.calls).toEqual([[en['ui.offline.bar']], [words.receiving]])
+  })
+
+  // Its owner tells its sentences apart by their keys, and hands over their words (the
+  // household's bars): the same one in another language is no other sentence.
+  it('is not said again where only its language changed, and is where its sentence then does', async () => {
+    const drawn = (sentence?: 'sync.not_receiving') => (
+      <Spoken>
+        {(t) => <OfflineBar {...(sentence === undefined ? {} : { sentence: t(sentence) })} />}
+      </Spoken>
+    )
+    const view = await render(drawn())
+    await userEvent.press(screen.getByTestId('to-german'))
+    expect(screen.getByText(catalogs.de['ui.offline.bar'])).toBeOnTheScreen()
+    expect(said.mock.calls).toEqual([[en['ui.offline.bar']]])
+    await view.rerender(drawn('sync.not_receiving'))
+    expect(said.mock.calls).toEqual([[en['ui.offline.bar']], [catalogs.de['sync.not_receiving']]])
   })
 
   it('is read in its place, and not said, where its owner says it was there already', async () => {

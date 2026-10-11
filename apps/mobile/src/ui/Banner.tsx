@@ -11,11 +11,12 @@
 // each is said as any other is. So its sentence is a string, which can be said, and what else
 // stands under it is `detail`, which is not.
 import { controls } from '@household/icons'
+import type { DisplayLocale } from '@household/i18n'
 import type { ColorName } from '@household/tokens/native'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
-import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { useI18n } from '../i18n/I18nProvider.tsx'
 import { announce as say, announceNow as sayNow } from './announce.ts'
 import { IconButton } from './Button.tsx'
 import { BaseIcon } from './Icon.tsx'
@@ -72,7 +73,7 @@ export function Banner({
   announce = false,
   testID,
 }: BannerProps) {
-  const t = useTranslate()
+  const { t, locale } = useI18n()
   const theme = useTheme()
   const urgent = tone === 'danger'
   // What is said: the title, a line break, the sentence. That a screen reader pauses at the
@@ -82,18 +83,26 @@ export function Banner({
   // over stay mounted, and what arrives on one out of sight is told to nobody: it stands there
   // when its member comes back, and is read in its place as what stood at the start is.
   const front = useInFront()
-  const stood = useRef<string | null>(null)
+  // And a sentence in another language is no other sentence. The app's language follows the
+  // account's whenever that is learned or changes (i18n/I18nProvider.tsx), on every screen
+  // that is drawn: what stands in the language it was said in, and is drawn in another, is
+  // not said again. A banner is given words and not their key, so that is told by the
+  // language: one whose sentence changed in the very draw its language did is taken for
+  // the same one.
+  const stood = useRef<{ readonly said: string; readonly locale: DisplayLocale } | null>(null)
   useEffect(() => {
     if (!announce) {
       stood.current = null
       return
     }
-    if (front && stood.current !== said) {
+    const was = stood.current
+    const translated = was !== null && was.locale !== locale
+    if (front && !translated && was?.said !== said) {
       if (urgent) sayNow(said)
       else say(said)
     }
-    stood.current = said
-  }, [announce, urgent, said, front])
+    stood.current = { said, locale }
+  }, [announce, urgent, said, front, locale])
 
   return (
     <View

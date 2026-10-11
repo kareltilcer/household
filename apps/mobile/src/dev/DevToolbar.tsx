@@ -16,8 +16,14 @@ import { useSample } from './sample.ts'
 
 const displayLocales: readonly DisplayLocale[] = [...locales, pseudoLocale]
 
-/** The scale a dev screen holds the text at: the device's own, or one of the two the design is held to. */
-const scales = [undefined, 1, 2] as const
+/**
+ * The scale a dev screen holds the text at: the device's own, or one of the two the design is
+ * held to. The device's own is named by a word, and not by nothing: `next` answers the value it
+ * was given where the list holds nothing after it, and took a device's own written as
+ * `undefined` for that, so the control went to 200 and stayed there (CI's tenth run,
+ * 38131404522: the flow that gives the scale back did not read the device's own again).
+ */
+const scales = ['device', 1, 2] as const
 
 /** The value after `value` in `values`, the first after the last. */
 function next<T>(values: readonly T[], value: T): T {
@@ -29,10 +35,10 @@ export function DevToolbar() {
   const theme = useTheme()
   const { locale, setLocale } = useI18n()
   const { preferences, set, hold } = useDisplay()
-  const [scale, setScale] = useState<(typeof scales)[number]>(undefined)
+  const [scale, setScale] = useState<(typeof scales)[number]>('device')
   // Held for as long as this toolbar is drawn, and let go with it: no screen after a dev screen
   // is left at a scale the device is not set to.
-  useEffect(() => (scale === undefined ? undefined : hold({ scale })), [scale, hold])
+  useEffect(() => (scale === 'device' ? undefined : hold({ scale })), [scale, hold])
 
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space['space-1'] }}>
@@ -58,7 +64,7 @@ export function DevToolbar() {
           setScale(next(scales, scale))
         }}
       >
-        {`${sample('Text')}: ${scale === undefined ? sample('device') : String(scale * 100)}`}
+        {`${sample('Text')}: ${scale === 'device' ? sample('device') : String(scale * 100)}`}
       </Button>
       <Button
         testID="dev-toolbar:motion"

@@ -7,11 +7,14 @@
 // failure is (on iOS once the screen reader has finished, announce.ts); and said again when its
 // owner changes what it says, which is one
 // bar whose words change where it stands (the household's bars, src/sync). A bar that was there
-// when its screen opened is read in its place: its owner says so.
-import { useEffect } from 'react'
+// when its screen opened is read in its place: its owner says so. The same sentence in another
+// language is not another sentence, and is not said again: its owner tells its sentences apart
+// by their keys, and what it hands over is their words.
+import type { DisplayLocale } from '@household/i18n'
+import { useEffect, useRef } from 'react'
 import { View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
-import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { useI18n } from '../i18n/I18nProvider.tsx'
 import { announce as say } from './announce.ts'
 import { StatusIcon } from './Icon.tsx'
 import { Text } from './Text.tsx'
@@ -29,12 +32,17 @@ export interface OfflineBarProps {
 }
 
 export function OfflineBar({ sentence, announce = true, testID = 'offline-bar' }: OfflineBarProps) {
-  const t = useTranslate()
+  const { t, locale } = useI18n()
   const theme = useTheme()
   const said = sentence ?? t('ui.offline.bar')
+  // The language it was last drawn in: a draw in another one changed its words and not what
+  // it says.
+  const drawnIn = useRef<DisplayLocale | null>(null)
   useEffect(() => {
-    if (announce) say(said)
-  }, [announce, said])
+    const translated = drawnIn.current !== null && drawnIn.current !== locale
+    drawnIn.current = locale
+    if (announce && !translated) say(said)
+  }, [announce, said, locale])
   return (
     <View
       testID={testID}

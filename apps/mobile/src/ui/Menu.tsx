@@ -6,8 +6,11 @@
 // it is pressed. What an item opens is often a confirmation, which is another modal: iOS
 // refuses to present one while the one before it is still leaving, and whatever opens then
 // takes the trigger for what opened it, and gives the focus back there when it closes.
+//
+// As it opens, the keyboard of whatever field was being typed in is put away, as a select's
+// sheet does and for its reason (ui/Select.tsx): its keyboard would stand over the actions.
 import { cloneElement, useRef, useState, type ReactElement, type ReactNode, type Ref } from 'react'
-import { Pressable, type AccessibilityState, type View } from 'react-native'
+import { Keyboard, Pressable, type AccessibilityState, type View } from 'react-native'
 import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
 import { useFocusRing } from './focus.ts'
 import { Ink } from './Icon.tsx'
@@ -89,6 +92,7 @@ export function Menu({ trigger, items }: MenuProps) {
         ref: opener,
         // A trigger that is busy drops its press (ui/Button.tsx), and opens nothing.
         onPress: () => {
+          Keyboard.dismiss()
           setOpen(true)
         },
         accessibilityState: { ...trigger.props.accessibilityState, expanded: open },

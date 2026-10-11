@@ -15,8 +15,8 @@ import type { SessionState } from './context.ts'
 import { account, SessionFixture } from './fixture.tsx'
 import { Signed, Unread, VisitorOnly, Waiting } from './guards.tsx'
 
-/** Where the router says the app is, as a test moves it. */
-const mockAt = { path: '/' }
+/** Where the router says the app is, and whether the guarded screen is in front, as a test says. */
+const mockAt = { path: '/', front: true }
 
 // The router's own: a redirect is drawn as where it leads, and the address is the test's.
 jest.mock('expo-router', () => {
@@ -26,6 +26,7 @@ jest.mock('expo-router', () => {
     Redirect: ({ href }: { readonly href: string }) =>
       createElement(View, { testID: `redirect:${href}` }),
     usePathname: () => mockAt.path,
+    useIsFocused: () => mockAt.front,
   }
 })
 
@@ -36,6 +37,7 @@ beforeEach(async () => {
   await AsyncStorage.clear()
   takeDestination()
   mockAt.path = today
+  mockAt.front = true
   jest.restoreAllMocks()
 })
 
@@ -93,6 +95,27 @@ describe('a household’s screen', () => {
     expectAccessible()
   })
 
+  // A keychain that is shut is no connection to check: it is said in the device's own words.
+  it('says the device would not say who is signed in, with the way to ask again', async () => {
+    const retry = jest.fn()
+    await render(
+      <SessionFixture state={{ status: 'unreachable', device: true }} retry={retry}>
+        <Signed>
+          <Inside />
+        </Signed>
+      </SessionFixture>,
+    )
+    expect(
+      screen.getByRole('header', { name: catalogs.en['device.session.unread.title'] }),
+    ).toBeOnTheScreen()
+    expect(screen.getByText(catalogs.en['device.session.unread.body'])).toBeOnTheScreen()
+    expect(screen.queryByText(catalogs.en['session.unreachable.body'])).toBeNull()
+    await userEvent.press(screen.getByRole('button', { name: catalogs.en['ui.retry'] }))
+    expect(retry).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('inside')).toBeNull()
+    expectAccessible()
+  })
+
   // The cold start: the address somebody was on their way to is held while they sign in.
   it('sends a visitor to sign in, with the address held for them', async () => {
     await render(
@@ -130,6 +153,32 @@ describe('a household’s screen', () => {
 
   it('holds the address for a member whose sign-in ended under them', async () => {
     await render(
+      <SessionFixture state={{ status: 'visitor' }} ended>
+        <Signed>
+          <Inside />
+        </Signed>
+      </SessionFixture>,
+    )
+    expect(heldDestination()).toBe(today)
+  })
+
+  // A household stays mounted under a screen opened over it, and the router's address is then
+  // that screen's: held by the guard underneath, it is where whoever signed in next would be led.
+  it('holds nothing while its screen is underneath another, whose address the router says', async () => {
+    mockAt.front = false
+    mockAt.path = '/account/security'
+    const view = await render(
+      <SessionFixture state={{ status: 'visitor' }} ended>
+        <Signed>
+          <Inside />
+        </Signed>
+      </SessionFixture>,
+    )
+    expect(heldDestination()).toBeNull()
+    // In front again, at its own address, it holds that.
+    mockAt.front = true
+    mockAt.path = today
+    await view.rerender(
       <SessionFixture state={{ status: 'visitor' }} ended>
         <Signed>
           <Inside />

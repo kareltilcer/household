@@ -79,13 +79,24 @@ interface Watch {
   readonly reached: number
 }
 
+/** What a watch answers: whether the sync is shown yet, and the time its moment is counted from. */
+export interface Waited {
+  readonly shown: boolean
+  /**
+   * When the sync began, as the watch counts it: what its owner said, or when the watch first
+   * drew the state. Nothing while the state is another. A row hands it to its mark, so that the
+   * two wait the one moment out and not one after the other (ui/ListRow.tsx).
+   */
+  readonly since: number | undefined
+}
+
 /**
  * Whether `syncing` has gone on long enough to be shown: past the tokens' threshold, and not
  * before (06-clients §5: a progress indication only when it takes longer than a moment). The
  * moment is counted from `since`, and from when the mark first drew the state where nothing
  * dates it.
  */
-function useLongEnough(active: boolean, began: number | undefined): boolean {
+export function useLongEnough(active: boolean, began: number | undefined): Waited {
   // A time that is no time dates nothing: what a date that did not parse comes to. It is equal
   // to no number, itself included, so taken as it is it would look like something new at every
   // draw, be asked about again at every draw, and take the screen down with the mark.
@@ -126,7 +137,10 @@ function useLongEnough(active: boolean, began: number | undefined): boolean {
   // down and raised again when what the mark is told changes. So a mark that is shown stays
   // shown when its owner learns when the write began, and one drawn in the middle of a long sync
   // is shown from the first.
-  return due !== undefined && due <= watch.reached
+  return {
+    shown: due !== undefined && due <= watch.reached,
+    since: watch.drawn === undefined ? undefined : (watch.since ?? watch.drawn),
+  }
 }
 
 export interface SyncMarkProps {
@@ -160,7 +174,7 @@ export function SyncMark({ state, words = 'inline', onOpen, name, since, ref }: 
   const target = useTarget()
   // A keyboard's focus, or a switch's: a touch gives none, so this is drawn for them alone.
   const focus = useFocusRing()
-  const shown = useLongEnough(state === 'syncing', since)
+  const { shown } = useLongEnough(state === 'syncing', since)
   if (state === 'syncing' && !shown) return null
   if (onOpen === undefined || !opens.has(state)) {
     return <StatusMark status={state} words={words} />

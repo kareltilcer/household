@@ -16,8 +16,12 @@ export type SessionState =
   | { readonly status: 'visitor' }
   /** Signed in: the account as it was last read, which with no connection is as it was kept. */
   | { readonly status: 'member'; readonly me: Me }
-  /** The device holds a sign-in, the server could not be asked whose, and nothing is kept. */
-  | { readonly status: 'unreachable' }
+  /**
+   * Who is signed in could not be read. The device holds a sign-in, the server could not be
+   * asked whose, and nothing is kept; or, with `device`, the device itself would not say
+   * whether it holds one, a keychain that is shut for now.
+   */
+  | { readonly status: 'unreachable'; readonly device?: true }
 
 /** What a sign-in the server answered hands the session: the account, and the pair it is signed in with. */
 export interface SignedIn {
@@ -53,7 +57,8 @@ export interface Session {
   /**
    * Takes a sign-in the server answered: the screen that made it calls. The pair is kept under
    * its member, and what the device kept of another member, signed in here before, is removed
-   * first.
+   * first. It rejects, with nothing taken, where the device will not say whose sign-in it
+   * holds: kept all the same, it would be written over sign-ins that were never read.
    */
   readonly signedIn: (answer: SignedIn) => Promise<void>
   /**
@@ -62,7 +67,7 @@ export interface Session {
    * everything kept, where the server could not be told: a sign-in only it ends.
    */
   readonly signOut: () => Promise<void>
-  /** Asks again who is signed in, where the server could not be asked. */
+  /** Asks again who is signed in, of whichever could not be asked: the server, or the device. */
   readonly retry: () => void
   /** The oldest version the server serves, once it has refused this build as older. */
   readonly minimumVersion: string | null

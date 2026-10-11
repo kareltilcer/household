@@ -64,6 +64,8 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
   const { followAccount } = useI18n()
   // Whether the device's own has been read: until then nobody is known to be signed in or not.
   const [read, setRead] = useState(false)
+  // Whether the vault would not say whose sign-in it holds, the last time it was asked.
+  const [shut, setShut] = useState(false)
   const [member, setMember] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
   const [left, setLeft] = useState(false)
@@ -109,16 +111,18 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
   }, [])
 
   // The device's own, read once: whose sign-in it holds, what it kept of what they read, and an
-  // address held from a run before this one.
-  const starting = useRef<Promise<void> | null>(null)
+  // address held from a run before this one. It answers whether the vault said whose sign-in it
+  // holds. Where it would not, a keychain shut for now, the reading is not kept as done, and
+  // whoever asks next reads again: taken for the run's answer, a member would be shown the
+  // sign-in screen while signed in, and a sign-in taken there would be the only one listed.
+  const starting = useRef<Promise<boolean> | null>(null)
   const start = useCallback(() => {
     starting.current ??= (async () => {
       const [active] = await Promise.all([
-        // A vault that would not say whose sign-in it holds: nobody's, for this run.
         tokens.start().catch(() => undefined),
         restoreDestination(),
       ])
-      if (active === undefined) return
+      if (active === undefined) return false
       // What the device keeps of anybody it holds no sign-in of goes first, before anything is
       // read back or opened (D-161's twin): a run that was closed between a pair's removal and
       // the rest, a keystore that lost a pair, a device restored from a backup, which carries
@@ -126,21 +130,32 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
       // is not known, and nothing is removed on its silence.
       await forgetOthers(tokens.members())
       if (active !== null) await keepFor(active).restore(queries)
-    })()
+      return true
+    })().then((said) => {
+      if (!said) starting.current = null
+      return said
+    })
     return starting.current
   }, [tokens, queries, keepFor])
-  useEffect(() => {
-    let wanted = true
-    void start().then(() => {
-      if (!wanted) return
+  // What a reading of the device came to, for the screens.
+  const started = useCallback(
+    (said: boolean) => {
       // Whoever the device holds now: a sign-in taken while it was being read is that one.
       setMember(tokens.member())
+      setShut(!said)
       setRead(true)
+    },
+    [tokens],
+  )
+  useEffect(() => {
+    let wanted = true
+    void start().then((said) => {
+      if (wanted) started(said)
     })
     return () => {
       wanted = false
     }
-  }, [start, tokens])
+  }, [start, started])
   useEffect(
     () => () => {
       kept.current?.stop()
@@ -187,10 +202,12 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
 
   const state = useMemo<SessionState>(() => {
     if (!read) return { status: 'unknown' }
+    // Not a visitor: whether anybody is signed in is what could not be read.
+    if (shut) return { status: 'unreachable', device: true }
     if (member === null) return { status: 'visitor' }
     if (me !== undefined) return { status: 'member', me }
     return unasked ? { status: 'unreachable' } : { status: 'unknown' }
-  }, [read, member, me, unasked])
+  }, [read, shut, member, me, unasked])
 
   const accountLocale = state.status === 'member' ? state.me.locale : undefined
   useEffect(() => {
@@ -200,7 +217,9 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
   const signedIn = useCallback(
     async ({ user, tokens: pair }: SignedIn) => {
       const id = user.id.toLowerCase()
-      await start()
+      // Nothing is taken while the vault will not say whose sign-in it holds: the screen that
+      // made this one says that it failed, and its member asks again.
+      if (!(await start())) throw new Error('session: the device would not say who is signed in')
       await forgetting.current
       // What the device kept is its member's. Another member's, signed in here before, goes
       // first: its pair, and with it everything else.
@@ -222,6 +241,7 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
       setEnded(false)
       setLeft(false)
       setMember(id)
+      setShut(false)
       setRead(true)
     },
     [tokens, queries, start, keepFor, forgetNext],
@@ -234,6 +254,10 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
     // While the server can still be told, and not put back if what follows fails: the next
     // start registers the device again.
     await forgetPush(client, id)
+    // Theirs no longer, while the server was asked that: it ended under the press, which is
+    // said and removed for already, or another member's is the one in use by now, and the
+    // request below would end theirs.
+    if (tokens.member() !== id) return
     const answer = await client.POST('/auth/logout')
     // A sign-in the server no longer knows has ended already: what was asked for is so. That
     // is a `401` whose renewal the server refused, which removed the pair (tokens.ts). A `401`
@@ -257,8 +281,16 @@ export function SessionProvider({ children, tokens, api }: SessionProviderProps)
   // The query's own, which is the same function for as long as the query is observed.
   const { refetch } = account
   const retry = useCallback(() => {
-    void refetch()
-  }, [refetch])
+    // What could not be asked is asked again: the device, where it would not say whose
+    // sign-in it holds, and else the server. Whichever it is, the session waits meanwhile, a
+    // read of the account that holds nothing being a wait already: where the device still will
+    // not say, what could not be read takes the wait's place anew and is said again, and a
+    // press that changed nothing would otherwise be answered to nobody.
+    if (shut) {
+      setRead(false)
+      void start().then(started)
+    } else void refetch()
+  }, [shut, start, started, refetch])
 
   const device = useCallback(async () => describeDevice(await tokens.device()), [tokens])
 

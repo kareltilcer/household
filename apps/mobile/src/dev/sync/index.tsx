@@ -112,7 +112,8 @@ function Ground({ testID, children }: { readonly testID: string; readonly childr
       style={{
         flexGrow: 1,
         flexShrink: 1,
-        flexBasis: cellWidth,
+        // A `width` and no `flexBasis`, as every room is said (ui/ListRow.tsx).
+        width: cellWidth,
         gap: theme.space['space-15'],
         padding: theme.space['space-2'],
         backgroundColor: theme.color.surface,

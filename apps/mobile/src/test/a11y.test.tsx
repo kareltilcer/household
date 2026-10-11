@@ -386,8 +386,57 @@ describe('the accessibility rules', () => {
     }).toThrow(/\[reach\] <View role="button" name="Open"> is inside <View testID="swallowed"/)
   })
 
+  // The row as it stood until CI's tenth run (38131404522) showed it breaking no line on a
+  // device: its words' room said by a `flexBasis`, which is computed once and kept.
+  it('want an element’s room said by a `width`, and never by a `flexBasis`', async () => {
+    const row = { flexDirection: 'row', flexWrap: 'wrap' } as const
+    await render(
+      <View>
+        <View testID="as-it-stood" style={row}>
+          <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 160 }}>
+            <Text>{words.long}</Text>
+          </View>
+          <View style={{ flexShrink: 1 }}>
+            <Text>{words.open}</Text>
+          </View>
+        </View>
+        <View testID="by-width" style={row}>
+          <View style={{ flexGrow: 1, flexShrink: 1, width: 160 }}>
+            <Text>{words.long}</Text>
+          </View>
+          <View style={{ flexShrink: 1 }}>
+            <Text>{words.open}</Text>
+          </View>
+        </View>
+        <View testID="a-share" style={row}>
+          <View style={{ flexBasis: '100%', flexGrow: 1 }}>
+            <Text>{words.long}</Text>
+          </View>
+        </View>
+        <View testID="the-rest" style={{ flexDirection: 'row' }}>
+          <Text style={{ flex: 1 }}>{words.long}</Text>
+          <View style={{ flexBasis: 'auto' }}>
+            <Text>{words.open}</Text>
+          </View>
+          <View style={{ flexBasis: 0, flexGrow: 1 }}>
+            <Text>{words.open}</Text>
+          </View>
+        </View>
+      </View>,
+    )
+    expect(broken('as-it-stood')).toEqual(['room'])
+    expect(broken('by-width')).toEqual([])
+    // A share of the row is resolved once too, against the width the row then had.
+    expect(broken('a-share')).toEqual(['room'])
+    // `flex: n` sets no `flexBasis` in a style; `auto` and nothing ask for no room.
+    expect(broken('the-rest')).toEqual([])
+    expect(() => {
+      expectAccessible(screen.getByTestId('as-it-stood'))
+    }).toThrow(/\[room\] <View name=".*"> says its room by a `flexBasis`/)
+  })
+
   it('want a row that wraps to break by the room its words ask for', async () => {
-    const room = { flexGrow: 1, flexShrink: 1, flexBasis: 160 }
+    const room = { flexGrow: 1, flexShrink: 1, width: 160 }
     const row = { flexDirection: 'row', flexWrap: 'wrap' } as const
     await render(
       <View>
@@ -408,6 +457,14 @@ describe('the accessibility rules', () => {
               <Text>{words.open}</Text>
             </Pressable>
           </View>
+        </View>
+        <View testID="no-room-named" style={row}>
+          <View style={{ flexGrow: 1, flexShrink: 1 }}>
+            <Text>{words.long}</Text>
+          </View>
+          <Pressable accessibilityRole="button" style={target} onPress={noop}>
+            <Text>{words.open}</Text>
+          </Pressable>
         </View>
         <View testID="alone" style={row}>
           <View style={room}>
@@ -431,8 +488,11 @@ describe('the accessibility rules', () => {
       </View>,
     )
     expect(broken('squeezed')).toEqual(['wrap'])
-    // A second child that may shrink: the first's basis is what the row breaks by.
+    // A second child that may shrink: the first's room is what the row breaks by.
     expect(broken('two-parts')).toEqual([])
+    // With no room named it is counted as nothing wide just the same, where its words asked
+    // for their own width.
+    expect(broken('no-room-named')).toEqual(['wrap'])
     // With nothing beside it nothing takes its room.
     expect(broken('alone')).toEqual([])
     // A child that asks for no room of its own is given the rest, and asked for no more.

@@ -795,6 +795,8 @@
   "device.nav.more": "Więcej",
   "device.push.channel": "Powiadomienia",
   "device.session.ended": "Nastąpiło wylogowanie na tym urządzeniu. To, co zachowało z twoich gospodarstw domowych, zostało usunięte, razem ze zmianami, których nie zdążyło jeszcze wysłać. Zaloguj się ponownie, aby kontynuować.",
+  "device.session.unread.body": "To urządzenie nie podało, kto jest tu zalogowany. Nic się nie zmieniło. Spróbuj ponownie.",
+  "device.session.unread.title": "Nie udało się odczytać, kto jest zalogowany",
   "device.shell.arrange.kept_here": "Twoja kolejność jest zapisana na tym urządzeniu. Inne twoje urządzenie ma własną.",
   "device.shell.arrange.reorder": "Zmień kolejność: {name}",
   "device.shell.panes.empty": "Nic nie jest wybrane. Wybierz wiersz z listy, a otworzy się tutaj.",

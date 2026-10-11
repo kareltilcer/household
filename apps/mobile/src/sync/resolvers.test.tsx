@@ -14,13 +14,14 @@ import { catalogs } from '@household/i18n'
 import type { RecordedOutcome } from '@household/sync'
 import { act, screen, userEvent, waitFor, within } from '@testing-library/react-native'
 import { router } from 'expo-router'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Platform } from 'react-native'
 import { paths } from '../app/paths.ts'
 import { createFormatters } from '../i18n/format.ts'
 import { elementsOf, expectAccessible } from '../test/a11y.ts'
 import { render, type DrawOptions } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
+import { useDecision, type Decision } from './decide.tsx'
 import { KeptLoser } from './KeptLoser.tsx'
 import { rejectionCodes, rejectionOf } from './rejection.ts'
 import { SyncFixture, type Sync } from './ReplicaProvider.tsx'
@@ -632,5 +633,57 @@ describe('the kept loser', () => {
     const announce = jest.spyOn(announcer, 'announce').mockImplementation(() => undefined)
     await kept(overriddenMerge)
     expect(announce).not.toHaveBeenCalled()
+  })
+})
+
+describe('a decision', () => {
+  type Decide = Decision<'retry'>['decide']
+
+  /** Hands over the `decide` of each draw, as a control drawn then would call it. */
+  function Asks({ hand }: { readonly hand: (decide: Decide) => void }) {
+    const { decide } = useDecision<'retry'>()
+    useEffect(() => {
+      hand(decide)
+    }, [hand, decide])
+    return null
+  }
+
+  it('is carried out once where two presses meet the control as it was last drawn', async () => {
+    // A device hands over the presses it had queued one after another, with nothing drawn
+    // again between them: the second meets the control the first met, which was not busy.
+    let drawn: Decide | undefined
+    await render(
+      <Asks
+        hand={(decide) => {
+          drawn ??= decide
+        }}
+      />,
+    )
+    const asked: string[] = []
+    let answer: (wrote: boolean) => void = () => undefined
+    const write = () => {
+      asked.push('retry')
+      return new Promise<boolean>((resolve) => {
+        answer = resolve
+      })
+    }
+    const done = jest.fn()
+    await act(async () => {
+      drawn?.('retry', write, done)
+      drawn?.('retry', write, done)
+      await Promise.resolve()
+    })
+    expect(asked).toEqual(['retry'])
+    // Answered, it is no longer under way, and the next press is taken.
+    await act(async () => {
+      answer(true)
+      await Promise.resolve()
+    })
+    expect(done).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      drawn?.('retry', write, done)
+      await Promise.resolve()
+    })
+    expect(asked).toEqual(['retry', 'retry'])
   })
 })

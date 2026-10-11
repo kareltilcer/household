@@ -11,7 +11,7 @@
 import { controls } from '@household/icons'
 import { useState } from 'react'
 import { Platform, View } from 'react-native'
-import { useDisplay, useTheme } from '../display/DisplayProvider.tsx'
+import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { IconButton } from './Button.tsx'
 import { Field, FieldInput, type FieldInputProps, type FieldProps } from './Field.tsx'
@@ -79,12 +79,16 @@ export function Stepper({
 }: StepperProps) {
   const t = useTranslate()
   const theme = useTheme()
-  const { textScale } = useDisplay()
+  const target = useTarget()
   // What the field holds while it is typed in, until it is left.
   const [typed, setTyped] = useState<string | undefined>(undefined)
   const fixed = disabled || readOnly
-  const low = min ?? Number.NEGATIVE_INFINITY
-  const high = max ?? Number.POSITIVE_INFINITY
+  // Where nothing says, the bounds are those of the whole numbers a number holds exactly. Past
+  // them a number is still "an integer" and no longer the one that was typed: twenty-two
+  // digits, typed or pasted, were given to the owner as 1e21, which the field then showed as
+  // "1e+21" and could not read back, and a step from there moved nothing.
+  const low = min ?? Number.MIN_SAFE_INTEGER
+  const high = max ?? Number.MAX_SAFE_INTEGER
   const held = (next: number) => Math.min(high, Math.max(low, next))
   const stepTo = (next: number) => {
     setTyped(undefined)
@@ -111,7 +115,22 @@ export function Stepper({
   return (
     <Field label={label} help={help} error={error} required={required} typed>
       {(wiring) => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space['space-1'] }}>
+        <View
+          // One line wherever there is the room for it, and the room it needs is three targets
+          // and two gaps: at 200 % that is 88 + 8 + 88 + 8 + 88 = 280 pt, what a dialog leaves
+          // on a phone 360 pt wide (360 less its 16 pt either side and the 24 pt of its own),
+          // and a sheet leaves 312. With the count held to 64 pt a scale it was 320, and the
+          // second button was cut by 8 pt in a sheet and by 40 in a dialog. Where there is
+          // less room still, the row wraps and cuts nothing: the count is the rest of its line
+          // by `flex`, which grows and does not shrink, so no line is broken by counting it as
+          // nothing (ui/ListRow.tsx), and its least width is what the row breaks by.
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: theme.space['space-1'],
+          }}
+        >
           {fixed ? null : (
             <IconButton
               testID={testID === undefined ? undefined : `${testID}:decrease`}
@@ -127,8 +146,9 @@ export function Stepper({
             {...(testID === undefined ? {} : { testID })}
             numeric
             {...centred}
-            // As wide as the row leaves it, and never narrower than four figures.
-            layout={{ flex: 1, minWidth: 64 * textScale }}
+            // As wide as the row leaves it, and never narrower than one of its buttons: what
+            // is longer than it shows is the field's own to scroll.
+            layout={{ flex: 1, minWidth: target }}
             // Digits alone, where its least allows no minus: a fraction cannot be typed on
             // that keyboard, and can on a keyboard plugged in, or be pasted.
             keyboardType={

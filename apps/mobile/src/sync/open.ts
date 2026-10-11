@@ -23,7 +23,7 @@ import {
   type Replica,
 } from '@household/sync'
 import { openReplica } from '@household/sync/native'
-import { open as openDatabase } from '@op-engineering/op-sqlite'
+import { open as openDatabase, type DB } from '@op-engineering/op-sqlite'
 import { apiUrl, namedFetch } from '../api/client.ts'
 import type { ProblemHub } from '../api/problems.ts'
 import type { Session } from '../session/context.ts'
@@ -141,25 +141,38 @@ function ended(): Error {
   return new Revoked('the device’s sign-in has ended')
 }
 
+/** The database `name` opened, where its file is there; undefined where there is none to open. */
+function existing(name: string): DB | undefined {
+  try {
+    return openDatabase({ name, failOnCreate: true })
+  } catch {
+    return undefined
+  }
+}
+
 /**
- * Deletes a replica's database file, where there is one. What a run that ended badly left
- * beside it goes with it: a log found later beside a new file of the same name would be read
- * into that file.
+ * Deletes a replica's database file, where there is one, and throws where it is still there
+ * afterwards. What a run that ended badly left beside it goes with it: a log found later beside
+ * a new file of the same name would be read into that file.
  */
 function deleteDatabase(name: string): void {
-  let database
-  try {
-    // Opened only if it is there: one that was noted and never made has nothing to delete.
-    database = openDatabase({ name, failOnCreate: true })
-  } catch {
-    return
-  }
+  // Opened only if it is there: one that was noted and never made has nothing to delete.
+  const database = existing(name)
+  if (database === undefined) return
   try {
     database.executeSync('PRAGMA wal_checkpoint(TRUNCATE)')
   } catch {
     // A file that cannot be read is deleted all the same.
   }
   database.delete()
+  // The deletion does not say whether the file went: op-sqlite closes the database and asks the
+  // system to remove its file, and does not look at the answer (read in its source, and run on
+  // nothing). So the file is asked for once more, and one that still opens is still there: the
+  // removal has failed, and is kept as far as it came (databases.ts).
+  const left = existing(name)
+  if (left === undefined) return
+  left.close()
+  throw new Error('the replica’s file could not be deleted')
 }
 
 const removal: Removal = {

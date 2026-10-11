@@ -11,7 +11,7 @@ import {
   QueryObserver,
   type QueryClient,
 } from '@tanstack/react-query'
-import { act, screen } from '@testing-library/react-native'
+import { act, screen, waitFor } from '@testing-library/react-native'
 import { createFormatters } from '../i18n/format.ts'
 import { ids } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
@@ -23,10 +23,12 @@ import { createKeep, keepKey, keptMembers, keptShape, writeEvery } from './keep.
 import { ApiProblemError, isRetryable, problemIn, retryAt, unwrap } from './problem.ts'
 import { createProblemHub, type Problem } from './problems.ts'
 import { useProblemText } from './problemText.ts'
-import { askedNow, cacheMaxAge, createQueryClient, useOnline, watchConnection } from './query.ts'
+import { askedNow, createQueryClient, useOnline, watchConnection } from './query.ts'
 import { answering, empty, json, problem, testApi, testClient, unanswered } from './testing.ts'
 
-/** A client the test puts away: a read nobody observes is held by a timer for a day. */
+const day = 24 * 60 * 60 * 1000
+
+/** A client the test puts away: a read nobody observes is held for as long as its client. */
 const clients: QueryClient[] = []
 function queryClient(options: Parameters<typeof createQueryClient>[0] = {}): QueryClient {
   const client = createQueryClient(options)
@@ -198,9 +200,24 @@ describe('the query client', () => {
     expect(heard.map((each) => each.code)).toEqual(['internal'])
   })
 
-  it('holds a read nobody observes for as long as the device keeps one', () => {
-    expect(queryClient().getDefaultOptions().queries?.gcTime).toBe(cacheMaxAge)
-    expect(cacheMaxAge).toBe(24 * 60 * 60 * 1000)
+  // What is written to the device is what the cache holds: a read let go after a day, the web's
+  // rule, would be written out of the device with it.
+  it('holds a read nobody observes for as long as its member’s sign-in, and so does the device', async () => {
+    jest.useFakeTimers()
+    const client = queryClient()
+    expect(client.getDefaultOptions().queries?.gcTime).toBe(Infinity)
+    client.mount()
+    const keep = createKeep(ids.member)
+    const stop = keep.watch(client)
+    // Another household's own answer, which nothing on screen reads.
+    client.setQueryData(['households', ids.otherHousehold], { id: ids.otherHousehold })
+    await jest.advanceTimersByTimeAsync(3 * day)
+    expect(client.getQueryData(['households', ids.otherHousehold])).toEqual({
+      id: ids.otherHousehold,
+    })
+    expect(await AsyncStorage.getItem(keepKey(ids.member))).toContain(ids.otherHousehold)
+    stop()
+    client.unmount()
   })
 })
 
@@ -387,8 +404,74 @@ describe('what the device keeps of what was read', () => {
     stop()
 
     const later = queryClient()
-    await createKeep(ids.member, { now: () => 1000 + 7 * cacheMaxAge }).restore(later)
+    await createKeep(ids.member, { now: () => 1000 + 7 * day }).restore(later)
     expect(later.getQueryData(['households'])).toEqual([{ id: ids.household }])
+  })
+
+  /**
+   * A read the device kept, asked for again by a run of the app and answered by `failure`, and
+   * what the next start reads back of it.
+   */
+  async function reReadWith(failure: Error) {
+    const client = queryClient()
+    client.mount()
+    const keep = createKeep(ids.member)
+    const stop = keep.watch(client)
+    client.setQueryData(['households'], [{ id: ids.household }], { updatedAt: Date.now() - 60_000 })
+    await keep.flush()
+    const again = new QueryObserver(client, {
+      queryKey: ['households'],
+      queryFn: () => Promise.reject(failure),
+      retryDelay: 0,
+    })
+    const unsubscribe = again.subscribe(() => undefined)
+    await waitFor(() => {
+      expect(client.getQueryState(['households'])).toMatchObject({
+        status: 'error',
+        fetchStatus: 'idle',
+      })
+    })
+    // What its screen still draws: the last answer.
+    expect(client.getQueryData(['households'])).toEqual([{ id: ids.household }])
+    await keep.flush()
+    unsubscribe()
+    stop()
+    client.unmount()
+    const next = queryClient()
+    await createKeep(ids.member).restore(next)
+    return next.getQueryState(['households'])
+  }
+
+  // A server away while the device says it has a connection is every re-read failing at once:
+  // dropped for that, everything the device kept would be written out of it, and the next
+  // start with no connection would open on nothing.
+  it.each([
+    ['got no answer', new TypeError('Network request failed')],
+    [
+      'was answered by the server’s own failure',
+      new ApiProblemError({ type: '', title: '', status: 503, code: 'internal' }),
+    ],
+    [
+      'was refused for now',
+      new ApiProblemError({ type: '', title: '', status: 429, code: 'rate_limited' }),
+    ],
+  ])('keeps a read whose re-read %s, as the answer it last was', async (_, failure) => {
+    expect(await reReadWith(failure)).toMatchObject({
+      data: [{ id: ids.household }],
+      status: 'success',
+      error: null,
+      fetchFailureCount: 0,
+      fetchFailureReason: null,
+      // And it is asked for again as soon as something reads it.
+      isInvalidated: true,
+    })
+  })
+
+  // The server's own word stands over what was kept (F-17): read back, a household its member
+  // has left would be theirs again at the next start with no connection.
+  it('keeps nothing of a read the server has since said is not there', async () => {
+    const gone = new ApiProblemError({ type: '', title: '', status: 404, code: 'not_found' })
+    expect(await reReadWith(gone)).toBeUndefined()
   })
 
   it('says whom it keeps reads of, by what they are kept under', async () => {

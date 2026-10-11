@@ -5,8 +5,9 @@ import { createTranslator } from '@household/i18n'
 import { fireEvent, screen, userEvent } from '@testing-library/react-native'
 import { useState } from 'react'
 import { Platform, StyleSheet, type StyleProp, type TextStyle } from 'react-native'
+import type { TestInstance } from 'test-renderer'
 import { expectAccessible, violations } from '../test/a11y.ts'
-import { render } from '../test/render.tsx'
+import { render, styleOf } from '../test/render.tsx'
 import { sample } from './controls.fixtures.ts'
 import { Stepper } from './Stepper.tsx'
 
@@ -227,6 +228,33 @@ describe('a stepper', () => {
     ).toBeOnTheScreen()
     expect(field().props).toMatchObject({ keyboardType: 'number-pad', allowFontScaling: false })
     expectAccessible()
+  })
+
+  // Three targets and two gaps: 88 + 8 + 88 + 8 + 88 at 200 %, which is what a dialog leaves
+  // on a phone 360 pt wide. With the count held to 64 pt a scale the second button was cut.
+  it('needs no more room at 200 % than a dialog leaves it on a phone, and wraps where it has less', async () => {
+    await render(<Count start={2} min={0} />, { scale: 2 })
+    const row = field().parent as TestInstance
+    const style = styleOf(row)
+    expect(style).toMatchObject({ flexDirection: 'row', flexWrap: 'wrap' })
+    const least = (row.children as TestInstance[]).map((part) => styleOf(part).minWidth)
+    expect(least).toEqual([88, 88, 88])
+    expect(88 * 3 + (style.gap as number) * 2).toBeLessThanOrEqual(360 - 2 * 16 - 2 * 24)
+    expectAccessible()
+  })
+
+  // Past the whole numbers a number holds exactly, what is typed is no longer what is given.
+  it('holds what is typed to the numbers it can hold exactly, where nothing else bounds it', async () => {
+    const onChange = jest.fn<(value: number) => void>()
+    await render(<Count start={2} onChange={onChange} />)
+    await retype('9'.repeat(22))
+    expect(onChange.mock.calls.length).toBeGreaterThan(0)
+    expect(onChange.mock.calls.every(([value]) => Number.isSafeInteger(value))).toBe(true)
+    await leave()
+    expect(shows()).toBe(String(Number.MAX_SAFE_INTEGER))
+    await retype(`-${'9'.repeat(22)}`)
+    await leave()
+    expect(shows()).toBe(String(Number.MIN_SAFE_INTEGER))
   })
 
   it('asks for a keyboard with a minus where nothing holds it above nothing', async () => {

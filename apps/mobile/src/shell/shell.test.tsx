@@ -7,6 +7,7 @@ import { catalogs, createTranslator } from '@household/i18n'
 import { act, fireEvent, screen, userEvent, waitFor, within } from '@testing-library/react-native'
 import { router } from 'expo-router'
 import { Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import { ApiProblemError } from '../api/problem.ts'
 import { HouseholdNotAvailable, NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold, paths } from '../app/paths.ts'
 import type { ModuleKey } from '../household/data.ts'
@@ -443,6 +444,35 @@ describe('signing out', () => {
     await userEvent.press(control())
     expect(signOut).toHaveBeenCalledTimes(2)
   })
+
+  // *Please update* takes every screen's place and says itself (update/UpdateRequired.tsx): a
+  // toast would be said for a screen that is no longer drawn, in words untrue of a server
+  // that answered.
+  it('raises no toast where the sign-out was refused as a build too old to be served', async () => {
+    const signOut = jest.fn(() =>
+      Promise.reject(
+        new ApiProblemError({
+          type: '',
+          title: '',
+          status: 400,
+          code: 'update_required',
+          minimum_version: '1.6.0',
+        }),
+      ),
+    )
+    await render(
+      <SessionFixture signOut={signOut}>
+        <SignOut />
+      </SessionFixture>,
+    )
+    await userEvent.press(control())
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(signOut).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('toast')).toBeNull()
+    expect(said).not.toHaveBeenCalled()
+  })
 })
 
 describe('arranging the modules', () => {
@@ -653,7 +683,7 @@ describe('arranging the modules', () => {
       const style = StyleSheet.flatten(
         screen.getByTestId(`arrange:${section}`).props.style as StyleProp<ViewStyle>,
       )
-      expect(style).toMatchObject({ flexGrow: 1, flexBasis: 224 * scale })
+      expect(style).toMatchObject({ flexGrow: 1, flexShrink: 1, width: 224 * scale })
     }
     expectAccessible()
   })

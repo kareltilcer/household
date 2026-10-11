@@ -79,9 +79,6 @@ async function start(): Promise<Answering> {
     }),
     client: (bearer) => testClient(api.transport, bearer === undefined ? {} : { bearer }),
   })
-  // A read still being answered as a test ends would be held for a day by a timer.
-  const { queries } = services.queries.getDefaultOptions()
-  services.queries.setDefaultOptions({ queries: { ...queries, gcTime: Infinity } })
   await render(
     <SessionProviders services={services}>
       <Home />

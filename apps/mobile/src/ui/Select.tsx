@@ -13,8 +13,14 @@
 // what a choice sets off may open another modal, which iOS refuses while this one is still
 // leaving, and whatever it moves the focus to would have the focus taken back by the sheet as
 // it goes. Until then the field reads what it read.
+//
+// As it opens, the keyboard of whatever field was being typed in is put away: the sheet takes
+// the screen from that field, and its keyboard would stand over the choices. React Native's
+// modal says nothing to the keyboard on either platform *(read: ReactModalHostView.kt and
+// RCTModalHostViewComponentView.mm name it nowhere)*; what each platform's own window then
+// does with it is not in this repository, and is seen on no device yet.
 import { useRef, useState, type Ref } from 'react'
-import { Pressable, View } from 'react-native'
+import { Keyboard, Pressable, View } from 'react-native'
 import { useTheme } from '../display/DisplayProvider.tsx'
 import { useFocusRing } from './focus.ts'
 import { Radio } from './Choice.tsx'
@@ -92,6 +98,7 @@ export function Select({
             accessibilityState={{ expanded: open, ...(disabled ? { disabled: true } : {}) }}
             disabled={disabled}
             onPress={() => {
+              Keyboard.dismiss()
               setOpen(true)
             }}
             onFocus={focus.onFocus}

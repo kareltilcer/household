@@ -230,10 +230,12 @@ export function ArrangeLists({ household, registry, arrangement, onArrange }: Ar
       testID={`arrange:${id}`}
       style={{
         // Side by side where there is room for them, which a tablet has, and one under another
-        // where there is not: the room is counted in the reader's text.
+        // where there is not: the room is counted in the reader's text. It is said by a
+        // `width`, which is read at every layout: a `flexBasis` is computed once and kept
+        // whatever the text's size becomes (ui/ListRow.tsx).
         flexGrow: 1,
         flexShrink: 1,
-        flexBasis: sectionRem * remPx * textScale,
+        width: sectionRem * remPx * textScale,
         gap: theme.space['space-1'],
       }}
     >

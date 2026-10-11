@@ -4,10 +4,9 @@
 // member's sign-in (keep.ts), so that the app opens with no connection at the household it was
 // last in, however long ago that was. A module's own rows are the replica's, which is the
 // offline surface: nothing here stands in for it.
-import type { ApiProblem, UnreadableProblem } from '@household/api'
+import { isAbsent, type ApiProblem, type UnreadableProblem } from '@household/api'
 import NetInfo from '@react-native-community/netinfo'
 import {
-  defaultShouldDehydrateQuery,
   focusManager,
   MutationCache,
   onlineManager,
@@ -19,9 +18,6 @@ import {
 import { useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
 import { isRetryable, problemIn } from './problem.ts'
-
-/** How long the cache holds a read that nothing on screen reads: what is written is what it holds. */
-export const cacheMaxAge = 24 * 60 * 60 * 1000
 
 export interface QueryClientOptions {
   /**
@@ -41,7 +37,12 @@ export function createQueryClient({ onProblem }: QueryClientOptions = {}): Query
     mutationCache: new MutationCache({ onError: report }),
     defaultOptions: {
       queries: {
-        gcTime: cacheMaxAge,
+        // A read is held for as long as its member's sign-in, on screen or not: what is
+        // written to the device is what the cache holds (keep.ts), so one let go after a day,
+        // the web's rule, would be written out of the device with it, and another household's
+        // own answer could not be opened with no connection by an app left running overnight.
+        // The cache is emptied with its member (session/SessionProvider.tsx).
+        gcTime: Infinity,
         // A problem the server stated is its answer, and only one that may yet clear is asked
         // again: its own failure, and a first attempt still running. A request that got no
         // answer is not: the transport has already resent it twice (retryingFetch), and asked
@@ -74,7 +75,7 @@ export interface QueryNotes extends Record<string, unknown> {
   /**
    * `false` keeps its answer out of what this device keeps: what nobody reads again, or what is
    * of no use later, a link to a file that is good for minutes. Such a query names its own
-   * `gcTime` too, where it should not stay in memory for the day.
+   * `gcTime` too: left to the default it stays in memory for as long as its member's sign-in.
    */
   readonly persist?: boolean
 }
@@ -85,9 +86,19 @@ declare module '@tanstack/react-query' {
   }
 }
 
-/** Whether a query's answer is written to this device: one that succeeded, unless it says no. */
+/**
+ * Whether what a query holds is written to this device: the last answer it was given, unless it
+ * says no, and whatever became of asking again but for one thing. A re-read that got no answer,
+ * or that the server failed or refused for now, says nothing of what was read: dropped for it,
+ * as TanStack's own rule drops whatever is not a success, an app opened once while the server
+ * was away would write out everything the device kept, and open on nothing at its next start
+ * with no connection. The server's own word that the thing is not there for this caller, the
+ * API's `404`, is its answer, and stands over what was kept (household/data.ts).
+ */
 export function isKept(query: Query): boolean {
-  return defaultShouldDehydrateQuery(query) && query.meta?.persist !== false
+  if (query.state.data === undefined || query.meta?.persist === false) return false
+  const problem = problemIn(query.state.error)
+  return problem === undefined || !isAbsent(problem)
 }
 
 /**

@@ -558,12 +558,93 @@ describe('the preferences', () => {
       expect(screen.getByRole('switch', { name: 'The weekly digest' })).toBeChecked()
     })
     expect(server.to('GET /me/notification-preferences')).toHaveLength(1)
+    // And the other stands as it was chosen: its own change is on its way still, and what
+    // the first was put back to is not what was chosen since.
+    expect(screen.getByRole('switch', { name: 'Reminders I subscribed to' })).not.toBeChecked()
     answers[1]?.()
     await waitFor(() => {
       expect(server.to('GET /me/notification-preferences')).toHaveLength(2)
     })
     expect(await screen.findByText('Not saved')).toBeInTheDocument()
     expect(screen.getByRole('switch', { name: 'The weekly digest' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Reminders I subscribed to' })).not.toBeChecked()
+  })
+
+  /**
+   * A server that takes each change as it is asked, in that order, and answers none until the
+   * test says: `answers[n]` answers the change made n-th with what the server held once it had
+   * taken it.
+   */
+  function takenInOrder(server: Server, held: Map<string, Held>): (() => void)[] {
+    const answers: (() => void)[] = []
+    server.on('PATCH /me/notification-preferences', async (request) => {
+      const before = held.get('') ?? everythingOn
+      const change = (await request.json()) as Partial<Held>
+      const after: Held = {
+        ...before,
+        ...change,
+        categories: { ...before.categories, ...change.categories },
+      }
+      held.set('', after)
+      return new Promise<Response>((resolve) => {
+        answers.push(() => {
+          resolve(Response.json(after))
+        })
+      })
+    })
+    return answers
+  }
+
+  // The answer to a change says what the server held once it had taken that one: under a
+  // change made since and still on its way it holds nothing of that one's choice. Drawn as it
+  // came, the later switch went back under its member until its own answer.
+  it('keep a later change drawn as chosen while an earlier one is answered', async () => {
+    const server = createServer()
+    const held = withPreferences(server)
+    const { user } = await notifications(server)
+    const answers = takenInOrder(server, held)
+    await user.click(screen.getByRole('switch', { name: 'The weekly digest' }))
+    await user.click(screen.getByRole('switch', { name: 'Reminders I subscribed to' }))
+    await waitFor(() => {
+      expect(answers).toHaveLength(2)
+    })
+    answers[0]?.()
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(screen.getByRole('switch', { name: 'The weekly digest' })).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Reminders I subscribed to' })).not.toBeChecked()
+    expect(server.to('GET /me/notification-preferences')).toHaveLength(1)
+    answers[1]?.()
+    // Both answered: what the server holds now is read, once.
+    await waitFor(() => {
+      expect(server.to('GET /me/notification-preferences')).toHaveLength(2)
+    })
+    expect(screen.getByRole('switch', { name: 'The weekly digest' })).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Reminders I subscribed to' })).not.toBeChecked()
+    expect(screen.queryByText('Not saved')).not.toBeInTheDocument()
+  })
+
+  // Two changes sent side by side are answered in whichever order their answers come, which is
+  // not always the order the server took them in: the answer that comes last may be the earlier
+  // one's, which holds nothing of the later change. So what the server holds is read once both
+  // are answered.
+  it('are as the server holds them where two answers came the other way round', async () => {
+    const server = createServer()
+    const held = withPreferences(server)
+    const { user } = await notifications(server)
+    const answers = takenInOrder(server, held)
+    await user.click(screen.getByRole('switch', { name: 'The weekly digest' }))
+    await user.click(screen.getByRole('switch', { name: 'Reminders I subscribed to' }))
+    await waitFor(() => {
+      expect(answers).toHaveLength(2)
+    })
+    answers[1]?.()
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    answers[0]?.()
+    await waitFor(() => {
+      expect(server.to('GET /me/notification-preferences')).toHaveLength(2)
+    })
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(screen.getByRole('switch', { name: 'The weekly digest' })).not.toBeChecked()
     expect(screen.getByRole('switch', { name: 'Reminders I subscribed to' })).not.toBeChecked()
   })
 

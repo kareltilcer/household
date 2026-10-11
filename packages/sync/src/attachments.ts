@@ -8,8 +8,11 @@
 // one refused because the app is older than the server serves (update_required, which is about the
 // build and not the file), or one the server's limit refused (a 429), once the time each asks to be
 // waited has passed: a run starts at every checkpoint, and every try sends the whole file. A file whose
-// bytes the device no longer holds is kept as refused too (bytesLost), and one it cannot read is passed
-// over until the next run: neither keeps the files behind it waiting.
+// bytes the device no longer holds is kept as refused too (bytesLost), and one the queue reads itself
+// and cannot read is passed over until the next run: neither keeps the files behind it waiting. One
+// that is sent from where it waits (byUri) is read by its transport, which cannot tell a file it could
+// not read from a request that did not arrive: it ends the run as that does, and is the first file of
+// the next one, so for as long as it cannot be read no file behind it is sent.
 
 import type { CommonPowerSyncDatabase, LocalStorageAdapter } from '@powersync/common'
 import { maxRetryAfterMs, retryAfterMs, type Credential } from './connector.ts'
@@ -284,6 +287,9 @@ export class Attachments {
       try {
         response = await send(credential)
       } catch {
+        // No answer: the network, which fails the files behind this one as well, so the run ends.
+        // And, where the file is sent from its place, a file its transport could not read, which
+        // rejects as a request with no answer does.
         await this.attempted(a.id)
         return
       }

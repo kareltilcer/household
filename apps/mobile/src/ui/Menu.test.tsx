@@ -5,7 +5,14 @@ import { controls } from '@household/icons'
 import { catalogs, createTranslator } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
 import { act, fireEvent, screen, userEvent } from '@testing-library/react-native'
-import { Platform, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
+import {
+  Keyboard,
+  Platform,
+  StyleSheet,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native'
 import type { TestInstance } from 'test-renderer'
 import { expectAccessible } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
@@ -167,6 +174,21 @@ describe('a menu', () => {
     await userEvent.press(trigger())
     expect(trigger()).toBeBusy()
     expect(screen.queryByRole('button', { name: sample.rename })).toBeNull()
+  })
+
+  // The sheet takes the screen from whatever field was being typed in, whose keyboard would
+  // stand over its actions.
+  it('puts the keyboard away as it opens, and leaves it be where its trigger is busy', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined)
+    const view = await render(<Actions />)
+    expect(dismiss).not.toHaveBeenCalled()
+    await userEvent.press(trigger())
+    expect(dismiss).toHaveBeenCalledTimes(1)
+    await view.unmount()
+    dismiss.mockClear()
+    await render(<Actions loading />)
+    await userEvent.press(trigger())
+    expect(dismiss).not.toHaveBeenCalled()
   })
 
   it('is not drawn where it has no item: a control that cannot act is absent', async () => {

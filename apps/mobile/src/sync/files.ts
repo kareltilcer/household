@@ -6,7 +6,8 @@
 // the id of the row it belongs to. It is sent from there, by where it is: the library hands the
 // transport its place and none of its bytes, and `expo-file-system` uploads it from disk, a
 // multipart form whose `file` field it is (files.Receive). A file may be a hundred megabytes
-// (FR-FL1), and nothing here or in the queue holds one whole.
+// (FR-FL1), and on its way out nothing here or in the queue holds one whole. On its way in it
+// is still handed over as bytes (`Replica.attach`), and kept from them.
 //
 // It is not sent through the `fetch` the replica's other requests leave by. On a device that is
 // Expo's (`expo/fetch`), which builds every body in memory and takes no file by its place, and

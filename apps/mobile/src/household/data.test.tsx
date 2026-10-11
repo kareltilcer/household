@@ -2,8 +2,16 @@
 // it, where the app opens, and the state of a body that is read from the server.
 import { beforeEach, describe, expect, it } from '@jest/globals'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useQueryClient, type QueryClient } from '@tanstack/react-query'
+import {
+  onlineManager,
+  QueryClientProvider,
+  QueryObserver,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
 import { act, screen, waitFor } from '@testing-library/react-native'
+import { createKeep } from '../api/keep.ts'
+import { createQueryClient } from '../api/query.ts'
 import { answering, json, problem, testClient, unanswered } from '../api/testing.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { householdOf, households, ids, summaryOf } from '../test/fixtures.ts'
@@ -111,6 +119,46 @@ describe('the household an address names', () => {
     expect(screen.getByTestId('read')).toHaveTextContent(`read ${households.own.name}`, {
       exact: true,
     })
+  })
+
+  // A run of the app that asked again of a server that was away leaves what the device kept as
+  // it was: the next start, with no connection, opens the household on it.
+  it('is drawn as the device kept it at the next start, though its last re-read got no answer', async () => {
+    const before = createQueryClient()
+    before.mount()
+    const keep = createKeep(ids.member)
+    const stop = keep.watch(before)
+    before.setQueryData(householdKey(ids.household), household, { updatedAt: Date.now() - 60_000 })
+    const again = new QueryObserver(before, {
+      queryKey: householdKey(ids.household),
+      queryFn: () => Promise.reject(new TypeError('Network request failed')),
+    })
+    const unsubscribe = again.subscribe(() => undefined)
+    await waitFor(() => {
+      expect(before.getQueryState(householdKey(ids.household))?.status).toBe('error')
+    })
+    await keep.flush()
+    unsubscribe()
+    stop()
+    before.unmount()
+    before.clear()
+
+    const next = createQueryClient()
+    await createKeep(ids.member).restore(next)
+    onlineManager.setOnline(false)
+    try {
+      await render(
+        <QueryClientProvider client={next}>
+          <SessionFixture api={testClient(answering({}).transport)}>
+            <Frame id={ids.household} />
+          </SessionFixture>
+        </QueryClientProvider>,
+      )
+      await comesTo(`read ${households.own.name}`)
+    } finally {
+      onlineManager.setOnline(true)
+      next.clear()
+    }
   })
 
   // F-17: a kept read stands in for a server that cannot be asked, never for one that answered.

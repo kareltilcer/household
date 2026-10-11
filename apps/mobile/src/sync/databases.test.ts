@@ -35,6 +35,14 @@ function removing(fails: { empty?: boolean; remove?: boolean } = {}) {
   return { asked, removal, fails }
 }
 
+/** The device refuses the reading of its notes that is `nth` from now, once, and answers every other. */
+function refuseRead(nth = 1) {
+  const getItem = jest.mocked(AsyncStorage.getItem)
+  const answered = getItem.getMockImplementation() ?? (() => Promise.resolve(null))
+  for (let before = 1; before < nth; before += 1) getItem.mockImplementationOnce(answered)
+  getItem.mockRejectedValueOnce(new Error('the storage could not be read'))
+}
+
 beforeEach(async () => {
   await AsyncStorage.clear()
 })
@@ -193,6 +201,78 @@ describe('a replica its member comes back to', () => {
     // Nothing of the ended sign-in is left in a file that is gone: the next is made anew.
     expect(await claimReplica(member, home, removal)).toBe(true)
     expect(await keptReplicas()).toEqual([{ member, household: home }])
+  })
+})
+
+describe('notes the device will not read', () => {
+  // Read as no notes, the next one written would be written over these, and a replica with no
+  // note is one that nothing marks when its member's sign-in ends.
+  const mine = { member, household: home }
+  const theirs = { member: other, household: home }
+
+  beforeEach(async () => {
+    const { removal } = removing()
+    await claimReplica(member, home, removal)
+    await claimReplica(other, home, removal)
+  })
+
+  it('are written over by no replica that is claimed, which is not opened', async () => {
+    const { removal } = removing()
+    // Refused as the claim looks for what is leaving, and then as it looks for its own note.
+    for (const nth of [1, 2]) {
+      refuseRead(nth)
+      await expect(claimReplica(member, second, removal)).rejects.toThrow('could not be read')
+      expect(await keptReplicas()).toEqual([mine, theirs])
+    }
+    // Asked again once the device says what it holds, it is noted beside the others.
+    expect(await claimReplica(member, second, removal)).toBe(true)
+    expect(await keptReplicas()).toEqual([mine, theirs, { member, household: second }])
+  })
+
+  it('are written over by no removal: what was removed stays noted as leaving, and the next start goes on', async () => {
+    const first = removing()
+    await claimReplica(member, second, first.removal)
+    await markLeaving(member)
+    // Refused as the removal comes back to note what it did to the first of the two.
+    refuseRead(2)
+    await removeLeft(first.removal)
+    // The one after it is removed all the same, and its note with it.
+    expect(first.asked).toEqual([
+      `empty:${member}/${home}`,
+      `remove:${member}/${home}`,
+      `empty:${member}/${second}`,
+      `remove:${member}/${second}`,
+    ])
+    expect(await keptReplicas()).toEqual([{ ...mine, leaving: true }, theirs])
+
+    const next = removing()
+    await removeLeft(next.removal)
+    expect(next.asked).toEqual([`empty:${member}/${home}`, `remove:${member}/${home}`])
+    expect(await keptReplicas()).toEqual([theirs])
+  })
+
+  it('leave a removal with nothing to do, which still never rejects', async () => {
+    const { removal, asked } = removing()
+    await markLeaving(member)
+    refuseRead()
+    await expect(removeLeft(removal)).resolves.toBeUndefined()
+    expect(asked).toEqual([])
+    expect(await keptReplicas()).toEqual([{ ...mine, leaving: true }, theirs])
+  })
+
+  it('mark nothing as leaving, and say so: the next start marks what this one could not', async () => {
+    refuseRead()
+    await expect(markLeaving(member)).rejects.toThrow('could not be read')
+    expect(await keptReplicas()).toEqual([mine, theirs])
+    // What is asked after it is done in its turn, as after any other step.
+    await markLeaving(member)
+    expect(await keptReplicas()).toEqual([{ ...mine, leaving: true }, theirs])
+  })
+
+  it('are not said to be nobody’s: whom the device keeps a replica of could not be told', async () => {
+    refuseRead()
+    await expect(keptReplicas()).rejects.toThrow('could not be read')
+    expect(await keptReplicas()).toEqual([mine, theirs])
   })
 })
 

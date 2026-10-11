@@ -47,6 +47,11 @@ export interface AccessibleOptions {
 
 const propsOf = (element: TestInstance): Props => element.props
 
+/** The style `element` draws with, as one object. */
+function styleOf(element: TestInstance): Props {
+  return { ...StyleSheet.flatten(propsOf(element).style as StyleProp<ViewStyle>) }
+}
+
 /** Every host element under `tree`, itself among them, parents first. */
 export function elementsOf(tree: TestInstance): TestInstance[] {
   return [
@@ -195,7 +200,7 @@ export const targetSize: Rule = (tree, { target }) =>
     .filter((element) => takesPress(element) && !isHiddenFromAccessibility(element))
     .flatMap((element) => {
       const props = propsOf(element)
-      const style: Props = { ...StyleSheet.flatten(props.style as StyleProp<ViewStyle>) }
+      const style = styleOf(element)
       const high =
         (length(style.minHeight) ?? length(style.height) ?? 0) +
         slop(props.hitSlop, ['top', 'bottom'])
@@ -442,38 +447,65 @@ export const controlsWithinReach: Rule = (tree) =>
           ]
     })
 
+/**
+ * No element says its room by a `flexBasis`: it says it by a `width`, with `flexGrow` and
+ * `flexShrink`, which flexes the same. A device computes the room a `flexBasis` gives once, at
+ * the element's first layout, and keeps it whatever the element is told later *(read: the guard
+ * in `computeFlexBasisForChild`, CalculateLayout.cpp:108-116, which only
+ * `Node::markDirtyAndPropagate` lifts, Node.cpp:421-424, and which React Native's renderer
+ * never calls for a style that changed: `updateYogaProps`, YogaLayoutableShadowNode.cpp; the
+ * branch a `width` takes, CalculateLayout.cpp:117-128, has no such guard)*. So a room counted
+ * in the reader's text stayed what it was at the size the element was first drawn at, and one
+ * that a row's one flexible child had been given, nothing, stayed nothing when a second child
+ * arrived. Seen in CI's tenth run (38131404522), on both platforms: a list row at 200 % broke
+ * no line, its words' part 160 pt and what was left over, the room of a scale of one
+ * (ui/ListRow.tsx). `flex: n` sets no `flexBasis` in a style, and is no part of this.
+ */
+export const roomByWidth: Rule = (tree) =>
+  elementsOf(tree)
+    .filter((element) => {
+      const basis = styleOf(element).flexBasis
+      return typeof basis === 'number' ? basis !== 0 : typeof basis === 'string' && basis !== 'auto'
+    })
+    .map((element) =>
+      failure(
+        'room',
+        element,
+        'says its room by a `flexBasis`, which a device computes once, at its first layout, and keeps: a `width` is read at every layout',
+      ),
+    )
+
 /** How far a child of a row gives and takes room, as Yoga reads its style. */
-function flexing(element: TestInstance): {
-  readonly grows: boolean
-  readonly shrinks: boolean
-  readonly basis: boolean
-} {
-  const style: Props = { ...StyleSheet.flatten(propsOf(element).style as StyleProp<ViewStyle>) }
+function flexing(element: TestInstance): { readonly grows: boolean; readonly shrinks: boolean } {
+  const style = styleOf(element)
   const flex = length(style.flex) ?? 0
-  const basis = style.flexBasis
   return {
     grows: (length(style.flexGrow) ?? Math.max(flex, 0)) !== 0,
     shrinks: (length(style.flexShrink) ?? Math.max(-flex, 0)) !== 0,
-    // Room that is asked for: a length, or a share of the row. None and `auto` ask for none.
-    basis: typeof basis === 'number' ? basis > 0 : typeof basis === 'string' && basis !== 'auto',
   }
 }
 
 /**
- * A row that wraps breaks by the room its words ask for: a child that says how much room it is
- * to have before its neighbours go under it, by a `flexBasis` with `flexGrow` and `flexShrink`,
- * is not the row's only child that flexes. Yoga takes the one child of a row that both grows
- * and shrinks for a child whose basis it need not ask, counts it as nothing wide, and breaks no
- * line for it *(read: `computeFlexBasisForChildren`, CalculateLayout.cpp, and
- * `calculateFlexLine`, FlexLine.cpp, in React Native's ReactCommon/yoga)*: the words are left
- * what the row's other children did not take, which at 200 % text on a phone was a letter's
- * width (ui/ListRow.tsx). What was laid out is not seen here; what a row declares is.
+ * A row that wraps breaks by the room its words ask for: a child that both grows and shrinks,
+ * which is how one says how much room it is to have before its neighbours go under it (a
+ * `width` with `flexGrow` and `flexShrink`), is not the row's only child that flexes. Yoga
+ * takes the one child of a row that both grows and shrinks for a child whose room it need not
+ * ask, counts it as nothing wide, and breaks no line for it *(read:
+ * `computeFlexBasisForChildren`, CalculateLayout.cpp:585-625, and `calculateFlexLine`,
+ * FlexLine.cpp, in React Native's ReactCommon/yoga)*: whatever room it named, and where it
+ * named none, the words are left what the row's other children did not take, which at 200 %
+ * text on a phone was a letter's width (ui/ListRow.tsx). A child given the rest by `flex: n`
+ * grows and does not shrink, and is none of this.
+ *
+ * What a row declares in the one tree a test drew is all that is read here. That a device then
+ * breaks the line is the end-to-end flow's to show, and so is a row whose second part arrives
+ * after its first layout, which a drawn tree cannot tell from one that had it from the start.
  */
 export const wrapsByItsWords: Rule = (tree) =>
   elementsOf(tree)
     .filter((element) => {
-      const style: Props = { ...StyleSheet.flatten(propsOf(element).style as StyleProp<ViewStyle>) }
-      return style.flexWrap === 'wrap' || style.flexWrap === 'wrap-reverse'
+      const { flexWrap } = styleOf(element)
+      return flexWrap === 'wrap' || flexWrap === 'wrap-reverse'
     })
     .flatMap((row) => {
       const children = row.children.filter((child) => typeof child !== 'string')
@@ -483,13 +515,13 @@ export const wrapsByItsWords: Rule = (tree) =>
       })
       const [only] = flexible
       if (children.length < 2 || flexible.length !== 1 || only === undefined) return []
-      const { grows, shrinks, basis } = flexing(only)
-      return grows && shrinks && basis
+      const { grows, shrinks } = flexing(only)
+      return grows && shrinks
         ? [
             failure(
               'wrap',
               only,
-              'is the only child that flexes of a row that wraps, so its `flexBasis` is not what the row breaks by',
+              'is the only child that flexes of a row that wraps, so the room it asks for is not what the row breaks by',
             ),
           ]
         : []
@@ -537,6 +569,7 @@ export const rules: readonly Rule[] = [
   holdNeedsNoHold,
   neverTruncated,
   controlsWithinReach,
+  roomByWidth,
   wrapsByItsWords,
   stateSaid,
 ]

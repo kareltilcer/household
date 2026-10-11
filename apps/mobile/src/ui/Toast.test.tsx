@@ -227,7 +227,7 @@ describe('a toast', () => {
     expect(styleOf(sentence as TestInstance)).toMatchObject({
       flexGrow: 1,
       flexShrink: 1,
-      flexBasis: 192,
+      width: 192,
     })
     expect(textOf(sentence as TestInstance)).toBe(sample.cleared)
     // A second part that may shrink is what makes the sentence's room count (ListRow.tsx).

@@ -249,53 +249,72 @@ function Settings({
   // switch stood as it was for that frame, and a second press on it in that frame sent the
   // first one's change again.
   const [pressed, setPressed] = useState<Change | null>(null)
-  // How many changes are on their way: a switch takes another while one is, sent beside it.
-  const flying = useRef(0)
-  // What the server last said it holds: what was kept as the first of the changes now on their
-  // way was made, and then the answer to each of them it took.
+  // The changes on their way, in the order they were made: a switch takes another while one
+  // is, sent beside it.
+  const flying = useRef<readonly Change[]>([])
+  // What the server last said it holds, while a change is on its way: what was kept as the
+  // first of them was made, and then the answer to each of them it took.
   const served = useRef<Preferences | undefined>(undefined)
-  // Whether a change was refused since the server was last read.
+  // Whether the server is to be read once no change is on its way: one was refused, or two
+  // were on their way at once.
   const unread = useRef(false)
+  /**
+   * Keeps what the server last said it holds with every change still on its way made to it.
+   * The answer to one change, and what a refused one is put back to, hold nothing of a change
+   * made since: drawn as they came, that one's switch went back under its member until its own
+   * answer.
+   */
+  const draw = () => {
+    const held = served.current
+    if (held !== undefined) {
+      queries.setQueryData<Preferences>(key, flying.current.reduce(changed, held))
+    }
+  }
   const save = useMutation({
     ...askedNow,
     mutationFn: async (change: Change) =>
       unwrap(await api.PATCH('/me/notification-preferences', { params: { query }, body: change })),
     onMutate: async (change: Change) => {
       setRefusal(null)
-      flying.current += 1
-      // The first of the changes on their way: what is kept is what the server holds.
-      const first = flying.current === 1
+      // Sent beside another: their answers come in whichever order, and the one that comes
+      // last may be the earlier one's, so the server is read once both are answered.
+      if (flying.current.length > 0) unread.current = true
+      flying.current = [...flying.current, change]
       // A read on its way was asked before this change: its answer would be drawn over it, and
       // would stay drawn where it came after the change's own.
       await queries.cancelQueries({ queryKey: key, exact: true })
-      if (first) served.current = queries.getQueryData<Preferences>(key)
+      // What is kept is what the server holds, until the first of these changes is drawn.
+      served.current ??= queries.getQueryData<Preferences>(key)
       // Shown as chosen while it is asked: a switch that waited for the answer would feel stuck.
-      queries.setQueryData<Preferences>(key, (was) =>
-        was === undefined ? was : changed(was, change),
-      )
+      draw()
       // Kept now, and read there by the draw this asks for: the screen's own hold is put away,
       // unless a later press has taken its place.
       setPressed((held) => (held === change ? null : held))
     },
-    onSuccess: (saved) => {
+    onSuccess: (saved, change) => {
       served.current = saved
-      queries.setQueryData(key, saved)
+      flying.current = flying.current.filter((each) => each !== change)
+      draw()
     },
-    onError: (error) => {
+    onError: (error, change) => {
       // Put back: what the screen shows is what the server last said it holds, and never what
       // was kept as this change was made, which holds whatever a change still on its way had
       // only chosen: two refused one after the other left the first one's choice drawn as saved.
-      if (served.current !== undefined) queries.setQueryData(key, served.current)
+      flying.current = flying.current.filter((each) => each !== change)
+      draw()
       unread.current = true
       setRefusal(isRefusedAsSent(error) ? t('account.refused') : say(error))
       setRefusals((count) => count + 1)
     },
     onSettled: () => {
-      flying.current -= 1
-      // A change that got no answer may have been taken all the same, so the server is read
-      // again after a refusal: once none is on its way, and not before, since a read asked
-      // while one still is would be answered as that one lands, and drawn over it.
-      if (flying.current > 0 || !unread.current) return
+      if (flying.current.length > 0) return
+      // None is on its way: what is kept is the server's own again, whatever reads it next.
+      served.current = undefined
+      // A change that got no answer may have been taken all the same, and of two sent side by
+      // side the server took one last, whichever was answered last: so the server is read
+      // again, once none is on its way, and not before, since a read asked while one still is
+      // would be answered as that one lands, and drawn over it.
+      if (!unread.current) return
       unread.current = false
       void queries.invalidateQueries({ queryKey: key })
     },

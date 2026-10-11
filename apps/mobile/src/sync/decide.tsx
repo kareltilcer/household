@@ -5,7 +5,7 @@
 // undone, and none is written to the activity log, so neither is said. A retry reports whether
 // it wrote: a row this device no longer holds is written by nothing, and the member is told so
 // where they would otherwise think the change was on its way.
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Banner } from '../ui/Banner.tsx'
 
@@ -29,24 +29,26 @@ export interface Decision<Kind extends string> {
 export function useDecision<Kind extends string>(): Decision<Kind> {
   const [busy, setBusy] = useState<Kind | null>(null)
   const [trouble, setTrouble] = useState<Trouble | null>(null)
-  const decide = useCallback(
-    (kind: Kind, act: () => Promise<boolean>, done: () => void) => {
-      if (busy !== null) return
-      setBusy(kind)
-      setTrouble(null)
-      void (async () => {
-        try {
-          if (await act()) done()
-          else setTrouble('nothing')
-        } catch {
-          setTrouble('failed')
-        } finally {
-          setBusy(null)
-        }
-      })()
-    },
-    [busy],
-  )
+  // Whether one is under way, as a press reads it: `busy` is what was last drawn, and two
+  // presses the device hands over together are both answered before anything is drawn again.
+  const under = useRef(false)
+  const decide = useCallback((kind: Kind, act: () => Promise<boolean>, done: () => void) => {
+    if (under.current) return
+    under.current = true
+    setBusy(kind)
+    setTrouble(null)
+    void (async () => {
+      try {
+        if (await act()) done()
+        else setTrouble('nothing')
+      } catch {
+        setTrouble('failed')
+      } finally {
+        under.current = false
+        setBusy(null)
+      }
+    })()
+  }, [])
   return { busy, trouble, decide }
 }
 

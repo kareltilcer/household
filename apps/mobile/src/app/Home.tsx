@@ -9,41 +9,22 @@
 // an invitation: sign out, since every other way out of the app's account is inside a
 // household.
 import { Redirect } from 'expo-router'
-import { useState } from 'react'
 import { couldNotBeRead } from '../api/query.ts'
 import { opening, useHouseholds, useLastHousehold } from '../household/data.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useSession, type Me } from '../session/context.ts'
 import { Unreachable, Unread, Waiting } from '../session/guards.tsx'
-import { Button } from '../ui/Button.tsx'
+import { SignOut } from '../shell/SignOut.tsx'
 import { Screen } from '../ui/Screen.tsx'
-import { useToast } from '../ui/Toast.tsx'
 import { inHousehold, paths } from './paths.ts'
 
 /** What a member in no household is shown: that they are in none, and the way to sign out. */
 function InNone() {
   const t = useTranslate()
-  const toast = useToast()
-  const { signOut } = useSession()
-  const [leaving, setLeaving] = useState(false)
   return (
     <Screen title={t('account.households.empty.title')} testID="route:home">
-      <Button
-        testID="home:sign-out"
-        loading={leaving}
-        onPress={() => {
-          setLeaving(true)
-          // Signed out, the index leads to sign-in by itself. Where the server could not be
-          // told, its member is signed in still, and is told so: no control of this screen
-          // says it.
-          void signOut().catch(() => {
-            setLeaving(false)
-            toast({ message: t('shell.sign_out.failed') })
-          })
-        }}
-      >
-        {t('shell.sign_out.action')}
-      </Button>
+      {/* More's own control: signed out, the index leads to sign-in by itself. */}
+      <SignOut testID="home:sign-out" />
     </Screen>
   )
 }
@@ -89,6 +70,6 @@ export function Home() {
     case 'unknown':
       return <Waiting />
     case 'unreachable':
-      return <Unreachable retry={retry} />
+      return <Unreachable retry={retry} device={state.device} />
   }
 }

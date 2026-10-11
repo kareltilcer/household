@@ -7,7 +7,7 @@ import { money } from '@household/domain'
 import { controls } from '@household/icons'
 import { catalogs } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
-import { fireEvent, screen, userEvent, within } from '@testing-library/react-native'
+import { act, fireEvent, screen, userEvent, within } from '@testing-library/react-native'
 import { createRef, useState } from 'react'
 import { StyleSheet, type StyleProp, type View, type ViewStyle } from 'react-native'
 import type { TestInstance } from 'test-renderer'
@@ -87,6 +87,7 @@ function drawn(element: TestInstance | undefined): string {
 
 afterEach(() => {
   jest.restoreAllMocks()
+  jest.useRealTimers()
 })
 
 describe('a list row', () => {
@@ -235,7 +236,7 @@ describe('a list row', () => {
       flexDirection: 'row',
       flexGrow: 1,
       flexShrink: 1,
-      flexBasis: 320,
+      width: 320,
     })
     // The avatar is beside the words, in their part: never on a line of its own above them.
     expect(textOf(lead as TestInstance)).toBe(`${words.electricity} ${words.read}`)
@@ -264,6 +265,30 @@ describe('a list row', () => {
     }
   })
 
+  // An empty part is not nothing to a row that wraps: it costs the words a gap, and at 200 %
+  // a line of its own under them, for the moment a sync is given before it is marked.
+  it('draws no second part for a sync that is not marked yet, and one with the mark once it is', async () => {
+    jest.useFakeTimers()
+    await render(
+      <List testID="list" label={words.meters}>
+        <ListRow title={words.electricity} mark="syncing" />
+      </List>,
+    )
+    const row = () => byRole(screen.getByTestId('list'), 'listitem')[0] as TestInstance
+    expect(row().children).toHaveLength(1)
+    await act(() => {
+      jest.advanceTimersByTime(799)
+    })
+    expect(row().children).toHaveLength(1)
+    // The row and its mark wait the one moment out, and not one after the other.
+    await act(() => {
+      jest.advanceTimersByTime(1)
+    })
+    expect(row().children).toHaveLength(2)
+    expect(screen.getByText(en['a11y.status.syncing'])).toBeOnTheScreen()
+    expectAccessible()
+  })
+
   it('draws what stands under it on a line of its own, as wide as the row, apart from its action', async () => {
     await render(
       <List testID="list" label={words.meters}>
@@ -277,7 +302,7 @@ describe('a list row', () => {
     const [row] = byRole(screen.getByTestId('list'), 'listitem')
     const [, tail, under] = (row as TestInstance).children as TestInstance[]
     expect(within(tail as TestInstance).getAllByRole('button')).toHaveLength(1)
-    expect(styleOf(under as TestInstance)).toMatchObject({ flexBasis: '100%', flexGrow: 1 })
+    expect(styleOf(under as TestInstance)).toMatchObject({ width: '100%', flexGrow: 1 })
     expect(within(under as TestInstance).getByRole('button', { name: words.add })).toBeTruthy()
     expectAccessible()
   })
@@ -838,7 +863,7 @@ describe('a composition', () => {
       expect(styleOf(label as TestInstance)).toMatchObject({
         flexGrow: 1,
         flexShrink: 1,
-        flexBasis: 256,
+        width: 256,
       })
       expect((label as TestInstance).children).toHaveLength(2)
       // The figures may shrink, which is what makes the label's room count (ListRow.tsx).
@@ -923,7 +948,7 @@ describe('a flow', () => {
       expect(styleOf(label as TestInstance)).toMatchObject({
         flexGrow: 1,
         flexShrink: 1,
-        flexBasis: 256,
+        width: 256,
       })
       // The figure may shrink, which is what makes the label's room count (ListRow.tsx).
       expect(styleOf(figure as TestInstance)).toMatchObject({ flexShrink: 1 })

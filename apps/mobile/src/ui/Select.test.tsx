@@ -7,7 +7,7 @@ import { catalogs } from '@household/i18n'
 import { nativeThemes } from '@household/tokens/native'
 import { act, screen, userEvent } from '@testing-library/react-native'
 import { useState } from 'react'
-import { Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import { Keyboard, Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { expectAccessible, violations } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
 import * as announcer from './announce.ts'
@@ -171,6 +171,29 @@ describe('a select', () => {
       nativeThemes.light.color.danger,
     )
     expectAccessible()
+  })
+
+  // The sheet takes the screen from whatever field was being typed in, whose keyboard would
+  // stand over its choices.
+  it('puts the keyboard away as it opens, and leaves it be where it opens nothing', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined)
+    const view = await render(<Register />)
+    expect(dismiss).not.toHaveBeenCalled()
+    await userEvent.press(field())
+    expect(dismiss).toHaveBeenCalledTimes(1)
+    await view.unmount()
+    dismiss.mockClear()
+    await render(
+      <Select
+        label={sample.register}
+        options={tariffs}
+        value="day"
+        onChange={() => undefined}
+        disabled
+      />,
+    )
+    await userEvent.press(field())
+    expect(dismiss).not.toHaveBeenCalled()
   })
 
   it('opens nothing out of its form, and says so', async () => {

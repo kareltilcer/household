@@ -16,6 +16,11 @@
 // same, and is gone if that went through. And a replica whose note could not be written is not
 // opened at all.
 //
+// Notes the device will not read are never taken for no notes. Read as none, the next note
+// written would be written over every other, and a replica with no note is one that nothing
+// marks when its member's sign-in ends: its file would stay for good. So whatever reads the
+// notes fails where they could not be read, and nothing is written over them.
+//
 // This file knows the names and keeps the notes, with nothing of the library's imported, nor of
 // the file system's: what empties a replica and what deletes its files is handed in (open.ts).
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -57,9 +62,14 @@ function isKept(value: unknown): value is KeptReplica {
   return typeof member === 'string' && typeof household === 'string'
 }
 
+/**
+ * The notes, as the device holds them. It rejects where the device would not say what it holds,
+ * which is not that it holds none; a note nobody could have written is no note.
+ */
 async function read(): Promise<KeptReplica[]> {
+  const text = await AsyncStorage.getItem(notes)
   try {
-    const value: unknown = JSON.parse((await AsyncStorage.getItem(notes)) ?? '[]')
+    const value: unknown = JSON.parse(text ?? '[]')
     return Array.isArray(value) ? value.filter(isKept) : []
   } catch {
     return []
@@ -114,12 +124,18 @@ async function leave(replica: KeptReplica, removal: Removal): Promise<KeptReplic
   }
 }
 
-/** Removes every replica that is leaving, one after another, noting each as it goes. */
+/**
+ * Removes every replica that is leaving, one after another, noting each as it goes. It rejects
+ * where the notes could not be read to begin with: nothing is known to be leaving.
+ */
 async function removeLeaving(removal: Removal): Promise<void> {
   for (const replica of await read()) {
     if (replica.leaving !== true) continue
     const left = await leave(replica, removal)
-    const kept = await read()
+    // Noted over the notes as they are now, and not at all where the device will not say what
+    // they are: this one stays noted as leaving, and the next start finds how far it came.
+    const kept = await read().catch(() => undefined)
+    if (kept === undefined) continue
     await write(
       kept.flatMap((each) =>
         same(each, replica.member, replica.household) ? (left === null ? [] : [left]) : [each],
@@ -130,7 +146,9 @@ async function removeLeaving(removal: Removal): Promise<void> {
 
 /**
  * Marks every replica of `member` as leaving: their sign-in has ended. It answers once that is
- * noted, which is all a sign-out waits for; the removal itself is `removeLeft`'s.
+ * noted, which is all a sign-out waits for; the removal itself is `removeLeft`'s. It rejects
+ * where the notes could not be read, and nothing is marked: the next start, which holds no
+ * sign-in of theirs, marks them (session/forget.ts).
  */
 export function markLeaving(member: string): Promise<void> {
   const id = member.toLowerCase()
@@ -143,10 +161,11 @@ export function markLeaving(member: string): Promise<void> {
 
 /**
  * Removes what is marked as leaving: asked as a sign-in ends, and again as the app starts, for
- * whatever a run before this one could not remove. It never rejects.
+ * whatever a run before this one could not remove. It never rejects: notes that could not be
+ * read are read at the next start.
  */
 export function removeLeft(removal: Removal): Promise<void> {
-  return inTurn(() => removeLeaving(removal))
+  return inTurn(() => removeLeaving(removal).catch(() => undefined))
 }
 
 /**
@@ -155,7 +174,9 @@ export function removeLeft(removal: Removal): Promise<void> {
  * leaves it emptied, an empty file, it is the member's to open again, and where it could be
  * neither emptied nor deleted it holds what an ended sign-in left and is not opened. Nor is one
  * whose note the device would not keep: a replica with no note is one that nothing marks when
- * its member's sign-in ends, and that nothing would ever remove.
+ * its member's sign-in ends, and that nothing would ever remove. It rejects where the notes
+ * could not be read, and the replica is not opened then either: its note would be written over
+ * every other.
  */
 export function claimReplica(
   member: string,
@@ -178,7 +199,8 @@ export function claimReplica(
 /**
  * The replicas this device has noted. Whose they are is what the session goes by as the app
  * starts, to remove what is kept of a member it holds no sign-in of (session/forget.ts, through
- * open.ts); a test reads the notes themselves.
+ * open.ts); a test reads the notes themselves. It rejects where they could not be read, which
+ * the session passes over until the next start.
  */
 export function keptReplicas(): Promise<KeptReplica[]> {
   return inTurn(read)

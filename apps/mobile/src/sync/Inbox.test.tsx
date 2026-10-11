@@ -19,6 +19,7 @@ import { elementsOf, expectAccessible, textOf } from '../test/a11y.ts'
 import { householdOf, households, people } from '../test/fixtures.ts'
 import { render, type DrawOptions } from '../test/render.tsx'
 import * as announcer from '../ui/announce.ts'
+import { Screen } from '../ui/Screen.tsx'
 import { Inbox, inboxState, InboxView, type InboxFacts } from './Inbox.tsx'
 import { SyncFixture, type ReplicaState, type Sync } from './ReplicaProvider.tsx'
 import { standIn, type StandIn } from './standIn.ts'
@@ -243,6 +244,43 @@ describe('the inbox', () => {
       expect(screen.getByTestId('empty-state')).toBeOnTheScreen()
     })
     expect(announce.mock.calls).toEqual([[en['sync.inbox.empty']]])
+  })
+
+  // A tab's screen stays mounted when another is opened, and so does a household another was
+  // opened over: what arrives on one out of sight is said to nobody.
+  it('says nothing of what trying again came to once its screen is no longer in front', async () => {
+    const announce = jest.spyOn(announcer, 'announce').mockImplementation(() => undefined)
+    const stand = standIn({ registry, entries: [conflict] })
+    const retry = jest.fn()
+    const at = (phase: ReplicaState['phase'], front: boolean) => {
+      const replica: ReplicaState =
+        phase === 'open'
+          ? { phase, ...stand.opened }
+          : phase === 'unavailable'
+            ? { phase, retry }
+            : { phase }
+      return (
+        <Screen inFront={front}>
+          <SyncFixture value={{ replica, online: true, receiving: phase === 'open' ? true : null }}>
+            <InboxView setting={settingFor(plain)} describers={describers} />
+          </SyncFixture>
+        </Screen>
+      )
+    }
+    const view = await render(at('unavailable', true))
+    await userEvent.press(screen.getByTestId('sync:inbox:retry'))
+    expect(retry).toHaveBeenCalledTimes(1)
+    await view.rerender(at('opening', true))
+    // Its member opens another tab, and the copy is opened after that.
+    await view.rerender(at('opening', false))
+    await view.rerender(at('open', false))
+    await waitFor(() => {
+      expect(screen.getByTestId('sync:inbox:list')).toBeOnTheScreen()
+    })
+    expect(announce).not.toHaveBeenCalled()
+    // Nothing is owed when they come back: what stands there is read in its place.
+    await view.rerender(at('open', true))
+    expect(announce).not.toHaveBeenCalled()
   })
 
   it('lists what waits oldest first, each with its module, its name, when, and its mark', async () => {
@@ -503,7 +541,7 @@ describe('the inbox', () => {
     expect(wordsOpen).toEqual(words)
     expect(besideOpen).toEqual(beside)
     expect(beside).toMatchObject({ flexShrink: 1 })
-    expect(under).toMatchObject({ flexBasis: '100%' })
+    expect(under).toMatchObject({ width: '100%' })
     // And the control is in the part it was in, the banner in a part of its own.
     const [, second, third] = parts()
     if (second === undefined || third === undefined) throw new Error('the row has no such part')

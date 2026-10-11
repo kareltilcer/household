@@ -795,6 +795,8 @@
   "device.nav.more": "More",
   "device.push.channel": "Notifications",
   "device.session.ended": "You were signed out on this device. What it kept of your households was removed, along with any change it hadn’t sent yet. Sign in again to carry on.",
+  "device.session.unread.body": "This device didn’t say who is signed in here. Nothing was changed. Try again.",
+  "device.session.unread.title": "Couldn’t read who is signed in",
   "device.shell.arrange.kept_here": "Your order is kept on this device. Another device of yours has its own.",
   "device.shell.arrange.reorder": "Reorder {name}",
   "device.shell.panes.empty": "Nothing is selected. Pick a row from the list and it opens here.",

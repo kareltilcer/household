@@ -75,6 +75,27 @@ function isStored(value: unknown): value is Stored {
   )
 }
 
+/**
+ * A kept read as it is stored: the answer it last was. One whose re-read failed since is held
+ * as failed, with that answer still in it (`isKept`), and is read back as it was stored: left
+ * so, the next start would draw a failure of a run before over what the device kept, and an
+ * error that has been through storage is no problem a screen can read. It is stored as read,
+ * and still marked as to be asked for again.
+ */
+function asRead(query: DehydratedState['queries'][number]): DehydratedState['queries'][number] {
+  if (query.state.status !== 'error') return query
+  return {
+    ...query,
+    state: {
+      ...query.state,
+      status: 'success',
+      error: null,
+      fetchFailureCount: 0,
+      fetchFailureReason: null,
+    },
+  }
+}
+
 export interface Keep {
   /**
    * Puts what the device kept into `queries`: what was written in this shape, however long ago
@@ -119,7 +140,11 @@ export function createKeep(
       shouldDehydrateQuery: isKept,
       shouldDehydrateMutation: () => false,
     })
-    const stored: Stored = { shape, at: now(), state }
+    const stored: Stored = {
+      shape,
+      at: now(),
+      state: { ...state, queries: state.queries.map(asRead) },
+    }
     try {
       await AsyncStorage.setItem(key, JSON.stringify(stored))
     } catch {

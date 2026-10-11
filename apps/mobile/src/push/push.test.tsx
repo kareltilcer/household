@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 import type { ApiClient } from '@household/api'
 import { catalogs } from '@household/i18n'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClientProvider } from '@tanstack/react-query'
 import { act, screen, waitFor } from '@testing-library/react-native'
 import { useState, type ReactNode } from 'react'
 import { createProblemHub } from '../api/problems.ts'
@@ -19,7 +19,7 @@ import {
   unanswered,
 } from '../api/testing.ts'
 import { account, SessionFixture } from '../session/fixture.tsx'
-import { forget } from '../session/forget.ts'
+import { forget, forgetOthers } from '../session/forget.ts'
 import { ids } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import { Text } from '../ui/Text.tsx'
@@ -248,6 +248,29 @@ describe('registering again, for a member who is signed in', () => {
     expect(api.asked).toEqual([])
   })
 
+  // Expo may take seconds to answer, and a member may turn notifications off meanwhile: the
+  // renewal that was waiting would turn them on again behind the press.
+  it('registers nothing for a member who turned notifications off while Expo was asked', async () => {
+    allows('granted')
+    let answer: (token: string) => void = () => undefined
+    jest.mocked(device.expoToken).mockReturnValue(
+      new Promise<string>((resolve) => {
+        answer = resolve
+      }),
+    )
+    const { api, client } = server()
+    const renewing = renewPush(registration(client), createProblemHub())
+    await waitFor(() => {
+      expect(device.expoToken).toHaveBeenCalled()
+    })
+    await AsyncStorage.setItem(offKey, '1')
+    answer(token)
+    await renewing
+    expect(api.asked).toEqual([])
+    expect(await AsyncStorage.getItem(offKey)).toBe('1')
+    expect(await AsyncStorage.getItem(tokenKey)).toBeNull()
+  })
+
   it('leaves a build alone that belongs to no project', async () => {
     allows('granted')
     const { api, client } = server()
@@ -333,6 +356,18 @@ describe('a sign-in that ended', () => {
     await AsyncStorage.setItem(tokenKey, token)
     await AsyncStorage.setItem(offKey, '1')
     await forget(ids.member.toUpperCase())
+    expect(await AsyncStorage.getItem(tokenKey)).toBeNull()
+    expect(await AsyncStorage.getItem(offKey)).toBe('1')
+  })
+
+  // A registration that was answered after its member's sign-in had ended writes its note
+  // back: the device says whose note it holds, so that a start removes one of nobody's.
+  it('says whose registration it holds a note of, for a start to remove one of nobody’s', async () => {
+    await AsyncStorage.setItem(tokenKey, token)
+    await AsyncStorage.setItem(offKey, '1')
+    await forgetOthers([ids.member])
+    expect(await AsyncStorage.getItem(tokenKey)).toBe(token)
+    await forgetOthers([])
     expect(await AsyncStorage.getItem(tokenKey)).toBeNull()
     expect(await AsyncStorage.getItem(offKey)).toBe('1')
   })
@@ -523,6 +558,36 @@ describe('what the app does about push wherever it is open', () => {
     expect(api.sent('POST /push/subscriptions')[0]?.body).toMatchObject({ device_id: ids.device })
     expect(device.requestPermission).not.toHaveBeenCalled()
     expect(await AsyncStorage.getItem(tokenKey)).toBe(token)
+  })
+
+  // A phone is started with no connection as a matter of course: asked only as the app starts,
+  // the registration would wait for a start that happened to have one.
+  it('asks nothing while the device has no connection, and registers when one returns', async () => {
+    allows('granted')
+    const { api, client } = server()
+    onlineManager.setOnline(false)
+    try {
+      await render(
+        <SessionFixture api={client}>
+          <Push />
+        </SessionFixture>,
+      )
+      await act(async () => {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 20)
+        })
+      })
+      expect(device.expoToken).not.toHaveBeenCalled()
+      expect(api.asked).toEqual([])
+      await act(() => {
+        onlineManager.setOnline(true)
+      })
+      await waitFor(() => {
+        expect(api.sent('POST /push/subscriptions')).toHaveLength(1)
+      })
+    } finally {
+      onlineManager.setOnline(true)
+    }
   })
 
   // Never at sign-in: the system's question is a press's alone.

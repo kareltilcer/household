@@ -16,6 +16,7 @@ import { useI18n } from '../i18n/I18nProvider.tsx'
 import { storageKey as localeKey } from '../i18n/locale.ts'
 import { elementsOf, expectAccessible } from '../test/a11y.ts'
 import { root } from '../test/render.tsx'
+import * as announcer from '../ui/announce.ts'
 import { Text } from '../ui/Text.tsx'
 import { Providers, RouteError, Screens } from './Root.tsx'
 
@@ -132,5 +133,20 @@ describe('a route that failed', () => {
     await userEvent.press(screen.getByRole('button', { name: catalogs.en['ui.retry'] }))
     expect(retry).toHaveBeenCalledTimes(1)
     expectAccessible(screen.root, { scale: 1 })
+  })
+
+  // It takes the place of what was drawn, and nothing moved the focus to it.
+  it('says its title and its sentence as it arrives, at once', async () => {
+    const said = jest.spyOn(announcer, 'announceNow').mockImplementation(() => undefined)
+    await render(
+      <SafeAreaProvider initialMetrics={metrics}>
+        <RouteError retry={() => Promise.resolve()} error={new Error('a screen failed')} />
+      </SafeAreaProvider>,
+    )
+    expect(said).toHaveBeenCalledTimes(1)
+    expect(said).toHaveBeenCalledWith(
+      `${catalogs.en['device.app.error.title']}\n${catalogs.en['device.app.error.body']}`,
+    )
+    said.mockRestore()
   })
 })

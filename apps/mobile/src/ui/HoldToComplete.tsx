@@ -48,6 +48,7 @@ import { useFocusRing } from './focus.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { announce as say } from './announce.ts'
 import { BaseIcon } from './Icon.tsx'
+import { useInFront } from './Screen.tsx'
 import { Text } from './Text.tsx'
 
 export type HoldPhase = 'idle' | 'holding' | 'released' | 'completing' | 'completed' | 'failed'
@@ -240,10 +241,18 @@ export function HoldToComplete({ label, onComplete }: HoldToCompleteProps) {
             ? t('ui.hold.failed')
             : undefined
   // Said as it changes, to whoever does not see it change: that it is completing, how it went,
-  // and that a hold let go early has to be held for longer.
+  // and that a hold let go early has to be held for longer. As its phase changes, and not as
+  // its word does: a control that is completed stays so for as long as it is drawn, and every
+  // one on a screen said so again when the app's language followed the account's. And by a
+  // screen that is in front alone, as a banner is (ui/Banner.tsx): a completion that is
+  // answered after its member went to another tab is read beside its control when they return.
+  const front = useInFront()
+  const told = useRef<HoldPhase>('idle')
   useEffect(() => {
-    if (word !== undefined) say(word)
-  }, [word])
+    if (told.current === phase) return
+    told.current = phase
+    if (word !== undefined && front) say(word)
+  }, [phase, word, front])
 
   return (
     <View

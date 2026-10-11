@@ -795,6 +795,8 @@
   "device.nav.more": "Mehr",
   "device.push.channel": "Benachrichtigungen",
   "device.session.ended": "Sie wurden auf diesem Gerät abgemeldet. Was es von Ihren Haushalten behalten hatte, wurde entfernt, auch Änderungen, die es noch nicht gesendet hatte. Melden Sie sich erneut an, um fortzufahren.",
+  "device.session.unread.body": "Dieses Gerät hat nicht mitgeteilt, wer hier angemeldet ist. Es wurde nichts geändert. Versuchen Sie es erneut.",
+  "device.session.unread.title": "Wer angemeldet ist, konnte nicht gelesen werden",
   "device.shell.arrange.kept_here": "Ihre Reihenfolge wird auf diesem Gerät gespeichert. Ein anderes Ihrer Geräte hat seine eigene.",
   "device.shell.arrange.reorder": "{name} verschieben",
   "device.shell.panes.empty": "Nichts ist ausgewählt. Wählen Sie eine Zeile aus der Liste, und sie öffnet sich hier.",

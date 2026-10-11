@@ -154,8 +154,88 @@ describe('a sign-in the device was given', () => {
     expect(await tokens.current()).toBeUndefined()
     expect(remove).not.toHaveBeenCalled()
     expect(vault.held()[vaultKeys.signIn(ids.member)]).toContain('refresh-a')
-    // And an installation it cannot name is given a name, as a device new to the app is.
+  })
+
+  // Kept over a list that was never read, a sign-in would drop from it every one the vault could
+  // not name a moment ago: theirs would be sign-ins the device holds and cannot list, and what
+  // it kept of them removed at the next start as nobody's.
+  it('is not kept over sign-ins the vault would not name, and is kept beside them once it does', async () => {
+    const first = device()
+    await first.tokens.keep(ids.member, pair('a'))
+    const { tokens, vault } = device(first.vault.held())
+    const get = jest.spyOn(vault, 'get').mockRejectedValue(new Error('the keychain is shut'))
+    const set = jest.spyOn(vault, 'set')
+    await expect(tokens.start()).rejects.toThrow('the keychain is shut')
+    await expect(tokens.keep(ids.otherMember, pair('b'))).rejects.toThrow('the keychain is shut')
+    await expect(tokens.remove(ids.member)).rejects.toThrow('the keychain is shut')
+    expect(set).not.toHaveBeenCalled()
+    expect(tokens.member()).toBeNull()
+    // The keychain opens: what it holds is read before anything is written.
+    get.mockRestore()
+    await tokens.keep(ids.otherMember, pair('b'))
+    expect(JSON.parse(vault.held()[vaultKeys.signIns] ?? '')).toEqual({
+      active: ids.otherMember,
+      members: [ids.member, ids.otherMember],
+    })
+  })
+
+  // A pair the vault holds for a member it does not name is a sign-in the next start cannot
+  // list: who is signed in is written first, and again with the pair until both are taken.
+  it('names its member before it keeps their pair, and writes both again where the vault refused', async () => {
+    const { tokens, vault } = device()
+    await tokens.start()
+    const set = jest.spyOn(vault, 'set').mockRejectedValueOnce(new Error('the keystore refused'))
+    await tokens.keep(ids.member, pair('a'))
+    // Refused at the first of the two: nothing of the sign-in is kept, and no pair stands alone.
+    expect(set.mock.calls.map(([key]) => key)).toEqual([vaultKeys.signIns])
+    expect(vault.held()).toEqual({})
+    expect(await tokens.current()).toBe('access-a')
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0)
+    })
+    expect(set.mock.calls.map(([key]) => key)).toEqual([
+      vaultKeys.signIns,
+      vaultKeys.signIns,
+      vaultKeys.signIn(ids.member),
+    ])
+    const next = device(vault.held())
+    expect(await next.tokens.start()).toBe(ids.member)
+    expect(next.tokens.members()).toEqual([ids.member])
+  })
+
+  // What an app closed between the two writes leaves: a member named, with no pair, which the
+  // next start signs in to nothing. And never a pair for a member nobody names.
+  it('leaves no pair the device cannot list where only the first of its two writes landed', async () => {
+    const { tokens, vault } = device()
+    await tokens.start()
+    const set = vault.set
+    let written = 0
+    jest.spyOn(vault, 'set').mockImplementation((key, value) => {
+      written += 1
+      return written === 1 ? set(key, value) : Promise.reject(new Error('the app was closed'))
+    })
+    await tokens.keep(ids.member, pair('a'))
+    expect(Object.keys(vault.held())).toEqual([vaultKeys.signIns])
+    const next = device(vault.held())
+    expect(await next.tokens.start()).toBeNull()
+    expect(next.tokens.members()).toEqual([])
+    expect(next.vault.held()[vaultKeys.signIn(ids.member)]).toBeUndefined()
+  })
+
+  // Made anew over a vault that may hold one, the id a sign-in of this run named would not be
+  // the one the next start reads back, and the server refuses a registration that names another.
+  it('names no installation where the vault will not say whether it holds one, until it does', async () => {
+    const first = device()
+    expect(await first.tokens.device()).toBe(ids.device)
+    const { tokens, vault } = device(first.vault.held())
+    const get = jest.spyOn(vault, 'get').mockRejectedValue(new Error('the keychain is shut'))
+    const set = jest.spyOn(vault, 'set')
+    await expect(tokens.device()).rejects.toThrow('the keychain is shut')
+    expect(set).not.toHaveBeenCalled()
+    get.mockRestore()
+    // The one the vault held all along, and none of this run's making.
     expect(await tokens.device()).toBe(ids.device)
+    expect(vault.held()[vaultKeys.device]).toBe(ids.device)
   })
 
   it('works for as long as the app runs on a device that will not keep it', async () => {
@@ -312,13 +392,17 @@ describe('a renewal', () => {
     expect(await tokens.renew('access-a')).toBe('access-b')
     expect(vault.held()[vaultKeys.signIn(ids.member)]).toContain('refresh-a')
     expect(await tokens.current()).toBe('access-b')
-    await Promise.resolve()
-    await Promise.resolve()
+    // Who is signed in and then their pair: two writes, each a turn of the vault's.
+    const turn = () =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 0)
+      })
+    await turn()
     expect(vault.held()[vaultKeys.signIn(ids.member)]).toContain('refresh-b')
     // Written once it was taken, and not at every token asked for after.
     const writes = set.mock.calls.length
     expect(await tokens.current()).toBe('access-b')
-    await Promise.resolve()
+    await turn()
     expect(set.mock.calls).toHaveLength(writes)
   })
 

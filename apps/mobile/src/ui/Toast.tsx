@@ -154,7 +154,9 @@ function Toast({
         boxShadow: theme.shadows['shadow-2'],
       }}
     >
-      <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: sentenceRem * remPx * textScale }}>
+      {/* Its room by a `width`, which is read at every layout, and never by a `flexBasis`,
+          which is computed once and kept (ui/ListRow.tsx says where that was seen and read). */}
+      <View style={{ flexGrow: 1, flexShrink: 1, width: sentenceRem * remPx * textScale }}>
         {/* Met by a screen reader, it is read as it was announced: after the one word. */}
         <Text color="text-inverse" accessibilityLabel={`${t('ui.toast.label')}: ${toast.message}`}>
           {toast.message}

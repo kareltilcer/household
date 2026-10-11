@@ -237,10 +237,14 @@ export interface CompositionProps {
  */
 const labelRem = 8
 
-/** A label's part of its row: as wide as the row leaves it, from `labelRem` of the reader's text. */
-function useLabelRoom(): Pick<ViewStyle, 'flexGrow' | 'flexShrink' | 'flexBasis'> {
+/**
+ * A label's part of its row: as wide as the row leaves it, from `labelRem` of the reader's text.
+ * The room is a `width`, which is read at every layout, and never a `flexBasis`, which is
+ * computed once and kept whatever the text's size becomes (ui/ListRow.tsx).
+ */
+function useLabelRoom(): Pick<ViewStyle, 'flexGrow' | 'flexShrink' | 'width'> {
   const { textScale } = useDisplay()
-  return { flexGrow: 1, flexShrink: 1, flexBasis: labelRem * remPx * textScale }
+  return { flexGrow: 1, flexShrink: 1, width: labelRem * remPx * textScale }
 }
 
 export function Composition({ caption, segments, total }: CompositionProps) {

@@ -20,8 +20,11 @@ import { Animated, Easing } from 'react-native'
 import type { TestInstance } from 'test-renderer'
 import { elementsOf, expectAccessible, violations } from '../test/a11y.ts'
 import { render, root, styleOf, type DrawOptions } from '../test/render.tsx'
+import { useI18n } from '../i18n/I18nProvider.tsx'
 import * as announcer from './announce.ts'
+import { Button } from './Button.tsx'
 import { HoldToComplete, stepped } from './HoldToComplete.tsx'
+import { Screen } from './Screen.tsx'
 
 const en = catalogs.en
 const label = 'Complete Take out the bins'
@@ -429,6 +432,62 @@ describe('a completion that takes a while', () => {
     })
     expect(await screen.findByText(en['ui.hold.failed'])).toBeOnTheScreen()
     expect(phase()).toBe('failed')
+  })
+})
+
+describe('what it says aloud', () => {
+  // A control that completed stays so for as long as it is drawn, and the app's language
+  // follows the account's on every screen that is drawn: its word in another language is no
+  // other phase.
+  it('is said as its phase changes, and not again where only the language did', async () => {
+    function Drawn() {
+      const { t, setLocale } = useI18n()
+      return (
+        <>
+          <Hold onComplete={() => undefined} />
+          <Button
+            testID="to-german"
+            onPress={() => {
+              setLocale('de')
+            }}
+          >
+            {t('ui.dismiss')}
+          </Button>
+        </>
+      )
+    }
+    await render(<Drawn />)
+    await fireEvent(control(), 'accessibilityTap')
+    expect(said.mock.calls).toEqual([[en['ui.hold.completed']]])
+    await userEvent.press(screen.getByTestId('to-german'))
+    expect(screen.getByText(catalogs.de['ui.hold.completed'])).toBeOnTheScreen()
+    expect(said).toHaveBeenCalledTimes(1)
+  })
+
+  // A tab's screen stays mounted when another is opened: a completion answered after its
+  // member left it is read beside its control when they come back, and said to nobody.
+  it('says nothing on a screen that is not the one in front, nor of what stands there once it is', async () => {
+    let finish: () => void = () => undefined
+    const onComplete = () =>
+      new Promise<void>((resolve) => {
+        finish = resolve
+      })
+    const drawn = (inFront: boolean) => (
+      <Screen inFront={inFront}>
+        <Hold onComplete={onComplete} />
+      </Screen>
+    )
+    const view = await render(drawn(true))
+    await fireEvent(control(), 'accessibilityTap')
+    await view.rerender(drawn(false))
+    await act(async () => {
+      finish()
+      await Promise.resolve()
+    })
+    expect(phase()).toBe('completed')
+    expect(said.mock.calls).toEqual([[en['ui.hold.completing']]])
+    await view.rerender(drawn(true))
+    expect(said).toHaveBeenCalledTimes(1)
   })
 })
 

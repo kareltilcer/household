@@ -65,7 +65,8 @@ async function refusesToken(response: Response): Promise<boolean> {
 }
 
 /**
- * `base`, with every request signed by `bearer`. A request the server refuses the token of is
+ * `base`, with every request signed by `bearer`, once: what `base` sends again for want of an
+ * answer leaves as it was signed (client.ts). A request the server refuses the token of is
  * sent once more, with the sign-in renewed: the token lapsed on the way, or the device's clock
  * is not the server's. Refused again, or with a sign-in that could not be renewed, the refusal
  * is the caller's answer. Only a renewal the server refuses ends a sign-in, and that is the
@@ -84,8 +85,9 @@ export function bearing(base: Transport, bearer: Bearer): Transport {
       renewed = await bearer.renew(token)
     } catch (error) {
       // The renewal was answered, with something that is no pair and no end: the request's own
-      // refusal stands. One that got no answer leaves the request with none either, which
-      // @household/api resends as it resends any other.
+      // refusal stands. One that got no answer, sent again already as any request is, leaves
+      // the request with none either: nothing sends it round to ask for the renewal once more
+      // (client.ts).
       if (error instanceof ApiProblemError) return first
       throw error
     }

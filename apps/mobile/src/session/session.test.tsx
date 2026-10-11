@@ -86,7 +86,8 @@ function Probe({ children }: { readonly children?: ReactNode }) {
   const { locale } = useI18n()
   session = current
   const { state } = current
-  const who = state.status === 'member' ? `member ${state.me.id}` : state.status
+  const which = state.status === 'unreachable' && state.device === true ? ' device' : ''
+  const who = state.status === 'member' ? `member ${state.me.id}` : `${state.status}${which}`
   const notes = `ended ${String(current.ended)} left ${String(current.signedOut)} minimum ${String(current.minimumVersion)} locale ${locale}`
   return (
     <>
@@ -115,15 +116,10 @@ interface Device {
 
 /** The app's own services, over a vault and a server of the test's. */
 function serving({ vault, api }: Device) {
-  const services = createServices({
+  return createServices({
     vault,
     client: (bearer) => testClient(api.transport, bearer === undefined ? {} : { bearer }),
   })
-  // A read that is still being answered as a test ends would be held for a day by a timer:
-  // the app's holds it so, and a test's process is not kept open for it.
-  const { queries } = services.queries.getDefaultOptions()
-  services.queries.setDefaultOptions({ queries: { ...queries, gcTime: Infinity } })
-  return services
 }
 
 /** Starts the app on a device that holds `kept`, whose server answers by `routes`. */
@@ -199,7 +195,6 @@ describe('who is signed in', () => {
 
   it('is the member whose sign-in the device holds, asked for with it', async () => {
     const { api } = await start(holding(ids.member, 'a'), { 'GET /me': () => json(200, eva) })
-    expect(screen.getByTestId('who')).toHaveTextContent('unknown')
     await who(`member ${ids.member}`)
     expect(api.sent('GET /me')[0]?.headers.get('Authorization')).toBe('Bearer access-a')
   })
@@ -284,9 +279,119 @@ describe('what the device kept of a member it holds no sign-in of', () => {
         <Probe />
       </SessionProviders>,
     )
-    await who('visitor')
+    await who('unreachable device')
     expect(forgotten).not.toHaveBeenCalled()
     expect(await AsyncStorage.getItem(keepKey(ids.member))).not.toBeNull()
+  })
+})
+
+// A keychain shut for a moment as the app starts says nothing of who is signed in. Taken for
+// the run's answer, a member would be shown the sign-in screen while signed in, with no word.
+describe('a device that will not say whose sign-in it holds', () => {
+  /** The app started on a device that holds Eva's sign-in, whose vault `shut` says is shut. */
+  async function startShut(shut: () => boolean, routes: Parameters<typeof answering>[0] = {}) {
+    await keptFrom()
+    const vault = memoryVault(holding(ids.member, 'a'))
+    const get = vault.get
+    jest
+      .spyOn(vault, 'get')
+      .mockImplementation((key) =>
+        shut() ? Promise.reject(new Error('the keychain is shut')) : get(key),
+      )
+    const api = answering({ 'GET /me': unanswered, ...routes })
+    await render(
+      <SessionProviders services={serving({ vault, api })}>
+        <Probe />
+      </SessionProviders>,
+    )
+    await who('unreachable device')
+    return { api, vault }
+  }
+
+  it('is neither a visitor’s nor a member’s, and is read again when it is asked again', async () => {
+    let shut = true
+    const { api } = await startShut(() => shut)
+    expect(api.asked).toEqual([])
+    // Asked again while it is still shut: as it was.
+    await act(() => {
+      the().retry()
+    })
+    await who('unreachable device')
+    shut = false
+    await act(() => {
+      the().retry()
+    })
+    // The member it held all along, as the device kept them.
+    await who(`member ${ids.member}`)
+    expect(forgotten).not.toHaveBeenCalled()
+  })
+
+  // Asked again and refused again with nothing drawn meanwhile, the press would change nothing
+  // on the screen and be answered to nobody. The session waits while the device is asked, as
+  // it does while the server is: what could not be read then takes the wait's place anew.
+  it('waits while it is asked again, and could not be read anew where it still will not say', async () => {
+    await keptFrom()
+    const vault = memoryVault(holding(ids.member, 'a'))
+    let refuse: () => void = () => undefined
+    let readings = 0
+    jest.spyOn(vault, 'get').mockImplementation(() => {
+      readings += 1
+      // The first reading is refused at once, and the one after it when the test says.
+      if (readings === 1) return Promise.reject(new Error('the keychain is shut'))
+      return new Promise<string | null>((_resolve, reject) => {
+        refuse = () => {
+          reject(new Error('the keychain is shut'))
+        }
+      })
+    })
+    await render(
+      <SessionProviders services={serving({ vault, api: answering({ 'GET /me': unanswered }) })}>
+        <Probe />
+      </SessionProviders>,
+    )
+    await who('unreachable device')
+    await act(() => {
+      the().retry()
+    })
+    await who('unknown')
+    await act(() => {
+      refuse()
+    })
+    await who('unreachable device')
+  })
+
+  // Kept over a list that was never read, it would be the only sign-in listed: the first one's
+  // would live on at the server with no device that names it, and what the device kept of them
+  // would be removed at the next start as nobody's.
+  it('takes no sign-in while it will not say, and nothing of what it holds is written over', async () => {
+    const { api, vault } = await startShut(() => true)
+    const before = vault.held()
+    let failure: unknown
+    await act(async () => {
+      failure = await the()
+        .signedIn({ user: jiri, tokens: pair('b') })
+        .catch((error: unknown) => error)
+    })
+    expect(failure).toBeInstanceOf(Error)
+    expect(vault.held()).toEqual(before)
+    expect(api.asked).toEqual([])
+    expect(screen.getByTestId('who')).toHaveTextContent('unreachable device')
+    expect(await AsyncStorage.getItem(keepKey(ids.member))).not.toBeNull()
+  })
+
+  it('reads what it holds before it takes a sign-in, once it says: another member’s is ended first', async () => {
+    let shut = true
+    const { api, vault } = await startShut(() => shut, { 'POST /auth/logout': () => empty() })
+    shut = false
+    await act(() => the().signedIn({ user: jiri, tokens: pair('b') }))
+    await who(`member ${ids.otherMember}`)
+    expect(api.sent('POST /auth/logout')[0]?.headers.get('Authorization')).toBe('Bearer access-a')
+    expect(forgotten).toHaveBeenCalledWith(ids.member)
+    expect(vault.held()[vaultKeys.signIn(ids.member)]).toBeUndefined()
+    expect(JSON.parse(vault.held()[vaultKeys.signIns] ?? '')).toEqual({
+      active: ids.otherMember,
+      members: [ids.otherMember],
+    })
   })
 })
 
@@ -465,6 +570,41 @@ describe('signing out', () => {
     expect(vault.held()[vaultKeys.signIn(ids.member)]).toBeDefined()
     expect(await AsyncStorage.getItem(keepKey(ids.member))).not.toBeNull()
     expect(forgotten).not.toHaveBeenCalled()
+  })
+
+  // The server is asked to forget the device first, which may take a while on a poor
+  // connection. Whoever is in use once it has answered is not ended by a press that was not
+  // theirs.
+  it('ends nothing of another member who signed in while the server was asked to forget the device', async () => {
+    await AsyncStorage.setItem(`household.push.token.${ids.member}`, 'ExponentPushToken[abc]')
+    let forgetDevice: (response: Response) => void = () => undefined
+    const { api, vault } = await signedIn({
+      'DELETE /push/subscriptions': () =>
+        new Promise<Response>((resolve) => {
+          forgetDevice = resolve
+        }),
+      'POST /auth/logout': () => empty(),
+    })
+    let leaving: Promise<void> = Promise.resolve()
+    await act(() => {
+      leaving = the().signOut()
+    })
+    await waitFor(() => {
+      expect(api.sent('DELETE /push/subscriptions')).toHaveLength(1)
+    })
+    await act(() => the().signedIn({ user: jiri, tokens: pair('b') }))
+    await who(`member ${ids.otherMember}`)
+    await act(async () => {
+      forgetDevice(empty())
+      await leaving
+    })
+    // The first one's sign-in was ended by the sign-in that took its place, under its own
+    // token, and nothing was asked under the second one's.
+    expect(api.sent('POST /auth/logout').map((each) => each.headers.get('Authorization'))).toEqual([
+      'Bearer access-a',
+    ])
+    expect(screen.getByTestId('who')).toHaveTextContent(`member ${ids.otherMember}`)
+    expect(vault.held()[vaultKeys.signIn(ids.otherMember)]).toContain('refresh-b')
   })
 
   it('is done where the server no longer knows the sign-in, and is not said to have ended', async () => {

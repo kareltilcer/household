@@ -5,7 +5,7 @@
 //
 // And what stands in a screen's place while it is not known who is signed in, and where that
 // could not be read.
-import { Redirect, usePathname } from 'expo-router'
+import { Redirect, useIsFocused, usePathname } from 'expo-router'
 import { useEffect, type ReactNode } from 'react'
 import { paths } from '../app/paths.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
@@ -76,13 +76,24 @@ export function Unread({ title, body, retry }: UnreadProps) {
   )
 }
 
-/** In a screen's place where the server could not be asked who is signed in, and nothing is kept. */
-export function Unreachable({ retry }: { readonly retry: () => void }) {
+export interface UnreachableProps {
+  readonly retry: () => void
+  /** Whether it is the device that would not say, and not the server that could not be asked. */
+  readonly device?: boolean | undefined
+}
+
+/**
+ * In a screen's place where who is signed in could not be read: the server could not be asked
+ * and nothing is kept, or the device itself would not say whose sign-in it holds. Each in its
+ * own words: a member told to check their connection for a keychain that is shut would check
+ * the wrong thing.
+ */
+export function Unreachable({ retry, device = false }: UnreachableProps) {
   const t = useTranslate()
   return (
     <Unread
-      title={t('session.unreachable.title')}
-      body={t('session.unreachable.body')}
+      title={device ? t('device.session.unread.title') : t('session.unreachable.title')}
+      body={device ? t('device.session.unread.body') : t('session.unreachable.body')}
       retry={retry}
     />
   )
@@ -91,9 +102,13 @@ export function Unreachable({ retry }: { readonly retry: () => void }) {
 /** What is under it is drawn for a member, and for nobody else. */
 export function Signed({ children }: { readonly children: ReactNode }) {
   const { state, signedOut, retry } = useSession()
-  // Where the app is, which the router says for every screen alike: this screen's own address
-  // while it is the one in front.
+  // Where the app is, which the router says for every screen alike: the whole app's address,
+  // and this screen's own only while it is the one in front.
   const address = usePathname()
+  // Whether it is. A household another was opened over, and one that a screen of the root's
+  // stack stands over, *not available* opened by a pressed notification, stay mounted with
+  // their guard, and the address the router says is then that other screen's.
+  const inFront = useIsFocused()
   const member = state.status === 'member'
   const visitor = state.status === 'visitor'
   // The address held while a visitor signed in has been reached, or another has: it is held no
@@ -104,17 +119,21 @@ export function Signed({ children }: { readonly children: ReactNode }) {
   // The address is held for whoever was on their way to it: someone who opened it signed out,
   // or whose sign-in ended under them. A member who signed out themselves was on their way out,
   // and the next person to sign in here is not sent to where they were. The sign-in's own
-  // address is never held: the router names it already as this screen gives way to it.
+  // address is never held: the router names it already as this screen gives way to it. And
+  // only the screen in front holds one: underneath another it would hold that screen's address
+  // for its own, and whoever signed in next would be led to wherever that was.
   useEffect(() => {
-    if (visitor && !signedOut && address !== paths.signIn.path) holdDestination(address)
-  }, [visitor, signedOut, address])
+    if (visitor && !signedOut && inFront && address !== paths.signIn.path) {
+      holdDestination(address)
+    }
+  }, [visitor, signedOut, inFront, address])
   switch (state.status) {
     case 'member':
       return children
     case 'unknown':
       return <Waiting />
     case 'unreachable':
-      return <Unreachable retry={retry} />
+      return <Unreachable retry={retry} device={state.device} />
     case 'visitor':
       return <Redirect href={paths.signIn.path} />
   }

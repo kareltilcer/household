@@ -3,9 +3,9 @@
 // body is what it proves itself with, and a client that answered a `401` by renewing would send
 // this one round again.
 //
-// A renewal whose answer was lost is resent by @household/api as any other request is, with the
-// token it left with: within a minute the server takes that for the retry it is, and answers
-// with a new pair (D-98).
+// A renewal whose answer was lost is sent again as any other request is (api/client.ts), with
+// the token it left with: within a minute the server takes that for the retry it is, and
+// answers with a new pair (D-98).
 import { problemOf, type ApiClient } from '@household/api'
 import { ApiProblemError, retryAt } from '../api/problem.ts'
 import type { ProblemHub } from '../api/problems.ts'

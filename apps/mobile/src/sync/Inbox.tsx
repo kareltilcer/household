@@ -28,6 +28,7 @@ import { Button } from '../ui/Button.tsx'
 import { ModuleChip } from '../ui/Chip.tsx'
 import { EmptyState } from '../ui/EmptyState.tsx'
 import { List, ListRow } from '../ui/ListRow.tsx'
+import { useInFront } from '../ui/Screen.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { StateFrame } from '../ui/StateFrame.tsx'
 import type { DataState } from '../ui/states.ts'
@@ -210,13 +211,17 @@ export function InboxView({ setting, describers = appDescribers }: InboxViewProp
   // What *Try again* came to is said: the control that was pressed leaves with its sentence,
   // and nothing else tells whoever cannot see the screen that their copy was opened after all.
   // Where it could not be, the sentence that comes back is announced as any that arrives is.
+  // And said only while this screen is the one in front: a copy that opens once its member has
+  // gone to another tab, or to a household opened over this one, is told to nobody, and what
+  // stands here when they come back is read in its place (ui/Banner.tsx).
   const retried = useRef(false)
   const arrived = state === 'empty' ? empty : t('sync.inbox.list')
+  const inFront = useInFront()
   useEffect(() => {
     if (!retried.current || state === 'error' || state === 'loading') return
     retried.current = false
-    announce(arrived)
-  }, [state, arrived])
+    if (inFront) announce(arrived)
+  }, [state, arrived, inFront])
 
   const readings = useMemo(
     () =>

@@ -183,7 +183,7 @@ English, accented under the pseudo-locale (`useSample`), and in no catalog.
 The harness at `/dev/harness` is eight data bodies through the twelve states, in both themes at
 200 % text, the data table being the web's alone (D-190).
 
-**Where axe stands on the web, thirteen rules stand over the tree a test draws**
+**Where axe stands on the web, fourteen rules stand over the tree a test draws**
 (`src/test/a11y.ts`, `expectAccessible`). Each fails with the element it failed on. `named`:
 whatever takes a press has a role and a name. `registered-name`: an icon-only control is called
 what the register calls one (`@household/icons`' `controls`), in any of the five languages or
@@ -199,14 +199,18 @@ reach, declares an `activate` action with a label, and answers an accessibility 
 accessibility tap and a click. `truncated`: no text is held to a number of lines. `reach`:
 nothing that takes a press, and no field that is typed in, stands inside what is one thing to a
 screen reader, an `accessible` view or another control, where on iOS it would be no element of
-its own *(read: `RCTViewComponentView.mm`)*. `wrap`: in a row that wraps, a child that says how
-much room it is to have before its neighbours go under it, by a `flexBasis` with `flexGrow`
-and `flexShrink`, is not the row's only child that flexes: Yoga counts such a child as nothing
-wide and breaks no line for it *(read)*, which is how a list row's title came to a letter's
-width at 200 % (Consequences). `state`: a switch, a checkbox and a radio say whether they are
+its own *(read: `RCTViewComponentView.mm`)*. `wrap`: in a row that wraps, a child that both
+grows and shrinks, which is how one says how much room it is to have before its neighbours go
+under it, is not the row's only child that flexes: Yoga counts such a child as nothing wide
+and breaks no line for it *(read)*, which is how a list row's title came to a letter's width
+at 200 % (Consequences). `room`: nothing says its room by a `flexBasis`, which a device
+computes once, at the element's first layout, and keeps whatever its style says later *(read,
+and seen in CI's tenth run)*: it is said by a `width`, which is read at every layout
+(Consequences). `state`: a switch, a checkbox and a radio say whether they are
 `checked`, and a tab whether it is `selected`. What none of them can hold is anything laid out,
 since Jest lays nothing out: a size as a device measures it, a word clipped at 200 %, where a
-line broke, `wrap` reading what a row declares; nor contrast, which the tokens' own test holds
+line broke, `wrap` and `room` reading what a row declares, and `wrap` alone having passed the
+row that broke no line on a device; nor contrast, which the tokens' own test holds
 pair by pair; nor the order a screen reader walks, nor whether an announcement was heard.
 Those are a flow's, which reads the harness at 200 % in both themes, and a person's with
 VoiceOver and TalkBack (item 95). An announcement is a call and no tree, so a component's own test spies on
@@ -229,10 +233,13 @@ arrives on one out of sight is told to nobody and taken as having stood there wh
 comes back, as the bar above a household's screens is. *At once* is iOS's: on Android React
 Native hands an announcement no place in a queue, so a failure is said there as any other is
 *(read: `AccessibilityInfo.js`, where `queue` is iOS only)*. What stands in a screen's place
-where a read failed (`Unread`, `src/session/guards.tsx`) and *please update*
-(`src/update/UpdateRequired.tsx`) open no screen of their own, so each is said as it arrives,
-its title and its sentence joined by a line break, as a banner's are. A success that no control
-of its screen says is a toast.
+where a read failed (`Unread`, `src/session/guards.tsx`), *please update*
+(`src/update/UpdateRequired.tsx`) and what stands where a route failed to draw (`RouteError`,
+`src/app/Root.tsx`) open no screen of their own, so each is said as it arrives, its title and
+its sentence joined by a line break, as a banner's are. A success that no control of its
+screen says is a toast; and a failure that *please update* answers is said by that screen
+alone, a sign-out refused so raising no toast over it. What *Try again* came to in the inbox
+is said by the inbox in front alone.
 
 **A device signs in with a token pair kept under its member** (`src/session`). The vault is
 SecureStore (`vault.ts`, the one file that imports it), every item
@@ -242,10 +249,19 @@ SecureStore (`vault.ts`, the one file that imports it), every item
 clock. The layout is several sign-ins' from the first, one a member, since a shared tablet holds
 several (D-104), which item 29 builds on. The vault answers nothing where nothing is kept, and
 rejects where the device will not say what it holds, a keychain shut while the device is
-locked: the store then starts as nobody's for that run, and nothing is removed on the vault's
-silence *(read in expo-secure-store's sources and run on nothing: Android answers nothing for a
+locked *(read in expo-secure-store's sources and run on nothing: Android answers nothing for a
 key permanently invalidated and for a value it cannot decrypt after a reinstall; iOS answers
-nothing for an item not found and throws any other status)*. The API's client
+nothing for an item not found and throws any other status)*. On that silence nothing is
+removed, and nothing is written either: who is signed in *could not be read*, said in the
+device's own words with the way to ask again, which reads the vault again
+(`src/session/SessionProvider.tsx`, `Unreachable` in `src/session/guards.tsx`), and until the
+vault has said, no sign-in is taken and no installation is named anew (`tokens.ts`: `keep`,
+`remove` and `device` reject). A sign-in kept over a list that was never read would be the
+only one listed, and what the device kept of every other member, their unsent changes among
+it, would be removed as nobody's at the next start. And who is signed in is written before
+their pair, in the pair's own turn and written again with it where the keystore would not
+take either: a pair left with nobody named is a sign-in the device holds and cannot list.
+The API's client
 (`src/api/client.ts`, `src/api/transport.ts`) names the app on every request,
 `Household-Client: mobile/<version>` with the package's own version, says
 `credentials: 'omit'`, and signs with the access token. A token is renewed when a request needs
@@ -253,7 +269,11 @@ one within a minute of its lapse, and once more where a request is refused
 `401 unauthenticated`, which is read from a copy of the answer, the request then sent again
 from a copy of itself. A request is answered by its own sign-in alone: one refused on a token
 that was another member's, the one in use until a moment ago, is given no token of the one now
-in use, and its own refusal stands. A token is never renewed on a timer, so a
+in use, and its own refusal stands. And one that is sent again for want of an answer leaves
+as it was signed: the resend stands under the signing (`createMobileClient`,
+`src/api/client.ts`), where signed anew at each sending a request that hung while its member
+signed out and another signed in left the second time as the other's, with the key it left
+with. A token is never renewed on a timer, so a
 device that is not being used rotates nothing. One renewal runs at a time, and every request
 that needs one meanwhile is served by it. The renewal itself leaves by a client that signs
 nothing (`renewal.ts`). The new pair is held in memory before it is written, its writes going
@@ -265,8 +285,8 @@ store removes the pair and tells the session, which removes everything else the 
 that member (`forget`, `src/session/forget.ts`): what the query client kept of what they read,
 the note of their push registration, every replica of theirs with its waiting files and the
 changes it had not sent, and the toasts on screen. A renewal that got no answer ends nothing,
-and leaves the request it was made for with no answer either, which `@household/api` resends;
-one answered with
+and leaves the request it was made for with no answer either, which nothing sends round to
+ask for the renewal once more; one answered with
 another problem ends nothing, and the request's own `401` stands. A `401` to a request ends
 nothing. Signing out removes the device's push registration at the server first, then ends the
 sign-in there, and removes what the device kept only once the server has heard or says that it
@@ -274,7 +294,8 @@ no longer knows the sign-in. That it no longer knows it is a `401` whose renewal
 refused, the pair gone with it; a `401` that left the pair where it was, a lapsed token whose
 renewal failed for another reason, is the server never having heard, and the sign-out fails as
 one that was not reached does. Unreached, the member stays signed in with everything kept but
-the device's note of its push registration, which the next start makes again. A different
+the device's note of its push registration, which the next start makes again, or the
+connection's return. A different
 member signing in ends the first one's sign-in at the server, under the first one's token and
 whatever that comes to: left alive there it would never lapse (D-99), a sign-in no device
 holds, for which the server goes on sending its member's notifications to the device another
@@ -291,10 +312,13 @@ app's page in the store, where the build was told of one for the platform it run
 
 **Push is registered for a device that allows it already, and asked for by a press alone**
 (D-194; `src/push`). A device whose system permission is granted is registered again for its
-member at each sign-in and at each start, Expo's token told to the server with the
+member at each sign-in, at each start and whenever a connection returns, a phone being
+started with none as a matter of course, Expo's token told to the server with the
 installation's id, and the registration is removed at the server before a sign-out. The token
 that was registered is remembered under its member, and so is their own choice to turn
-notifications off here, which outlives their sign-in. The system's question is put by
+notifications off here, which outlives their sign-in; the first is said to the session as
+kept of its member, so that a note written back by a registration answered after their
+sign-in ended is removed at the next start. The system's question is put by
 `usePush().ask`, in a press, and by nothing else; no screen of this item draws one, F-20 being
 item 29's. A build that was told no EAS project cannot ask Expo for a token: its state is
 `unsupported`, and nothing is asked of anybody.
@@ -324,11 +348,13 @@ removes a member's own whenever their sign-in ends, so D-161's objection to the 
 name, a copy that stays until its member returns, does not hold here. **And what it keeps of
 anybody it holds no sign-in of is removed as the app starts** (`forgetOthers`,
 `src/session/forget.ts`; D-161's *whether or not a page knew them when it ended*). Whoever
-keeps something named for its member says whom it keeps something of, the kept reads by their
-keys (`keptMembers`) and the replicas by their notes, and the session removes what is kept of
-every member the vault names no sign-in of, before anything is read back and before a sign-in
-is taken. That is what a run closed between a pair's removal and the rest left behind, what a
-keystore that lost a pair left, and what a restore from a backup brought, which carries what
+keeps something named for its member says whom it keeps something of, the kept reads and a
+push registration's note by their keys and the replicas by their notes, and the session
+removes what is kept of every member the vault names no sign-in of, before anything is read
+back and before a sign-in is taken; a keeper that cannot say, its own notes unread, is passed
+over until the next start. That is what a run closed between a pair's removal and the rest
+left behind, what a keystore that lost a pair left, and what a restore from a backup brought,
+which carries what
 was kept and never the pair. Where the vault would not say what it holds, nothing is removed.
 The query client is one member's at a time: its keys are the web's, without the member in them,
 what it kept is restored under the member whose sign-in is in use, and an account it holds is
@@ -340,7 +366,13 @@ the replica open on with no connection (PRD 03 §2.1), and what was kept under a
 (`keptShape`) is dropped. The number is raised only by the pull request after which the app
 can no longer draw what an earlier one kept, and never by a release, in the manner of the
 web's version (D-158): a read is the contract's own answer, which a later build of the same
-major reads as it reads an older server's. What outlives a sign-in is
+major reads as it reads an older server's. What is kept is the last answer a read was given,
+whatever became of asking again: one asked again of a server that could not be reached, or
+that failed or refused for now, stays kept, as the answer it last was, and only the API's own
+*not found* takes it off the device, the server's word standing over what was kept. And the
+query client lets go of no read for its age while its member is signed in, drawn or not,
+since what is written is what it holds (`isKept`, `src/api/query.ts`). What outlives a
+sign-in is
 the device's and no member's content: the display modes, the language, a member's arrangement
 of their modules (D-155), which household they were last in, their own choice to turn
 notifications off on this device, the installation's own id, and the address of the screen a
@@ -364,7 +396,8 @@ sends with expo-file-system's `File.upload`, as a multipart form whose `file` fi
 the foreground session, and not through the `fetch` the replica's other requests leave by:
 read in the installed sources, `expo/fetch` builds every body in memory and refuses a part
 given by its URI, and React Native's own networking, which takes one, holds the whole form in
-memory on iOS, where `File.upload` hands the system a file on both platforms. So this one
+memory on iOS, where `File.upload` hands the system a file on both platforms, on iOS a copy
+it first writes, framed as the form, under the app's caches (Consequences). So this one
 request names the app, and tells the problem hub of `update_required`, itself; and the queue
 takes that answer for no refusal of the file, which waits with its row for the app its member
 updates to, as one refused by no problem of the API's does
@@ -398,20 +431,31 @@ having no page to reload and no other tab to wait for. The file is imported with
 household's layout, and so loaded as the app starts, which is when it says what the session is
 to forget.
 
-**A replica's removal is noted step by step, and what failed is taken up at the next start**
-(`src/sync/databases.ts`). A replica is noted in AsyncStorage before it is opened, and one
-whose note the device would not write is not opened: nothing would mark it when its member's
-sign-in ended, and nothing would ever remove it. One that is noted already is opened with
-nothing written. When a member's sign-in ends theirs are marked as leaving, which is all the
-session waits for. Each is then emptied by one path. One that is open is closed, under whoever
+**A replica's removal is noted as far as it came, and what failed is taken up at the next
+start** (`src/sync/databases.ts`). A replica is noted in AsyncStorage before it is opened, and
+one whose note the device would not write is not opened: nothing would mark it when its
+member's sign-in ended, and nothing would ever remove it. One that is noted already is opened
+with nothing written. And the notes are read, or the step that needed them is not taken: a
+device that will not hand its notes over is never read as one that noted nothing, which the
+next write would have made true of every other replica it holds, each then a file that
+nothing marks and nothing removes. So a replica whose notes could not be read is not opened,
+a removal writes nothing back over a reading that failed, and whoever asks whose replicas are
+kept is told that it could not be said, and passed over until the next start. When a member's
+sign-in ends theirs are marked as leaving, which is all the session waits for; where even
+that could not be noted, the next start's sweep marks them, the pair being gone. Each is then
+emptied by one path. One that is open is closed, under whoever
 still holds it, and never wiped through: its last holder may have closed it first, as a
 sign-out's screen does on its way out, and a closed database refuses the wipe, and the library
 may have begun to discard it itself, after which its wipe answers at once whatever became of
 the first. It is then opened for nobody, with a credential that throws and no server to ask,
-wiped, closed, and noted as emptied. Then its database's file is deleted by op-sqlite itself,
-after a checkpoint that truncates its log, its files' directory is deleted whatever became of
-the database's deletion, and its note dropped. What could not be emptied has its file deleted
-all the same. Whatever failed is tried again as the file is loaded, before any replica is
+wiped and closed. Then its database's file is deleted by op-sqlite itself, after a checkpoint
+that truncates its log, and asked for once more, op-sqlite's deletion saying nothing of what
+it came to *(read: `OPBridge.cpp`; the second look is held by Jest's stand-in alone)*: one
+that still opens has not gone, and the removal has failed. Its files' directory is deleted
+whatever became of the database's deletion. The note is written once, after both: dropped,
+or, where the deletion failed, saying how far the removal came. What could not be emptied has
+its file deleted all the same. Whatever failed is tried again as the file is loaded, before
+any replica is
 opened. A replica that is still leaving is removed before it is opened again; one that was
 emptied and whose file could not be deleted is its member's to open, being empty; one that
 could be neither emptied nor deleted is not opened. A sign-in that ends while its replica is on
@@ -434,7 +478,11 @@ says that a change needs a connection. A bar that arrives, and a sentence that t
 place, is said, and by the household in front alone: one that another was opened over stays
 mounted with its own bar, the connection goes for both at once, and what stands above it when
 its member comes back is taken as having stood there. What is told apart is which sentence it
-is and not its words, so the same one in another language is no change. The app never tells
+is and not its words, so the same one in another language is no change: the app's language
+follows the account's whenever that is learned, on every screen that is drawn. The bar and a
+banner, which are handed words and no key, tell that by the language they were last drawn
+in; and a hold-to-complete says its phase as it changes, never its word as that does, and
+from a screen in front alone. The app never tells
 the replica to connect again.
 
 **The guard, the replica's provider and the frame stand inside the household's navigator, in
@@ -521,7 +569,11 @@ know to: it holds the address for a visitor where it leads into a household, in 
 AsyncStorage, since signing in may leave the app, and notes that a link changed the household,
 which is said in a banner with the way back. An address that leads into no household is a
 screen a visitor may open, and is opened as it is: the sign-in's own, held, sent a member who
-had just signed in from the sign-in screen to itself, without end. That a link switched the
+had just signed in from the sign-in screen to itself, without end. And a guard holds an
+address only while its own screen is the one in front (`Signed`, `src/session/guards.tsx`):
+the router's word for where the app is belongs to every screen alike, and a household that
+stays mounted underneath another screen would hold that screen's address for its own, and
+lead whoever signed in next to it. That a link switched the
 household is positive evidence, an address that named
 another household than the one on screen, and never inferred from a household having changed.
 
@@ -577,7 +629,14 @@ accessibility hint and are drawn as texts beside it, there being no described-by
 and nothing says *invalid* but the error's own sentence, its glyph and the edge's colour. A
 select is a button that holds its value and opens a sheet of radio rows; a stepper parses what
 was typed itself, with a comma or a full stop before a fraction, and its two moves are actions
-of its field; a checkbox, a radio and a switch are drawn, one row a control. A control that
+of its field. Its count is never narrower than a target, so that three targets and two gaps
+are what it needs, 280 pt at 200 %, which a dialog leaves on a phone 360 pt wide; where there
+is less its row wraps and cuts nothing; and where its owner gives it no bounds it is held to
+the whole numbers a number holds exactly, twenty-two digits typed having been handed on as
+`1e21`. A select's and a menu's opening press put the keyboard away, their sheet taking the
+screen from whatever field was being typed in *(read: React Native's modal names the keyboard
+nowhere on either platform; what a device then does is seen on none)*. A checkbox, a radio
+and a switch are drawn, one row a control. A control that
 cannot act is absent, an option that cannot be chosen is not offered, and a busy control says
 `busy`, drops the press and stays where it is.
 
@@ -726,12 +785,13 @@ platform.
 | The offline bar always said; said only where its owner asks | Opening the harness would say the sentence sixteen times, and opening the app offline would say a bar that is read in its place. With the default off, the bar above a household would have to remember to turn it on, and its whole point is to be said when the connection goes. It is said by default, and its owner says where it stood already |
 | A refused form's first field found by asking the tree; by measuring where each field is; by its owner passing the order | There is no document to ask. Measuring is asynchronous, and Jest lays nothing out. The third is a second list of a form's fields. Known limit: a field drawn later than its neighbours enters after them |
 | A refusal focusing the field for the keyboard too | The keyboard would rise over the error a sighted member is reading |
+| The keyboard left for the platform to put away as the screen holding its field is replaced; `Button` putting it away whenever it turns busy; the router's stacks putting it away at each change of address | On Android whether it goes is a race *(seen in CI's tenth run: after the dev form's sign-in it stood over the household's tab bar for as long as the flow waited, where three other sign-ins of the same run left none; read: React Native blurs a focused field in the commit that deletes its view, and Android hides the keyboard only for a view still attached to its window)*. A control that is busy is not always its screen's last: one that saves and stays would take the keyboard from a member who is still typing beside it. And at a change of address the field has gone already: `Keyboard.dismiss()` blurs the field that has the focus, and there is none left to ask. The press that leads away knows that it does, and puts the keyboard away itself, while its field is still mounted: the dev form's does, and item 29's forms do (Consequences) |
 | A status's word as a hidden text beside its glyph | React Native has no visually hidden text, only clipped or transparent text, which a screen reader may or may not read. The mark is one accessible element, named by its word |
 | Every text of a row a stop of its own; the whole row one accessible element | A row of four swipes. The second would put its trailing action and its conflict control out of a screen reader's reach on iOS *(read)*. A row's words are one element, and its mark and its action each their own |
 | One constant for the pair of props that hides an element from a screen reader on both platforms | Every place that hides one writes the pair, and none writes half of it; a wrapper is an element more in each |
 | The `Request` unpacked into an address and its options; `expo/fetch` imported by name; React Native's `fetch` forced (`EXPO_PUBLIC_USE_RN_FETCH`) | A body would be read as text, which refuses the form an upload sends. The second pins what the runtime already chose, and under Jest its native half is a stand-in. The third is a build-wide switch for no gain |
 | A renewal on any `401` | A sign-in that failed, `invalid_credentials`, would rotate the refresh token of whoever is signed in, for nothing. A second step whose challenge is gone is answered `unauthenticated` all the same, which the answer cannot tell from a refused token: a screen that signs somebody in beside a sign-in in use asks through a client that signs nothing, as the renewal does (item 29) |
-| A renewal with no answer handing its request's `401` back; a renewal answered with another problem thrown | A member offline would be told that something went wrong at our end. `@household/api` takes a throw for a lost answer and resends, and each resend would ask for the renewal a `429` has just refused |
+| A renewal with no answer handing its request's `401` back; a renewal answered with another problem thrown | A member offline would be told that something went wrong at our end. And a problem thrown from the transport is taken by its caller for an answer that never came: a renewal the server had answered, with a `429`, would be said as a server out of reach |
 | A request failed where its token could not be renewed before it lapsed | The token held is sent as it is, and the server says whether it still stands: an answered problem thrown from the transport would be taken for a lost answer |
 | The access token's lapse read out of the token | The server's clock against the device's. It is counted from when the pair arrived |
 | A renewal failed where its pair could not be written | The old refresh token is used up either way, and the request has a good token: held in memory, the sign-in works for as long as the app runs, and the pair is written again as a token is next asked for, which a keychain that was shut while the device was locked then takes |
@@ -742,10 +802,12 @@ platform.
 | Why a sign-in ended kept as one of several causes; the notice kept across a restart | The answer names none (Q18). After the app was closed and opened it is a notice nobody asked for; the web's is in memory too |
 | The API's clients made as the providers mount | Where a build was told no API, making one throws: it is made when first asked for, and a misconfigured build fails inside the route's own boundary |
 | Nothing drawn until the vault is read | The router's stack must be mounted to be told where to go, and the splash is held already for the display's own reads. The session is *unknown* until then |
+| A vault that would not say taken for nobody's sign-in for the whole run, as it first was; the vault asked again by itself, when the app comes to the front | A member was shown the sign-in screen while signed in, with no word why, until the app was closed; a sign-in taken there was written over a list of sign-ins that was never read, and the installation given a second id. What could not be read is said so, and asked again by its member's press, as every other read of the app's is: an observer of the app's coming to the front would be a second way to do what *Try again* does |
 | The member in every query key | Every screen's key would carry it, and the web's keys would stop being the app's. The cache is one member's at a time, and emptied when its member is forgotten |
 | TanStack's own persister | Its throttle writes a cache back after it was removed, and its restore rejects where storage refuses: the web's own reasons (ADR 0025) |
 | The kept reads tied to the build that wrote them, as the web's are (D-161), and dropped by the next | What the tie was for is drift: a build may keep a read otherwise than the one before it, a key's meaning or an answer's shape, and what is restored is drawn before any answer can correct it, with a connection as without. But it drops every read at every update, and the first start after one would need a connection: a member whose phone updated the app overnight would open it with none to *could not be read* and no replica, on the client whose promise is that reads work offline (PRD 03 §2.1). A number answers the drift where it arises: `keptShape` is raised by the pull request that changes what is kept, and a read is the contract's own answer, which a later build of the same major reads as it reads an older server's |
-| The query client emptied in the providers' own cleanup | React runs a removed tree's cleanups parent first: the readers let go after the emptying, and each set a day's timer on a read the cache no longer held. It is emptied by a component that stands after everything that reads |
+| A read kept only while its last asking succeeded, which is TanStack's own rule for what it stores, and the web's; a read that nothing draws let go from memory after a day, as the web's is | An app opened once while the server was away, or on a network with nothing behind it, wrote everything it kept out of the device a second after its re-reads failed, and the next start with no connection opened on *could not be read*, with no replica: an outage met twice shut the app that is to work with none (PRD 03 §2.1). And what is written is what the cache holds: another household's own answer, read by nothing while its member is in the first, went from the device after a day of the app's life. The web's rules are a browser's, which is no offline surface |
+| The query client emptied in the providers' own cleanup | React runs a removed tree's cleanups parent first: the readers let go after the emptying, and each left held again a read the cache had just put away. It is emptied by a component that stands after everything that reads |
 | The device believed on `isInternetReachable`; *unknown* taken for offline | Where the platform cannot say, NetInfo asks a host of Google's. Every read at a cold start would wait for NetInfo's first answer, and a bar would be drawn for a state nobody reported. A network with nothing behind it is a request's own failure to say |
 | The offline bar hearing the device by a listener of its own, beside the query client's; a lint that keeps NetInfo to one file; the device asked once more as that file loads | Two stores of one fact, and the query client's is the one that holds a read back, so it is the one the bar must not disagree with: the bar reads what the query client was told. The lint's one rule of restricted imports is spent on `Text` for the same files, where a second block would replace it, so a test of the sources names the file. NetInfo hands a new listener the state it has *(read)* |
 | The ended sign-in's notice in the `warning` or the `danger` tone; always announced; never announced | Calm is a design decision of that notice (A-11). A screen that opens with it reads it in its place, and would say it twice; a renewal refused while a visitor sits on the screen would otherwise change it silently |
@@ -754,10 +816,10 @@ platform.
 | Navigation driven from a route's guard alone; a `+native-intent` file that rewrites what the system hands over | A pressed notification for a visitor who signed out themselves would not be held, the guard holding nothing for them, and nothing would know that a link changed the household. The second is a file under `app/` that is no route, and runs outside React, with no session |
 | *Switched* inferred from any change of household its member did not make, as the web infers it; the hook reading for itself whether its household is in front | On a device the index opening a household after a sign-out and a sign-in would read as a switch. The frame hands the second over: a stack keeps the household a link was opened over mounted underneath |
 | The held address in memory alone; held during render, as the web holds it | Signing in may leave the app, for a password manager or a provider's screen, and the system may close it meanwhile. The router has one address for every screen, and as the guarded screen gives way it reads the sign-in's own, which would take the place of what was held |
-| The guard holding a visitor's address with its query | The router's own word for where the app is has none, and the address that launches the app is heard by nothing else. No route reads a query and the server writes none into a link: the first route that takes one holds it |
+| The guard holding a visitor's address with its query | The router's own word for where the app is has none, and the address that launches the app is heard by nothing else. No route reads a query and the server writes none into a link: the first route that takes one holds it, and keeps the guard from writing its own word, which has none, over what a link's arrival held with one a moment before |
 | expo-notifications called from each file that needs it | One file imports it (`src/push/device.ts`), and every call that can fail on a build with no notifications answers nothing there: Jest's stand-in for its native half throws |
 | Expo asked for the token again in order to remove it; *turned off here* kept for the device; the project as a default parameter | A sign-out on a poor connection may not reach Expo's service: the token that was registered is remembered. A shared tablet's profiles each keep their own (D-104). `undefined` passed on purpose would be replaced by the build's |
-| The device's registration left for the sign-out to end, with no removal before it | The web's order (ADR 0026), kept so that both clients sign out by one rule. What it costs is said (D-187): a device whose sign-out then failed stays signed in with no note of its registration, and is registered again only at its next start |
+| The device's registration left for the sign-out to end, with no removal before it | The web's order (ADR 0026), kept so that both clients sign out by one rule. What it costs is said (D-187): a device whose sign-out then failed stays signed in with no note of its registration, and is registered again at its next start, or when a connection next returns |
 | A second Android channel for urgent pushes; a notification left unshown while the app is open | The server names no channel, and from Android 8 a notification's own priority is ignored *(read)*. The server has applied its member's mutes and quiet hours already |
 | The device's twins of the web's `push.*` words written now | No screen of this item draws them: F-20 is item 29's, which designs the screen they belong to |
 | `device.` twins for `nav.home` and `ui.not_available.home` in German and Polish, which say *Zur Startseite* and *Strona główna* | That is what a phone app's home is called in both, and D-195 judges a key by its English |
@@ -784,13 +846,14 @@ platform.
 | A household's replica removed as its address answers `404` | A suspended household answers `404` too (D-115), and what a device had not sent of it must be there still when the suspension is lifted: the frame cannot tell gone from suspended. The member's list can, which item 29's lockout reads (Consequences) |
 | A note left of a replica whose sign-in ended before the note was asked for | It is two ids and no content, and is cleared at that member's next sign-in; but it says that a replica is kept which never was, on a device whose rule is that what it keeps of a member goes with their sign-in. The opening asks whether its sign-in has gone before it notes itself, as well as after |
 | `onRevoked` handed to the replica | A second path to an end the session has reached already |
+| One watcher of what waits, in the replica's provider, for the tab bar, More and the inbox to share | Each of the three watches for itself, at one read of the few rows that wait for each change of them, and only while it is drawn. One watcher would need a context of its own, so that whoever reads the replica's status is not drawn again for an inbox that changed, and a fixture that runs the watch for every test and dev screen that hands over a stand-in: some forty lines, and a shape other than the web's own provider, for a saving nobody could measure |
 | The sentence for the settings' addresses left out of the bar until item 29 has screens there | The addresses are real, and a push names them: the bar over *not available* there would promise that changes are saved |
 | The inbox saying nothing after *Try again*; the focus moved to its list | The control that was pressed leaves with its sentence. Where one state takes another's place no element outlives both: what trying again came to is announced |
-| *Try again* outside the inbox announcing what it came to, by each owner of a wait; a debt of focus paid by the next screen's title | The inbox has a sentence for what came, and the three that stand in a read's place, of who is signed in, of the list of households and of a household, have none but the screen itself. A flag that the next title pays would be paid by whichever screen mounted next, one nobody asked again for among them. With no connection the press changes nothing and says nothing, as the web's (ADR 0026) |
+| *Try again* outside the inbox announcing what it came to, by each owner of a wait; a debt of focus paid by the next screen's title | The inbox has a sentence for what came, and the three that stand in a read's place, of who is signed in, of the list of households and of a household, have none but the screen itself, as the screen that stands where a route failed to draw has none but the route. A flag that the next title pays would be paid by whichever screen mounted next, one nobody asked again for among them. With no connection the press changes nothing and says nothing, as the web's (ADR 0026) |
 | The focus moved by an effect on the inbox's entries alone; whenever an entry leaves; as soon as the sheet has gone | On iOS the sheet goes after the row and on Android before it *(read)*: an effect on the entries alone steals the focus from under a leaving sheet, or misses the row. A row the replica sent by itself would take the focus from wherever its member was. And the sheet may have gone before the list has heard of the answer, the focus then put on the lead of a list about to leave with its last row. It is moved once the sheet has said that it has gone and the list no longer draws the answered row |
 | The focus left to the platform once the inbox's last row is answered; a wrapper round the list as its place, as the web's; the empty sentence announced | The web puts it on the list's own place (D-166), and a device's is the lead while rows are drawn and the empty sentence once none is. An accessible view round the list closes its rows to a screen reader on iOS *(read)*. And a focus that is nowhere is still nowhere after an announcement |
 | A resolver unmounted as its answer goes, as the web's; the confirmation and its sheet closed at once | A modal unmounted says nothing of having gone, and iOS refuses what is presented meanwhile *(read)*. A controller told to dismiss while the modal it presented is leaving may stay: unverified either way, so the order that cannot fail was taken |
-| *Put it away*, *Keep mine* and a refused change's *Try again* saying where the focus goes once they leave with their own press | The web's twins are the same, and React Native cannot say where a reader was. An answer that writes says what it came to in a toast |
+| *Put it away*, *Keep mine* and a refused change's *Try again* saying where the focus goes once they leave with their own press, and so a toast's own dismiss and the switched banner's; *Put it away* saying that it was put away | The web's twins are the same, and React Native cannot say where a reader was. An answer that writes says what it came to in a toast; a kept version put away writes nothing its member made, its banner leaving is the web's whole answer too, and no catalog has words for more |
 | A conflict's two versions side by side | A sheet on a phone at 200 % has room for one label and its value: they stand one under the other |
 | The dev screen's live replica read from the household underneath it; the replica's report brought forward in the build the flows walk | Another screen's provider is not this one's context. A second behaviour that only a test's build has: the dev screen has a control that has the replica report now |
 | The guard around the household's navigator | A layout that draws no navigator loses the rest of the address: a visitor's link to a screen of a household was held as a link to its Home |
@@ -814,7 +877,7 @@ platform.
 | A move said by a live region; the focus following a hidden row to its *Show* control | A device has no live region on both platforms. The row's name is where a reader starts |
 | Arrange's sections laid out by a `wide` prop; in the prototype's tablet order | The row's own wrap does it in any room, a pane's too. One reading order in both layouts |
 | The way to the inbox always listed; a row of More as a list row with a link at its end; its name left to its text | D-191. A 44 pt word at the end of a row that is itself the obvious target. A count beside the words could be read after the sentence |
-| *Not available* leading on by a push; the way back from a switched household by `router.back()`, or by a replace | Back would return to the address that opened nothing. `back` is right only while nothing was opened since the link, and a replace would take the link's target away |
+| *Not available* leading on by a push; the way back from a switched household by `router.back()`, by a replace, or by `router.dismissTo` | Back would return to the address that opened nothing: after a push always, and after the replace only inside a household, once, where the replace is a jump between the household's tabs and the tabs keep the address in their own history *(seen under Jest, `src/shell/layout.test.tsx`)*, a way round which is larger than a second press of back. `back` is right only while nothing was opened since the link, and a replace would take the link's target away. `dismissTo` finds no screen to go back to: the stack's two households are routes of one name with no id of their own, so the pop takes the one on top for its target and hands it the other's address in place *(read: React Navigation's `StackRouter.js`, to which expo-router's stack leaves the action)*. The household kept underneath is not returned to, the one on top changes household under a frame that is mounted, and the link's target is gone, which is the replace |
 | The dev screen's two text sizes by the toolbar alone; a scope of scale in the display's provider | The page is to show both at once. No member's screen wants one |
 | The focus put on a dialog's first control, as the web's; at the commit | A screen reader reads on from where its focus is put: from the title it reads the description and then the choices. Before the platform says that the modal is shown there is nothing on the screen to focus |
 | The ground named and within a screen reader's reach | An unnamed button the size of the screen is what it would land on first. It has the close control, the choices and its own escape |
@@ -904,10 +967,24 @@ platform.
   is lost (PRD 03 §2): **item 53** looks at it beside Q18.
 - A household that another was opened over stays mounted underneath, its replica open, until
   its member goes back; each *Back to …* of the switched banner stacks one more. **Item 29**'s
-  switcher replaces, and does not navigate.
+  switcher replaces, and does not navigate. Two frames of one household, which links alone can
+  stack, each read their member's arrangement once, and a change made under one is written
+  over by the next change under the other: nothing can be arranged in this build, and
+  **item 36**'s store is one for both.
+- **What stands above a household's screens does not scroll** (`src/shell/HouseholdFrame.tsx`):
+  the connection's bar and the switched banner, and under them the place for item 29's one
+  entitlement banner. By arithmetic on the tokens, seen on no glass: on a phone 360 pt wide at
+  200 % the switched banner alone, its sentence and its two controls, is some 500 pt high.
+  **Item 29**, which puts a third thing there, looks first at the dev shell page at 200 % with
+  that banner drawn, and gives the place a ceiling and a scroll if a screenshot shows what the
+  arithmetic says.
 - With a screen reader on, a toast stays until it is put away, and several can stand at once
   for a reader who dismisses none. Whether a newer toast releases the older ones is a product
-  decision for the first module that raises many.
+  decision for the first module that raises many. And what an Undo came to is its owner's to
+  say: the primitive's `undo` answers nothing, so a failure of it is heard by nobody, and no
+  toast of this build carries one. The first module's does (**item 30**), and its toast must
+  not outlive the household it was raised in either, an Undo pressed after its member left it
+  writing to a replica that is closed.
 - With nothing waiting the inbox has no row, and is reached by its address alone until
   **item 29**'s sync health lists it. Nor does a press lead to arranging while no module has
   screens: in a build of this item nothing can wait and nothing is there to arrange, until the
@@ -974,20 +1051,40 @@ platform.
   unless that gravity is the start's. So the count is no longer centred on Android, and is
   still on iOS (`src/ui/Stepper.tsx`). The flow line that would show it: a swipe that begins
   on the count, and an assertion of what is below the fold.
-- **Mended as read, and proven on no device: at 200 % on a phone a list row's title was left a
-  letter's width.** Seen in the fifth run's `harness-conflicted.png`: a glyph a line, cut at
-  the right. The cause was not what stood beside the title but that no line broke. Read in
-  Yoga (`computeFlexBasisForChildren`, `CalculateLayout.cpp`; `calculateFlexLine`,
-  `FlexLine.cpp`): where a row's only flexible child both grows and shrinks, its basis is
-  taken for nothing and the row's lines are broken by that, so the words got what the avatar,
-  the mark and the action left. A row is now two parts, the avatar with the words and the mark
-  with the action, of which the second may shrink too, so the words' basis counts and the
-  second part goes under the first; and a row takes an `under` part for what stands across it,
-  the inbox's kept version (`src/ui/ListRow.tsx`). The same was so, and is mended the same
-  way, in the composition chart's legend, the flow chart's node and a toast with Undo. Jest
-  holds the styles, and the rule `wrap` holds the next row to them; that a device then draws
-  it so is unseen. The flow line: in the harness at 200 %, the row's *Open* below its title,
-  and whole glyphs in the conflicted cell's screenshot.
+- **Mended twice as read, the first mend seen not to hold, and the second proven on no device
+  yet: at 200 % on a phone a list row's title was left a few letters' width.** Seen in the
+  fifth run's `harness-conflicted.png`: a glyph a line, cut at the right. The cause was not
+  what stood beside the title but that no line broke. Read first in Yoga
+  (`computeFlexBasisForChildren`, `CalculateLayout.cpp`; `calculateFlexLine`, `FlexLine.cpp`):
+  where a row's only flexible child both grows and shrinks, its basis is taken for nothing and
+  the row's lines are broken by that, so the words got what the avatar, the mark and the
+  action left. So a row became two parts, the avatar with the words and the mark with the
+  action, of which the second may shrink too, so that the words' basis counts and the second
+  part goes under the first; and a row takes an `under` part for what stands across it, the
+  inbox's kept version (`src/ui/ListRow.tsx`). **The tenth run (38131404522) showed that row
+  unbroken on both platforms**: the first part was 160 pt and what the line had left over
+  (179 of 304 on the simulator, 190 of 313 on the emulator), which is its basis at a scale of
+  one, though its style said 320 by then. Read after that: a basis that a `flexBasis` gives is
+  computed once in an element's life, while it has none (`CalculateLayout.cpp`, the branch
+  guarded by `computedFlexBasis.isUndefined()`), and only Yoga's own setters clear it
+  (`Node::markDirtyAndPropagate`), which React Native's renderer does not go through for a
+  style that changed (`YogaLayoutableShadowNode::updateYogaProps`). The harness holds its
+  scale after its first layout, so its rows kept the basis of the scale they were first laid
+  out at; and so would a member's row whose device's text size changed under it, and one
+  first drawn alone, which the shortcut gives a basis of nothing, when its mark arrived. That
+  a part whose basis is right at its first layout does break its line was seen in that run
+  too: a toast with Undo, raised with the text at 200 % already, drew its two controls under
+  its sentence on the emulator (`toast-undo-200.png`). A
+  basis that a `width` gives is computed at every layout (the branch after it, unguarded), so
+  **the room a part is to have is said by `width`, never by `flexBasis`**, with `flexGrow` and
+  `flexShrink` as before: in the row, its `under` part, the composition chart's legend, the
+  flow chart's node, a toast with Undo and arranging's sections. A rule over the drawn tree
+  fails a `flexBasis` (`src/test/a11y.ts`), and fails the row as it stood. That a device then
+  breaks the line is the `row` flow's to show, in the harness at 200 %: *Open* at the row's
+  own edge, under the avatar, and not to its right. On the simulator that ran (304 pt inside
+  the row): the avatar and the words alone on the first line, the words 220 pt wide, and
+  *Open* on a line of its own beginning where the avatar does. A row whose mark arrives after
+  it was drawn is read by no flow: the harness has no control that gives a drawn row a mark.
 - **Item 29** takes the seams this leaves: the sign-in screen's place (`src/session/SignIn.tsx`)
   and `signedIn`, which a sign-in the server answered is handed to; several profiles' sign-ins
   in the token store, of which one is in use; the household's name in the app bar as the
@@ -997,21 +1094,36 @@ platform.
   the replica the provider holds; and the takeover notice where the ended sign-in is said.
   And it takes what this leaves open. The lockout carries the way to sign out: a member in none
   but suspended households is opened at one, *not available* leads back to it, and nothing on
-  that path signs out until then. A request is signed by whichever sign-in is in use when it
-  is sent, and when it is sent again, so several profiles need a client or a token store for
-  each member: only the refused leg is closed here, a request refused on another member's
-  token being given none of the one now in use. Its sign-in screens ask through a client that
+  that path signs out until then. A request is signed once, by whichever sign-in is in use
+  when it is asked: it leaves again as it left, and one refused on another member's token is
+  given none of the one now in use. What is not closed is that the session hands out one
+  member and the store one renewal at a time: several profiles need a client or a token store
+  for each, or a profile whose pair has lapsed is served by another's renewal. Its sign-in
+  screens ask through a client that
   signs nothing, a second step whose challenge is gone being answered as a refused token is. A
   link the system hands over while a visitor is on the sign-in screen leaves two of them on
   the stack. And *Try again* outside the inbox says nothing of what it came to (Alternatives
-  rejected).
+  rejected). **A form of its screens puts the keyboard away at the press that sends it**
+  (`Keyboard.dismiss()`), while its field is still mounted, as the dev form does: on Android
+  a keyboard whose field leaves with its screen stays or goes by a race, and in CI's tenth run
+  it stood over the household's tab bar after a sign-in, the bar out of a member's reach and
+  out of the tree a flow reads, until something put it away.
 - **Item 30** makes the first EAS project and build: nothing of `eas.json` has run, nor the
   script that generates on the builder (`eas-build-post-install`), and until a project exists
   no build can ask for a push token. It gives the app a link host and its association files,
   the scheme alone opening it today, and the store's pages. Its first upload route must not
   take the part's file name for the file's, which is the row's id on a device, and an upload
   it refuses `update_required` keeps its file; the way in still takes bytes, so a camera's file
-  would be read whole once. Its first push on Android is where the notification's channel
+  would be read whole once. Two things of an upload are read and left to it. A file sent from
+  its place that its transport cannot read ends every run of the queue at itself:
+  `File.upload` rejects for it as for a request that got no answer, the same exception on
+  both platforms, so the queue, which passes over a file it reads itself and cannot, cannot
+  tell this one from a network that is down; the first route decides whether the transport
+  tells the two apart, or a file is given up after some tries. And on iOS `File.upload` first
+  writes a whole copy of the file, framed as the form, under the app's caches: it needs that
+  much free room, makes the copy again at every try, and a copy left by an app killed in the
+  middle is removed by nothing, the removal of a member's files included, so a member's file
+  can outlive their sign-in there. Its first push on Android is where the notification's channel
   shows (below). It decides the backups (above), and whether `VIBRATE`, the template's own,
   stays asked: it is left asked until a device shows whether a notification is still felt
   without it. Its critical paths on a device stand on this item's flows. On Android a member's
@@ -1064,8 +1176,14 @@ platform.
 - **Run on a device, as of CI's eighth run (38126916736, 2026-10-11, on `cb26a93`), the first
   to pass whole, every job.** This bullet says what that run and the seven before it showed,
   and nothing later: it is brought up to date from the last green run before the pull request
-  is marked ready. That run was of the tree before the first review round's fixes (`fc4e1df`),
-  so what that round changed has been on no device yet. On the iOS simulator all eight of its
+  is marked ready. That run was of the tree before the first review round's fixes (`fc4e1df`).
+  What that round changed was first on a device in the tenth run (38131404522, on `d5e4788`),
+  which was not green: `harness` failed on both platforms for the list row (above), `sign-out`
+  on the emulator for the keyboard that stayed up (the seam item 29 takes, below), and
+  `primitives` on both for lines of the flow's own and the dev toolbar's scale; `launch`,
+  `engine`, `theme`, `resolvers`, `shell` and `hold` passed on both, `link`, `stack`,
+  `replica` and `held` on the emulator, and the server's two steps after them. What the second
+  review round changed has been on no device yet. On the iOS simulator all eight of its
   flows passed: the app opens at sign-in with nothing kept; the engine screen's checks hold on
   Hermes, the vectors' 87 format cases and 8 match cases under the polyfills, the five families
   registered, the random source and the client's name; the theme changes at a press; the
@@ -1112,9 +1230,10 @@ platform.
   away and left when it was back: op-sqlite, PowerSync's extension and the SDK link and run
   there. The step after the flows, which asks the server for a client named `mobile/<version>`,
   ran for the first time in the eighth, and the server named one. No flow reads a replica's
-  removal: that op-sqlite's own deletion removes PowerSync's file, and that expo-router loads
-  every route's file as the app starts, so that the forgetter is registered before a sign-in
-  can end, are read. And no flow opens a replica on iOS, where it is believed from the
+  removal: that op-sqlite's own deletion removes PowerSync's file, that a file it could not
+  remove still opens when it is asked for again, and that expo-router loads every route's
+  file as the app starts, so that the forgetter is registered before a sign-in can end, are
+  read. And no flow opens a replica on iOS, where it is believed from the
   conformance suite, which holds the library on Node's SQLite, and from Jest.
 - **Not run at all: an upload, a push, and EAS.** No route takes a file, so `File.upload` has
   met no server. No EAS project exists, so no permission was asked for, no token registered,

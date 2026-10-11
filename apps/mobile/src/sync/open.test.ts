@@ -68,10 +68,15 @@ jest.mock('@op-engineering/op-sqlite', () => ({
       executeSync: (statement: string) => {
         mockFiles.asked.push(`${statement}:${name}`)
       },
+      // As op-sqlite's does: it closes the database, asks the system to remove the file, and
+      // says nothing of a file that stayed.
       delete: () => {
-        if (mockFiles.stuck) throw new Error('the file is in use')
+        if (mockFiles.stuck) return
         mockFiles.asked.push(`deleted:${name}`)
         mockFiles.there.delete(name)
+      },
+      close: () => {
+        mockFiles.asked.push(`closed:${name}`)
       },
     }
   },
@@ -408,6 +413,8 @@ describe('a sign-in that ended', () => {
     await forget(who.member)
     expect(await keptReplicas()).toEqual([{ ...who, leaving: true, emptied: true }])
     expect(mockFiles.there.has(name)).toBe(true)
+    // The deletion itself said nothing: the file was asked for once more, found, and let go.
+    expect(mockFiles.asked).toEqual([`PRAGMA wal_checkpoint(TRUNCATE):${name}`, `closed:${name}`])
     await mine.close()
 
     // The next start is this file loaded again, which asks for what a run before it left: here,
@@ -489,6 +496,24 @@ describe('a sign-in that ended', () => {
     const again = await openHouseholdReplica(options(who))
     expect(await keptReplicas()).toEqual([who])
     await again.close()
+  })
+
+  it('is not opened where the device would not read its notes, and is written over none of them', async () => {
+    const first = pair()
+    const mine = await openHouseholdReplica(options(first))
+    const who = pair()
+    jest
+      .mocked(AsyncStorage.getItem)
+      .mockRejectedValueOnce(new Error('the storage could not be read'))
+    await expect(openHouseholdReplica(options(who))).rejects.toThrow('could not be read')
+    // Nothing was opened that nothing notes, and the note that was there is there still.
+    expect(mockOpened).toHaveLength(1)
+    expect(await keptReplicas()).toEqual([first])
+    // And asked once more, as the screen that says so offers, it is noted beside the other.
+    const again = await openHouseholdReplica(options(who))
+    expect(await keptReplicas()).toEqual([first, who])
+    await again.close()
+    await mine.close()
   })
 
   it('opens nothing for a member whose sign-in ended while their replica was on its way', async () => {

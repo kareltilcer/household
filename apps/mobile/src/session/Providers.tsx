@@ -113,11 +113,11 @@ export function SessionProviders({ children, services: given }: SessionProviders
 }
 
 /**
- * Empties what was read as the providers are taken down. The app's stand for as long as it
- * runs; a test's do not, and a read nobody draws is kept in memory for a day by a timer, which
- * would hold whatever ran the test open for as long. It stands after everything that reads:
- * what is taken down is put away in the order it stands in, and a reader that let go of its
- * read after this had emptied them would set the timer again.
+ * Empties what was read and written as the providers are taken down. The app's stand for as
+ * long as it runs; a test's do not, and what they held would stay in memory, a write's by a
+ * timer of minutes that holds whatever ran the test open for as long. It stands after
+ * everything that reads: what is taken down is put away in the order it stands in, and a
+ * reader that let go of its read after this had emptied them would leave it held again.
  */
 function Emptied({ queries }: { readonly queries: QueryClient }) {
   useEffect(

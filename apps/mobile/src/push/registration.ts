@@ -41,13 +41,16 @@ export function pushProject(extra: unknown = buildSettings()): string | undefine
   return setting(extra, 'eas', 'projectId')
 }
 
+/** What every member's registered token is kept under, before their id. */
+const tokenUnder = 'household.push.token.'
+
 /**
  * Where the token registered for `member` is kept: what `subscribed` is read from, and what is
  * removed at the server before a sign-out with no word from Expo's service, which a device with
  * a poor connection may not reach.
  */
 function tokenKey(member: string): string {
-  return `household.push.token.${member.toLowerCase()}`
+  return `${tokenUnder}${member.toLowerCase()}`
 }
 
 /**
@@ -78,7 +81,18 @@ async function keep(key: string, value: string | null): Promise<void> {
 }
 
 // A sign-in that ended took the server's registration with it: the device forgets it had one.
-onForget((member) => keep(tokenKey(member), null))
+// And it says whose token it holds a note of, as whatever is kept under its member's name does
+// (session/forget.ts): a registration answered after its member's sign-in ended writes the
+// note back, and it is removed, with whatever else the device keeps of nobody, as the app next
+// starts. A member's own choice to turn notifications off here is no part of that: it outlives
+// their sign-in.
+onForget(
+  (member) => keep(tokenKey(member), null),
+  async () =>
+    (await AsyncStorage.getAllKeys())
+      .filter((key) => key.startsWith(tokenUnder))
+      .map((key) => key.slice(tokenUnder.length)),
+)
 
 /**
  * What this device says of notifications, and whether it is registered for `member`. It
@@ -121,20 +135,18 @@ export interface Registration {
 }
 
 /**
- * Registers this device, which allows notifications already, for its member: Expo's token for
- * the installation, told to the server with the device it is signed in on. A device reads as
- * subscribed only once the server has heard of it.
+ * Registers the device: Expo's token for the installation, told to the server with the device
+ * it is signed in on. `unless` is asked once Expo has answered, which may be seconds later, and
+ * where it says so nothing is told to the server and nothing is changed.
  */
-export async function subscribePush({
-  api,
-  member,
-  device: installation,
-  channel,
-  project,
-}: Registration): Promise<PushState> {
+async function register(
+  { api, member, device: installation, channel, project }: Registration,
+  unless?: () => Promise<boolean>,
+): Promise<PushState> {
   if (project === undefined) return unsupported
   await device.ensureChannel(channel)
   const token = await device.expoToken(project)
+  if (unless !== undefined && (await unless())) return readPushState(member, project)
   unwrap(
     await api.POST('/push/subscriptions', {
       body: { transport: 'expo', endpoint: token, device_id: installation },
@@ -143,6 +155,15 @@ export async function subscribePush({
   await keep(tokenKey(member), token)
   await keep(offKey(member), null)
   return { permission: 'granted', subscribed: true }
+}
+
+/**
+ * Registers this device, which allows notifications already, for its member: Expo's token for
+ * the installation, told to the server with the device it is signed in on. A device reads as
+ * subscribed only once the server has heard of it.
+ */
+export function subscribePush(registration: Registration): Promise<PushState> {
+  return register(registration)
 }
 
 /**
@@ -166,19 +187,23 @@ export async function unsubscribePush(
 
 /**
  * For a device that allows notifications already: registers its token with the server again,
- * asking nothing. Called once a member is signed in, at a sign-in and at each start: a token
- * reaches its member only while their sign-in lives, and Expo may have given the installation
- * another since. A build that cannot register, a device that was never asked or refused, and one
- * whose member turned notifications off here are left as they are. It never rejects: a device
- * that could not be registered is tried at the next start. It asks the server outside any query
- * or mutation, so what it is refused with is told to `problems` here.
+ * asking nothing. Called once a member is signed in, at a sign-in, at each start and as a
+ * connection returns (Push.tsx): a token reaches its member only while their sign-in lives, and
+ * Expo may have given the installation another since. A build that cannot register, a device
+ * that was never asked or refused, and one whose member turned notifications off here are left
+ * as they are. It never rejects: a device that could not be registered is tried when it is next
+ * called. It asks the server outside any query or mutation, so what it is refused with is told
+ * to `problems` here.
  */
 export async function renewPush(registration: Registration, problems: ProblemHub): Promise<void> {
   const { member, project } = registration
+  // Their own choice, read as the renewal begins and again once Expo has answered: turned off
+  // meanwhile, by a press while this waited, it would be turned on again behind the press.
+  const off = async () => (await kept(offKey(member))) !== null
   try {
     if (project === undefined || (await device.permission()) !== 'granted') return
-    if ((await kept(offKey(member))) !== null) return
-    await subscribePush(registration)
+    if (await off()) return
+    await register(registration, off)
   } catch (error) {
     // Left as it was. A token the server refused outright it will refuse again: forgotten.
     if (error instanceof ApiProblemError && error.status === 422) {
