@@ -44,6 +44,12 @@ const flows = globSync('e2e/flows/*.yaml', { cwd: app }).sort().map(flow)
 /** The steps several flows share, which a flow runs as its own and Maestro runs for none. */
 const parts = globSync('e2e/flows/parts/*.yaml', { cwd: app }).sort().map(flow)
 
+/**
+ * The flows a run asks for by name, apart from the suite (run.ts, `--kept`): Maestro runs
+ * none of them with the folder, and each is held to the app's names as the suite's are.
+ */
+const apart = globSync('e2e/flows/kept/*.yaml', { cwd: app }).sort().map(flow)
+
 /** The configuration of the build the flows run on: development's, told nothing else. */
 function development(): ReturnType<typeof config> {
   for (const name of ['APP_VARIANT', 'HOUSEHOLD_MOBILE_API_URL', 'HOUSEHOLD_MOBILE_LINK_HOST']) {
@@ -84,7 +90,7 @@ function drawn(id: string): boolean {
 describe('the flows', () => {
   it('are there, each a file Maestro takes for a flow', () => {
     expect(flows.length).toBeGreaterThan(0)
-    for (const { name, steps } of [...flows, ...parts]) {
+    for (const { name, steps } of [...flows, ...parts, ...apart]) {
       expect([name, steps.trim()]).not.toEqual([name, ''])
     }
   })
@@ -92,7 +98,7 @@ describe('the flows', () => {
   it('name the app the end-to-end build is: the development variant', () => {
     const { android, ios } = development()
     expect(ios?.bundleIdentifier).toBe(android?.package)
-    const all = [...flows, ...parts]
+    const all = [...flows, ...parts, ...apart]
     expect(all.map(({ name, appId }) => [name, appId])).toEqual(
       all.map(({ name }) => [name, android?.package]),
     )
@@ -109,6 +115,17 @@ describe('the flows', () => {
       }
     }
     expect(parts.flatMap((part) => part.parts)).toEqual([])
+    // A flow asked for apart from the suite stands a folder down, and names its part from there.
+    for (const { name, parts: named } of apart) {
+      for (const part of named) {
+        expect([name, part, existsSync(join(app, 'e2e', 'flows', 'kept', part))]).toEqual([
+          name,
+          part,
+          true,
+        ])
+      }
+    }
+    expect(apart.flatMap((each) => [...each.tags, ...each.links])).toEqual([])
     // A part is nobody's flow: it says no tag, and is run by a flow that does.
     expect(parts.flatMap((part) => part.tags)).toEqual([])
   })
@@ -142,14 +159,14 @@ describe('the flows', () => {
   })
 
   it('select by a `testID` the app draws, but for a flow written ahead of its screens', () => {
-    const missing = [...flows, ...parts]
+    const missing = [...flows, ...parts, ...apart]
       .filter((each) => !each.tags.includes('awaiting'))
       .flatMap(({ name, ids }) => ids.filter((id) => !drawn(id)).map((id) => `${name}: ${id}`))
     expect(missing).toEqual([])
   })
 
   it('never select by a word: the app draws in five languages', () => {
-    for (const { name, steps } of [...flows, ...parts]) {
+    for (const { name, steps } of [...flows, ...parts, ...apart]) {
       // A command with its selector on its own line is one by words.
       const byWords =
         /^- (tapOn|longPressOn|assertVisible|assertNotVisible|scrollUntilVisible): \S/m
@@ -174,7 +191,7 @@ describe('the flows', () => {
     const pressedAtAnEdge: string[] = []
     const said = (command: string, key: string) =>
       new RegExp(`^\\s+${key}: '?([^'\\n]+?)'?$`, 'm').exec(command)?.[1]
-    for (const { name, steps } of [...flows, ...parts]) {
+    for (const { name, steps } of [...flows, ...parts, ...apart]) {
       const commands = steps
         .split('\n')
         .filter((line) => !line.startsWith('#'))

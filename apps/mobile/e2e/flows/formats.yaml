@@ -1,0 +1,34 @@
+# The app's own formatters on a device's `Intl` (src/i18n/format.ts; src/dev/engine/checks.ts):
+# a sample of each thing they write, money, a day, an instant in a named zone, a size and a
+# list, in two languages, each as Node writes it. Jest holds the samples to Node; a device's
+# dates and numbers are its own system's, and where one is written another way the line fails
+# and names what the device wrote instead, under the sample's name.
+#
+# A flow of its own, and a line apart from the engine screen's one verdict (engine.yaml): a
+# device that writes a date another way than Node is a thing for somebody to weigh, and is
+# not the engine failing.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devEngine'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'dev-index:devEngine'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:engine'
+    timeout: 30000
+# Where it did not hold this is `engine:formats:failed`, and the failure's screenshot has
+# each sample that differs with what was written for it.
+- scrollUntilVisible:
+    element:
+      id: 'engine:formats:passed'
+    direction: DOWN
+    timeout: 60000
+- takeScreenshot: formats

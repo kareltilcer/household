@@ -46,8 +46,9 @@ appId: com.kareltilcer.household.dev
 - takeScreenshot: stepper-before
 # Maestro swipes from the middle of the count to a tenth of the way down the screen. Where
 # the page goes with the finger, the select, which stands well above the count, has left by
-# the top, and the switch under the steppers is there. Where the count keeps the touch,
-# nothing has moved, and the select is where it was.
+# the top. Where the count keeps the touch, nothing has moved, and the select is where it
+# was. That is all that is held: how far the page goes on by itself once the finger is off
+# is the platform's, and on a simulator it went past the whole of the fields' light half.
 - swipe:
     from:
       id: 'controls:light:stepper'
@@ -55,9 +56,5 @@ appId: com.kareltilcer.household.dev
 - extendedWaitUntil:
     notVisible:
       id: 'controls:light:select'
-    timeout: 15000
-- extendedWaitUntil:
-    visible:
-      id: 'controls:light:switch'
     timeout: 15000
 - takeScreenshot: stepper-dragged

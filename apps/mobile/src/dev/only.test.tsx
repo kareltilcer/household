@@ -107,9 +107,19 @@ describe('the page of primitives, narrowed', () => {
       'primitives:only:hold',
       'primitives:only:parts',
       'primitives:only:metric',
+      'primitives:only:arriving',
     ])
     // Narrowed to a part of the status section, that part's own ground is there.
-    for (const part of ['statuses', 'marks', 'banners', 'loading', 'hold', 'parts', 'metric']) {
+    for (const part of [
+      'statuses',
+      'marks',
+      'banners',
+      'loading',
+      'hold',
+      'parts',
+      'metric',
+      'arriving',
+    ]) {
       await userEvent.press(screen.getByTestId(`primitives:only:${part}`))
       expect([part, drawn(`status-section:${part}:light`)]).toEqual([part, true])
     }

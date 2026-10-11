@@ -110,6 +110,25 @@ describe('what a report says became of the flows', () => {
     expect(read.lost).toEqual(['shell', 'hold', 'launch'])
   })
 
+  it('takes for the driver’s what Android says of its death, and the flow after that says nothing', () => {
+    const died =
+      "maestro.android.DeviceServerDiedException: Device server died during 'viewHierarchy' on emulator-5554"
+    const read = outcome(
+      report([
+        failedWith('row', 'Assertion is false: id: list:open is visible'),
+        passed('launch'),
+        failedWith('harness', died),
+        failedWith('link', 'Unknown error'),
+      ]),
+    )
+    expect(read.lost).toEqual(['harness', 'link'])
+    // And where no flow before it said so: the next run's report gave no reason for either.
+    expect(
+      outcome(report([failedWith('harness', 'Unknown error'), failedWith('link', 'Unknown error')]))
+        .lost,
+    ).toEqual(['harness', 'link'])
+  })
+
   it('reads a report that is none as one that names no flow', () => {
     expect(outcome('')).toEqual({ failed: [], lost: [] })
   })

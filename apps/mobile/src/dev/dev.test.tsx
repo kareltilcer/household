@@ -8,6 +8,7 @@ import { fonts } from '@household/tokens'
 import { screen, userEvent } from '@testing-library/react-native'
 import { router } from 'expo-router'
 import { paths } from '../app/paths.ts'
+import { createFormatters } from '../i18n/format.ts'
 import { expectAccessible } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
 import { held, lacking } from './engine/builtins.ts'
@@ -16,6 +17,7 @@ import {
   builtIns,
   client,
   fontFamilies,
+  formats,
   i18nVectors,
   randomSource,
 } from './engine/checks.ts'
@@ -68,6 +70,16 @@ describe('the engine’s checks', () => {
     // And Node, which Jest runs on, has every one the list says a device lacks: a call of one
     // passes every test here, which is why the sources are read for them (e2e/engine.test.ts).
     expect(lacking.filter((builtIn) => !builtIn.has()).map(({ name }) => name)).toEqual([])
+  })
+
+  it('write a sample of each thing the app formats as Node writes it, and name what differs', () => {
+    // What the check holds a device to is what Node writes here: this is where it is held.
+    expect(formats()).toEqual({ id: 'formats', cases: 10, failed: [], apart: true })
+    // An engine that writes another way is named with what it wrote.
+    const german = formats(() => createFormatters('de'))
+    expect(german.failed).toContain('en day: 3. März 2026')
+    // Every sample but one: German writes a size as Czech does.
+    expect(german.failed).toHaveLength(9)
   })
 })
 

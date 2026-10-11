@@ -207,6 +207,10 @@ job of its own.
 | `primitives` | a sheet opens and closes; a menu's item opens a confirmation | both |
 | `stepper` | a drag that begins on a stepper's count takes the page with it | both |
 | `toast` | a toast with Undo at 200 % text, in a screenshot for a person | both |
+| `mark` | a sync mark that arrives after its row, at 200 % text: under the avatar and words, and not beside them | both |
+| `sheet` | a stepper in a sheet at 200 % text, its two buttons whole, in a screenshot | both |
+| `keyboard` | a select's choices opened with a field's keyboard up, in a screenshot with no keys over them | both |
+| `formats` | the app's own formatters on the device's `Intl`: a sample of each thing they write, as Node writes it | both |
 | `hold` | hold to complete: let go early, and held | both |
 | `shell` | a tab bar's slot opens its place and says so, Add is a sheet over it; a module is hidden from its row's menu; one pane at a phone's width and two at a tablet's; *not available* leads home | both |
 | `resolvers` | a change that was not accepted is given up: its sheet, the confirmation inside it, both gone and a toast | both |
@@ -292,6 +296,16 @@ true or false of itself. One flow that failed for something else once took both 
 it. A flow that failed has failed the job already; where it is the flow that signs in, or the
 one that reports, its step fails too and prints what the server holds instead.
 
+**One check takes the server away** (`e2e/run.ts`, `--kept`, which the Android job passes with
+`--stack`): a read the device kept is kept though the server is gone when it asks again. It is
+two flows that the suite does not run (`e2e/flows/kept`), with the API stopped between them
+and started again after (`e2e/api.sh`, which is the job's own way of starting it, written a
+second time): signed in and put behind the launcher; then, with no server, brought to the
+front, given six seconds, stopped and started, and still at the member's household. It runs
+before the suite, in the emulator's first minutes, since no other device makes it; the API
+comes back as it was, its keys development's own and its sessions the database's. Taking the
+connection away would not do: offline, the app does not ask at all.
+
 **The way to a dev screen is by presses, and not by a link.** The sign-in screen has a control that
 leads to the dev sign-in form (`sign-in:dev`), and every dev screen leads to their index
 (`dev-screen:index`): `flows/parts/dev.yaml` walks that, and each flow that reads a dev screen
@@ -350,6 +364,16 @@ build has no screen to draw an error on, and an exception nothing caught ends it
   a flow that began and ended in between passes. `e2e/run.ts` reads the
   report for them and runs them again, once, in a session of their own, whose report and
   folders are under `again/`. The flow that crashed is not run again, and fails the job.
+- **An emulator's adb has gone twelve minutes after its start.** In the eleventh and twelfth
+  runs, the first two whose flows ran that long, adb said `device offline` 721.4 s and
+  721.6 s after the emulator was launched, at two different steps of the same flow, with no
+  crash of the app's and the emulator's own process still answering its console. The flow
+  running by then says `DeviceServerDiedException` or only `Unknown error`, and the one after
+  it `Unknown error` in milliseconds. Why is not known: `e2e/run.ts` follows the emulator's
+  log into `logcat.txt` for the next time. It reads such flows as the driver's, waits a
+  minute for adb to answer again, says in the job's log what adb lists, and runs them again
+  where it does (`again/`, `logcat-again.txt`). If the emulator does not come back, the
+  suite needs two emulators: the flows a first one lost, run on a second.
 
 ### On a developer's machine
 

@@ -3,11 +3,13 @@
 // to Hermes's (src/test/hermes.ts), and the end-to-end flow reads the screen on a phone, where
 // the engine is Hermes itself and the fonts are the binary's own.
 import { newId, isUuid } from '@household/api'
+import { money } from '@household/domain'
 import { formatMessage, matchLocale, MessageError } from '@household/i18n'
 import { vectors } from '@household/test-vectors'
 import { fonts } from '@household/tokens'
 import { isLoaded } from 'expo-font'
 import { clientName } from '../../api/client.ts'
+import { createFormatters, type Formatters } from '../../i18n/format.ts'
 import { held, lacking, type BuiltIn } from './builtins.ts'
 
 /** One line of the engine screen: what was checked, how much of it held, and what did not. */
@@ -20,6 +22,8 @@ export interface Check {
   readonly failed: readonly string[]
   /** What the line found, for a reader: a value, where the check is of one. */
   readonly found?: string
+  /** A line that says how it came out under its own name alone, and not in the page's verdict. */
+  readonly apart?: boolean
 }
 
 /** A case's outcome as the vector states one: what it gives, or the code it is refused with. */
@@ -121,6 +125,70 @@ export function builtIns(has: (builtIn: BuiltIn) => boolean = (builtIn) => built
   }
 }
 
+/**
+ * A sample of each thing the app's own formatters write (src/i18n/format.ts), in two of its
+ * languages, with what Node writes for it: read off Jest's run of the same calls, which the
+ * test beside the engine screen holds these to. On a device the same calls go through that
+ * device's `Intl` for dates and numbers, and through the polyfills for the rest.
+ */
+const samples: readonly {
+  readonly kind: string
+  readonly write: (format: Formatters) => string
+  readonly written: Readonly<Record<string, string>>
+}[] = [
+  {
+    kind: 'money',
+    write: (format) => format.money(money(124000, 'CZK')),
+    written: { en: 'CZK 1,240.00', cs: '1 240,00 CZK' },
+  },
+  {
+    kind: 'day',
+    write: (format) => format.day('2026-03-03', 'long'),
+    written: { en: 'March 3, 2026', cs: '3. března 2026' },
+  },
+  {
+    kind: 'instant',
+    write: (format) => format.instant('2026-03-03T17:41:00Z', 'Europe/Prague', 'medium'),
+    written: { en: 'Mar 3, 2026, 6:41 PM', cs: '3. 3. 2026 18:41' },
+  },
+  {
+    kind: 'bytes',
+    write: (format) => format.bytes(1536000),
+    written: { en: '1.5 MB', cs: '1,5 MB' },
+  },
+  {
+    kind: 'list',
+    write: (format) => format.list(['Petr', 'Jana', 'Tomáš']),
+    written: { en: 'Petr, Jana, and Tomáš', cs: 'Petr, Jana a Tomáš' },
+  },
+]
+
+/**
+ * The app's formatters, on this engine: each sample written as Node writes it, or named with
+ * what this engine wrote instead. A line apart from the page's one verdict: where a device's
+ * own locale data writes a date another way than Node's, that is for somebody to weigh, and
+ * no reason for the page to say that the engine has failed.
+ */
+export function formats(make: (locale: string) => Formatters = createFormatters): Check {
+  const failed = samples.flatMap(({ kind, write, written }) =>
+    Object.entries(written).flatMap(([locale, expected]) => {
+      let found: string
+      try {
+        found = write(make(locale))
+      } catch {
+        found = 'threw'
+      }
+      return found === expected ? [] : [`${locale} ${kind}: ${found}`]
+    }),
+  )
+  return {
+    id: 'formats',
+    cases: samples.reduce((count, { written }) => count + Object.keys(written).length, 0),
+    failed,
+    apart: true,
+  }
+}
+
 export function allChecks(): readonly Check[] {
-  return [...i18nVectors(), fontFamilies(), randomSource(), client(), builtIns()]
+  return [...i18nVectors(), fontFamilies(), randomSource(), client(), builtIns(), formats()]
 }

@@ -18,7 +18,7 @@
 // starts.
 import { describe, expect, it } from '@jest/globals'
 import { globSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { held, lacking } from '../src/dev/engine/builtins.ts'
 
 /** apps/mobile: Jest runs in it. */
@@ -37,14 +37,40 @@ function bundled(): string[] {
     .map((name) => name.slice(scope.length))
 }
 
+/**
+ * The folders of a bundled package that hold an entry of it outside its `src`, as its
+ * manifest's `exports` name them: `native`, where a package keeps a device's half
+ * (`@household/sync/native`, which opens the replica). A browser's half is in no device's
+ * bundle, and may call what a browser has.
+ */
+function entriesOutsideSrc(name: string): string[] {
+  const manifest: unknown = JSON.parse(
+    readFileSync(join(app, '..', '..', 'packages', name, 'package.json'), 'utf8'),
+  )
+  const exported: unknown =
+    typeof manifest === 'object' && manifest !== null && 'exports' in manifest
+      ? manifest.exports
+      : undefined
+  if (typeof exported !== 'object' || exported === null) return []
+  return Object.keys(exported)
+    .filter((entry) => entry !== './web')
+    .map((entry): unknown => Reflect.get(exported, entry))
+    .filter((target): target is string => typeof target === 'string' && /\.tsx?$/.test(target))
+    .filter((target) => !target.startsWith('./src/'))
+    .map((target) => dirname(target).replace(/^\.\//, ''))
+}
+
 /** Every source a device's bundle can hold, by its path from apps/mobile. */
 function sources(): string[] {
   return [
     'index.ts',
     ...globSync('{src,app}/**/*.{ts,tsx}', { cwd: app }),
-    ...bundled().flatMap((name) =>
-      globSync(`../../packages/${name}/src/**/*.{ts,tsx}`, { cwd: app }),
-    ),
+    ...bundled().flatMap((name) => [
+      ...globSync(`../../packages/${name}/src/**/*.{ts,tsx}`, { cwd: app }),
+      ...entriesOutsideSrc(name).flatMap((folder) =>
+        globSync(`../../packages/${name}/${folder}/**/*.{ts,tsx}`, { cwd: app }),
+      ),
+    ]),
   ]
     .map((file) => file.replaceAll('\\', '/'))
     .filter((file) => !file.includes('.test.'))
@@ -56,6 +82,10 @@ describe('what a device runs', () => {
     expect(bundled()).toContain('sync')
     expect(read).toContain('src/sync/sync.fixtures.ts')
     expect(read.some((file) => file.startsWith('../../packages/sync/src/'))).toBe(true)
+    // And a package's half for a device, which stands outside its `src`; never a browser's.
+    expect(read).toContain('../../packages/sync/native/index.ts')
+    expect(read).toContain('../../packages/icons/native/index.ts')
+    expect(read).not.toContain('../../packages/sync/web/index.ts')
   })
 
   it('calls no built-in the device’s engine lacks, which Node would let pass', () => {

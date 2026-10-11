@@ -22,7 +22,8 @@ export interface EngineProps {
 export default function Engine({ checks: given }: EngineProps) {
   const sample = useSample()
   const checks = useMemo(() => given ?? allChecks(), [given])
-  const all = checks.every((check) => check.failed.length === 0)
+  // But for a line that is apart, which says how it came out under its own name alone.
+  const all = checks.every((check) => check.apart === true || check.failed.length === 0)
   return (
     <DevScreen page="engine" title={sample('Engine')}>
       <Text testID={`engine:all:${all ? 'passed' : 'failed'}`} weight={500}>

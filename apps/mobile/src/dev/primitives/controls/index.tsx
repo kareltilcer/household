@@ -262,6 +262,7 @@ function Overlays({ theme: name }: { readonly theme: Theme }) {
   const [asking, setAsking] = useState(false)
   const [editing, setEditing] = useState(false)
   const [reading, setReading] = useState('18 204,5')
+  const [members, setMembers] = useState(3)
   const field = useRef<TextInput>(null)
   const id = (part: string) => `controls:${name}:${part}`
   return (
@@ -347,6 +348,16 @@ function Overlays({ theme: name }: { readonly theme: Theme }) {
           onChangeText={setReading}
         />
         <TextArea label={sample(words.note)} />
+        {/* A stepper where it has the least room: in a sheet, on a phone, at twice the text.
+            The end-to-end flow keeps a screenshot of it there, its two buttons whole. */}
+        <Stepper
+          testID={id('sheet:members')}
+          label={sample(words.members)}
+          value={members}
+          onChange={setMembers}
+          min={1}
+          max={12}
+        />
       </Sheet>
 
       <Menu

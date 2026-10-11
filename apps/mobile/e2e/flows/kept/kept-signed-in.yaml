@@ -1,0 +1,30 @@
+# The first half of the kept read's check (e2e/run.ts, `--kept`; kept-server-away.yaml is the
+# second, and says what is held): a member signs in with the server there, the app reads
+# their households and keeps what it read, and is then put behind the launcher, signed in.
+#
+# Not one of the suite's flows: the run asks for it by name after them, takes the API away,
+# and asks for the other.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+- runFlow: ../parts/sign-in.yaml
+- extendedWaitUntil:
+    visible:
+      id: 'route:household'
+    timeout: 60000
+# What a device keeps of its reads is written a moment after they are answered: two places
+# opened, which is that moment and more.
+- tapOn:
+    id: 'tab-bar:today'
+- extendedWaitUntil:
+    visible:
+      id: 'route:today'
+    timeout: 15000
+- tapOn:
+    id: 'tab-bar:home'
+- extendedWaitUntil:
+    visible:
+      id: 'route:household'
+    timeout: 15000
+- pressKey: Home
