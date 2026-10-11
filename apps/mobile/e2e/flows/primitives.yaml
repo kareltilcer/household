@@ -21,6 +21,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'dev-index:devPrimitives'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'dev-index:devPrimitives'
 - extendedWaitUntil:
@@ -31,6 +32,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'primitives:only:overlays'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'primitives:only:overlays'
 # A sheet, opened and closed by its own control.
@@ -38,6 +40,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'controls:light:sheet:open'
     direction: DOWN
+    centerElement: true
     timeout: 60000
 - tapOn:
     id: 'controls:light:sheet:open'
@@ -60,6 +63,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'controls:light:menu:open'
     direction: DOWN
+    centerElement: true
     timeout: 60000
 - tapOn:
     id: 'controls:light:menu:open'

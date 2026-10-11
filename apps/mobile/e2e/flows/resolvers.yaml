@@ -20,6 +20,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'dev-index:devSync'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'dev-index:devSync'
 - extendedWaitUntil:
@@ -30,12 +31,18 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'sync:only:resolvers'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'sync:only:resolvers'
+# Brought up from the foot of the screen before it is pressed, as every control a flow scrolls
+# down to is (`centerElement`). On the emulator this one came to rest under the system's
+# navigation bar, whole on the screen as Maestro counts it, and the press went to the bar:
+# nothing opened, and the flow waited for a sheet nobody had asked for.
 - scrollUntilVisible:
     element:
       id: 'sync:resolvers:rejected:light:open:forbidden'
     direction: DOWN
+    centerElement: true
     timeout: 60000
 - tapOn:
     id: 'sync:resolvers:rejected:light:open:forbidden'

@@ -8,12 +8,16 @@
 # the app, and over every flow after it, until somebody answers. It carries no `testID`, and
 # answering it by its words is what Maestro's own issue 2610 reports failing on a hosted
 # runner. That a link opens the app at its address is link.yaml's, on Android.
+#
+# The first wait is a flow's longest: whichever flow a simulator runs first starts the app for
+# the first time, which took seventy-three seconds once, past the sixty this was given, and
+# passed only because the one look that was under way came back with the screen.
 appId: com.kareltilcer.household.dev
 ---
 - extendedWaitUntil:
     visible:
       id: 'route:signIn'
-    timeout: 60000
+    timeout: 180000
 - tapOn:
     id: 'sign-in:dev'
 - extendedWaitUntil:

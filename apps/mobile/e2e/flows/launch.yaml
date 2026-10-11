@@ -7,9 +7,10 @@ appId: com.kareltilcer.household.dev
     clearState: true
     # iOS keeps a keychain past an app's removal, and the tokens are in it.
     clearKeychain: true
-# The first start of a release build on an emulator with no graphics card of its own.
+# The first start of a release build on an emulator with no graphics card of its own, or on a
+# simulator that has not run it yet, which took over a minute once (parts/dev.yaml).
 - extendedWaitUntil:
     visible:
       id: 'route:signIn'
-    timeout: 60000
+    timeout: 180000
 - takeScreenshot: launch

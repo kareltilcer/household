@@ -41,6 +41,7 @@ onFlowComplete:
     element:
       id: 'more:dev'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'more:dev'
 - extendedWaitUntil:
@@ -51,6 +52,7 @@ onFlowComplete:
     element:
       id: 'dev-index:devSync'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'dev-index:devSync'
 - extendedWaitUntil:
@@ -61,6 +63,7 @@ onFlowComplete:
     element:
       id: 'sync:only:live'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'sync:only:live'
 # The lines are there once the member's households are read, the device's own word among
@@ -92,6 +95,7 @@ onFlowComplete:
     element:
       id: 'sync:live:report'
     direction: DOWN
+    centerElement: true
     timeout: 30000
 - tapOn:
     id: 'sync:live:report'

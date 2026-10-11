@@ -18,65 +18,73 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'dev-index:devHarness'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'dev-index:devHarness'
 - extendedWaitUntil:
     visible:
       id: 'household-dev-screen:harness'
     timeout: 30000
+# The whole harness is on the screen until it is narrowed, and every look at it is slow: one
+# swipe to its controls took eight seconds on the emulator, of the twenty a scroll is given
+# unless it says otherwise.
 - scrollUntilVisible:
     element:
       id: 'harness:only:list'
     direction: DOWN
+    centerElement: true
+    timeout: 60000
 - tapOn:
     id: 'harness:only:list'
 # The states in the order they are drawn in (src/ui/states.ts). A cell at twice the text may
-# be taller than the screen, so a part of it in view is enough.
+# be taller than the screen, so a part of it in view is enough; and the way from one to the
+# next is some swipes long, which took fifty-three of a simulator's sixty seconds once, so
+# each is given two minutes.
 # A skeleton in the body's shape.
 - scrollUntilVisible:
     element:
       id: 'list:loading:light'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - scrollUntilVisible:
     element:
       id: 'skeleton'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 # The teaching empty state.
 - scrollUntilVisible:
     element:
       id: 'list:empty:light'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - scrollUntilVisible:
     element:
       id: 'empty-state'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 # The body itself, in the light theme and then in the dark.
 - scrollUntilVisible:
     element:
       id: 'list:populated:light'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - scrollUntilVisible:
     element:
       id: 'body:list'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - takeScreenshot: harness-populated-light
 - scrollUntilVisible:
     element:
       id: 'list:populated:dark'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - takeScreenshot: harness-populated-dark
 # A message in the body's place.
@@ -84,50 +92,50 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'list:error:light'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - scrollUntilVisible:
     element:
       id: 'banner:danger'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 # The body under the offline bar.
 - scrollUntilVisible:
     element:
       id: 'list:offline:light'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - scrollUntilVisible:
     element:
       id: 'offline-bar'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 # A row's mark: a change that waits, and one in conflict.
 - scrollUntilVisible:
     element:
       id: 'list:pending:light'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - scrollUntilVisible:
     element:
       id: 'status:pending'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - scrollUntilVisible:
     element:
       id: 'list:conflicted:light'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - scrollUntilVisible:
     element:
       id: 'status:conflict'
     direction: DOWN
-    timeout: 60000
+    timeout: 120000
     visibilityPercentage: 20
 - takeScreenshot: harness-conflicted

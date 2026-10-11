@@ -404,6 +404,7 @@ jobs:
       # somebody to sign in as. The action runs each line of its script as a command of its
       # own, by a shell, and stops the emulator when the last has run.
       - name: Run the flows on an emulator
+        id: flows
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         timeout-minutes: 30
         env:
@@ -423,15 +424,26 @@ jobs:
       # What the server kept of the sign-in a flow made on the emulator: the account's list of
       # devices names an installation with the app's version, as the contract's sign-in and
       # the app's `Household-Client` say it (apps/mobile/e2e/stack.ts).
+      #
+      # Asked wherever the flows ran, whatever became of them, and so is the step after it:
+      # what a device left at the server is true or false of itself, and one flow that failed
+      # for something else took both answers with it once, in a run where the replica had
+      # demonstrably reported. A flow that failed has failed the job already; where it is the
+      # flow that signs in, or the one that reports, its step here fails too, and says what
+      # the server holds instead.
       - name: The account lists the device that signed in
-        if: ${{ success() && steps.member.outcome == 'success' }}
+        if: >-
+          ${{ !cancelled() && steps.member.outcome == 'success' &&
+          (steps.flows.outcome == 'success' || steps.flows.outcome == 'failure') }}
         run: pnpm --filter @household/mobile run e2e:stack devices
       # And what it kept of the replica a flow opened there and had report itself
       # (e2e/flows/replica.yaml): the household's clients, which an owner reads off its
       # replicas' reports, name the app and its version, as the replica's own requests said
       # them (D-178).
       - name: The household lists the replica that reported
-        if: ${{ success() && steps.member.outcome == 'success' }}
+        if: >-
+          ${{ !cancelled() && steps.member.outcome == 'success' &&
+          (steps.flows.outcome == 'success' || steps.flows.outcome == 'failure') }}
         run: pnpm --filter @household/mobile run e2e:stack clients
       # The permissions read off the package above, held to what each is for
       # (apps/mobile/build/asked.ts): one a new library brings fails here until it is given

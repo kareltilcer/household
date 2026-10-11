@@ -14,6 +14,7 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'dev-index:devEngine'
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: 'dev-index:devEngine'
 - extendedWaitUntil:
