@@ -461,9 +461,7 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   nothing. A request is answered by its own sign-in alone: one refused on a token that was
   another member's is given none of the one now in use (`src/session/tokens.ts`), and the
   credential a replica is handed throws once its own member's sign-in has gone, whoever is
-  signed in by then (`src/sync/open.ts`). A screen that signs somebody in asks through a
-  client that signs nothing, a second step whose challenge is gone being answered
-  `unauthenticated` as a refused token is. What a device keeps of a member is named for them
+  signed in by then (`src/sync/open.ts`). What a device keeps of a member is named for them
   and removed when their sign-in ends, however it ends ([D-187](docs/prd/09-decisions.md)):
   whatever keeps something of theirs registers its removal with `onForget`
   (`src/session/forget.ts`), as the session's kept reads, the push token's note, which
