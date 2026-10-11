@@ -712,14 +712,19 @@ The development variant may speak plain `http` on Android, which the template al
 build alone. The flows (`e2e/flows`) select by `testID` and never by a word, and
 `e2e/flows.test.ts` holds each to the app's own names, since nothing where they are written
 runs them: its `appId`, a link's scheme and address, and each piece of each `id`. The flows are
-twenty. Fifteen carry no tag, ask nothing of a server and run on both platforms: the launch,
-the engine, the theme, the harness, the primitives, the hold, the shell and the resolvers, and
-seven that each read one thing only a device shows, a flow of its own so that it fails for
-that alone: a list row at twice the text (`row`), a sync mark that arrives after its row
-(`mark`), a drag that begins on a stepper's count (`stepper`), a stepper in a sheet at twice
-the text (`sheet`), a select's choices opened with a field's keyboard up (`keyboard`), a toast
-with Undo at twice the text (`toast`), and what the app's own formatters write on a device's
-`Intl` (`formats`). Two more are no flows of the suite (`e2e/flows/kept`): the Android job
+twenty-one. Sixteen carry no tag, ask nothing of a server and run on both platforms: the
+launch, the engine, the theme, the harness, the primitives, the hold, the shell and the
+resolvers, and eight that each read one thing only a device shows, a flow of its own so that
+it fails for that alone: a list row at twice the text (`row`), a sync mark that arrives after
+its row (`mark`), a drag that begins on a stepper's count (`stepper`), a stepper in a sheet at
+twice the text (`sheet`), a select's choices opened with a field's keyboard up (`keyboard`), a
+toast with Undo at twice the text (`toast`), a tab bar whose room changes under it
+(`turned`), and what the app's own formatters write on a device's `Intl` (`formats`). That
+last holds each sample to who writes it (`src/dev/engine/checks.ts`): a number, an amount and
+a size, which FormatJS writes on every device, to the very string Node writes, and a date,
+which the device's own ICU writes, to its fields in their order, with the spaces, a comma, a
+full stop and English's joining word between them folded; what a device wrote another way and
+was let is drawn under it. Two more are no flows of the suite (`e2e/flows/kept`): the Android job
 runs them before it (`e2e/run.ts`, `--kept`), with the API stopped between the two, to hold
 that a device signed in and brought back with the server away, and then started again, still
 opens on what it kept of its reads. Five run in the Android job alone. A link (`link`) is
@@ -825,6 +830,7 @@ platform.
 | `device` among the server's segments; a `device` part | It is not the server's, and three tests say what those segments are. A part would give the web a loader for words it never draws |
 | The account's language rule in the session's provider, as the web has it; the account's language shown and not kept | The session would derive again a rule that is i18n's. The next start would draw in the device's language until the session was read |
 | `DateTimeFormat` polyfilled too, so that dates match Node's; `getCanonicalLocales` polyfilled; plurals and numbers polyfilled only where missing | The first is megabytes of time-zone data for what Hermes has; Hermes has the second; and with the third a device would format a number with its own ICU on Android and with Foundation on iOS, and the vectors would hold neither |
+| A device's date held to Node's exact string, as the engine page's `formats` line first held it | An ICU's punctuation and spaces are the platform's and change with its version: the simulator of iOS 26 wrote *Mar 3, 2026 at 6:41 PM*, with a narrow no-break space, where Node writes a comma and a plain one. The fields are what a member reads, and the line holds a date to those, in their order; what FormatJS writes, a number, an amount and a size, is held to the string still |
 | `react-native-get-random-values` | A further native module for what expo-crypto, which is the SDK's own, does in an installer of six lines with a test |
 | `@ibm/plex-sans` and `@ibm/plex-mono`, which the web's faces come from; `@ibm/plex` whole; the files committed; the `woff2` converted as the workspace generates | The first two hold `woff` and `woff2` alone, and run a telemetry script as they install. The monolith has the TTFs in 186 MB and ten thousand files, with the same script. ADR 0024 rejected committing them. And a decoder and a build step for what a package already holds |
 | A second list of the faces' files in their test; the test in the app | The test and the app would each know where a family's file is. Jest in the app would need Node's types in the app's project |
@@ -1045,7 +1051,8 @@ platform.
   asks the read's own problem (`isAbsent`), as the household's reader does.
 - A region's own conventions are not on a device: `de-AT`, `de-CH` and `en-GB` count and group
   as their language does, where the web formats them with the browser's whole CLDR. What a date
-  prints on a device is its operating system's.
+  prints on a device is its operating system's, the word, the punctuation and the spaces
+  between its fields among it, so the engine page holds a date to its fields alone (`formats`).
 - The keychain's class is right while nothing reads the vault with the device locked. The day
   something does, a silent push that syncs or a background task, it becomes
   `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`, and an item's class is changed by writing it again.
@@ -1210,8 +1217,12 @@ platform.
   shell page has no pane whose room a press turns. The dev shell page draws one bar of five slots whose room a press turns
   from a tablet's to 320 pt, the bar mounted all the while (`shell:turned`), so that a flow on
   CI's phones can read it: after the press, Home and More within the room, where unmended
-  each slot would be 144 pt and the two ends past the screen's edges. No flow reads it yet,
-  and none can reach the flow chart, which no phone held upright gives 28 rem.
+  each slot would be 144 pt and the two ends past the screen's edges. A flow of its own reads
+  it now, on both platforms (`turned`, `e2e/flows/turned.yaml`): it presses the control and
+  asks for each end of the bar whole on the screen, by a scroll that swipes nothing where it
+  has it, an assertion passing an element any part of whose frame is on the screen. It is
+  written, and has run on no device yet. No flow can reach the flow chart, which no phone
+  held upright gives 28 rem.
 - **Item 29** takes the seams this leaves: the sign-in screen's place (`src/session/SignIn.tsx`)
   and `signedIn`, which a sign-in the server answered is handed to; several profiles' sign-ins
   in the token store, of which one is in use; the household's name in the app bar as the
@@ -1342,8 +1353,17 @@ platform.
   job passed, the two flows of the kept read's check and all twenty of the suite, four of
   them, `replica`, `launch`, `harness` and `link`, at a second asking after the driver had
   gone; and fourteen of the simulator's fifteen passed, `formats` failing there
-  (`engine:formats:passed` not found), which is read apart from this record. `stepper` and
-  `shell` passed on both, the second reading nothing of the bar whose room turns. What the
+  (`engine:formats:passed` not found), as it had in the run before (38152216148, on
+  `3c14871`), of the same formatters, page and flow, where what the simulator wrote was read.
+  Of its ten samples two were not Node's string, both the instant's: iOS's ICU wrote
+  `Mar 3, 2026 at 6:41 PM`, with a narrow no-break space, where Node writes a comma and a
+  plain one, and in Czech set narrow no-break spaces between the day's parts, the day, the
+  month and the hour of the named zone right in both. Every sample FormatJS writes was Node's
+  very string there, and on the emulator the whole line passed. So a date is the device's own
+  to write, and that was no defect: the line holds a date to its fields now, and what FormatJS
+  writes to the string still (`src/dev/engine/checks.ts`), which has run on no device.
+  `stepper` and `shell` passed on both, the second reading nothing of the bar whose room
+  turns, which `turned` was written to read since, and has run on no device either. What the
   fourth round changed has been on no device.
   In the eighth run, on the iOS simulator all eight of its
   flows passed: the app opens at sign-in with nothing kept; the engine screen's checks hold on
