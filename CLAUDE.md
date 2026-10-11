@@ -313,11 +313,13 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   drawn from what the query client keeps, is drawn as chosen in the press itself, from its
   screen's own state, until the query client holds the change (`pressed` there): the query
   client tells a screen by a timer, which a browser ran only after the frame that answers the
-  press, and a switch pressed again in that frame sent the first change a second time. One
-  whose change is refused is put back to what the server last said it holds (`served`
-  there), never to what was kept as the change was made, which another change's unsaved
-  choice may be in; a read on its way is cancelled before a change takes anything, and
-  after a refusal the server is read again only once no change is on its way. The
+  press, and a switch pressed again in that frame sent the first change a second time. What
+  is drawn while changes are on their way is what the server last said it holds (`served`
+  there) with each of them made to it (`flying`), whichever was just answered or refused:
+  never what was kept as a change was made, which another's unsaved choice may be in, and
+  never an answer alone, which holds nothing of a change made since. A read on its way is
+  cancelled before a change takes anything, and after a refusal, or after two changes that
+  were on their way at once, the server is read again only once none is. The
   account's selects of a timezone and of the first day of the week hold their own press
   too, let go by the save's own state (`account/Account.tsx`). And a page the
   browser kept and shows again puts a provider's start back whatever became of it
@@ -423,17 +425,34 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   import of React Native's `Text` anywhere else in the app but the accessibility rules' own test.
   Those rules (`src/test/a11y.ts`, `expectAccessible`) stand where axe does on the web: they read
   what a drawn tree declares, a role, a name, a state, a target's least size, that a
-  control is not inside what is one thing to a screen reader, and how a row that wraps is
-  to break, and nothing a device lays out. A row that wraps and gives its words a least
-  room is two parts that may each shrink, the words' and what stands beside them
-  (`src/ui/ListRow.tsx`): by Yoga's source the one child of a row that both grows and
-  shrinks is counted as nothing wide and breaks no line, which the rule `wrap` fails. What
-  is said aloud goes through `src/ui/announce.ts`, the one file that calls
+  control is not inside what is one thing to a screen reader, how a row that wraps is to
+  break and by what a part says its room, and nothing a device lays out. A row that wraps
+  and gives its words a least room is two parts that may each shrink, the words' and what
+  stands beside them (`src/ui/ListRow.tsx`): by Yoga's source the one child of a row that
+  both grows and shrinks is counted as nothing wide and breaks no line, which the rule
+  `wrap` fails. And a part says its room by a `width` with `flexGrow` and `flexShrink`,
+  never by a `flexBasis`, which the rule `room` fails wherever one is drawn: a device
+  computes what a `flexBasis` gives once, at the element's first layout, and keeps it
+  whatever its style says later (read in Yoga and in React Native's renderer, and seen in
+  CI's tenth run, where a row first laid out at a text scale of one broke no line at two).
+  What is said aloud goes through `src/ui/announce.ts`, the one file that calls
   `AccessibilityInfo` ([D-188](docs/prd/09-decisions.md)), and a `Banner` that announces
   says what arrives only where its screen is the one in front (`useInFront`,
   `src/ui/Screen.tsx`, which `HouseholdScreen` tells from the navigator): a tab's screen
   and a household another was opened over stay mounted, and what arrives on one out of
-  sight is read in its place when its member comes back. A route is a line of
+  sight is read in its place when its member comes back. The same sentence in another
+  language is no other sentence: the app's language follows the account's on every screen
+  that is drawn (`followAccount`, `src/i18n/I18nProvider.tsx`), and a banner and the
+  offline bar, which keep the language they were last drawn in, and a hold-to-complete,
+  which says its phase's change and never its word's, say nothing again for it
+  (`src/ui/Banner.tsx`, `src/ui/OfflineBar.tsx`, `src/ui/HoldToComplete.tsx`). What takes a
+  screen's place and opens none says itself as it arrives: *could not be read* (`Unread`,
+  `src/session/guards.tsx`), *please update* (`src/update/UpdateRequired.tsx`) and the
+  screen where a route failed to draw (`RouteError`, `src/app/Root.tsx`). And a guard holds
+  a visitor's address only while its own screen is in front (`Signed`,
+  `src/session/guards.tsx`): `usePathname()` is the whole app's word, and a household
+  mounted underneath another screen would hold that screen's address for its own. A route
+  is a line of
   `src/app/paths.ts` and a file under `app/`, which `src/app/routes.test.ts` holds to each
   other, and its address is the web's own ([D-196](docs/prd/09-decisions.md)). The file is one
   line that re-exports its screen, or its layout, from `src/`, but for a dev screen's: a dev
@@ -459,24 +478,37 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   answers `401 refresh_token_invalid` ends it (`src/session/renewal.ts`); a request refused
   `401 unauthenticated` is renewed once and sent again (`src/api/transport.ts`), and ends
   nothing. A request is answered by its own sign-in alone: one refused on a token that was
-  another member's is given none of the one now in use (`src/session/tokens.ts`), and the
-  credential a replica is handed throws once its own member's sign-in has gone, whoever is
-  signed in by then (`src/sync/open.ts`). What a device keeps of a member is named for them
+  another member's is given none of the one now in use (`src/session/tokens.ts`), one sent
+  again for want of an answer leaves as it was signed, the resend standing under the signing
+  (`createMobileClient`, `src/api/client.ts`), and the credential a replica is handed throws
+  once its own member's sign-in has gone, whoever is signed in by then
+  (`src/sync/open.ts`). What a device keeps of a member is named for them
   and removed when their sign-in ends, however it ends ([D-187](docs/prd/09-decisions.md)):
   whatever keeps something of theirs registers its removal with `onForget`
   (`src/session/forget.ts`), as the session's kept reads, the push token's note, which
   household was on screen, the toasts on screen and the replicas do, and whatever keeps it
-  under its member's name says there whom it keeps something of, as the kept reads and the
-  replicas' notes do. By that the session removes, as the app starts and before anything is
-  read back, what is kept of anybody the vault holds no sign-in of (`forgetOthers`): a
-  removal the app was closed in the middle of, a keystore that lost a pair, a restore from a
-  backup. A vault that will not say what it holds rejects (`src/session/vault.ts`), nobody
-  is signed in for that run, and nothing is removed on its silence. Every request the
+  under its member's name says there whom it keeps something of, as the kept reads, the
+  push token's note and the replicas' notes do. By that the session removes, as the app
+  starts and before anything is read back, what is kept of anybody the vault holds no
+  sign-in of (`forgetOthers`): a removal the app was closed in the middle of, a keystore
+  that lost a pair, a restore from a backup. A vault that will not say what it holds rejects
+  (`src/session/vault.ts`): who is signed in is then *could not be read*, in the device's
+  own words and with *Try again*, which reads the vault again (`Unreachable`,
+  `src/session/guards.tsx`), and on its silence nothing is removed and nothing written,
+  neither a sign-in nor an installation's id (`src/session/tokens.ts`). The same holds of
+  the replicas' notes: a read of them that failed is never taken for no notes
+  (`src/sync/databases.ts`). Every request the
   app sends the API names it, `Household-Client: mobile/<version>` (`clientName`,
   `src/api/client.ts`), and every `fetch` of the app's says `credentials: 'omit'` (`platform`,
   `src/api/transport.ts`): the replica's own leave by `namedFetch`, and an upload, which leaves
   by expo-file-system's `File.upload` and by no `fetch`, names the app itself
-  (`src/sync/files.ts`). A write through the query client spreads `askedNow`
+  (`src/sync/files.ts`). What the query client read is kept on the device under its member
+  (`src/api/keep.ts`), for one shape (`keptShape`) and not for one build, as the last answer
+  each read was given: a re-read that got no answer, or that the server failed, takes
+  nothing off the device, only the API's own `404` does (`isKept`, `src/api/query.ts`), and
+  the cache lets go of no read for its age (`gcTime: Infinity`). A rule of the web's that
+  counts on a connection, or on a page being loaded again, is not copied to the device. A
+  write through the query client spreads `askedNow`
   (`src/api/query.ts`): `src/api/askedNow.test.ts` reads the sources of the session, push, a
   household's own answer, the links, *please update* and the dev sign-in, and fails a
   `useMutation` there that does not begin with it. `src/api/query.ts` is also the one source
@@ -498,7 +530,11 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   a section within a screen being a header too, as arranging's lists and More's groups are; and
   never in `Screen` alone, which `src/app/routes.test.ts` holds by reading the sources; what the
   frame draws in a screen's place, a wait, *could not be read* and *not available*, is a plain
-  `Screen`. A household's own answer is read by `useHousehold` (`src/household/data.ts`), only
+  `Screen`. *Not available* leads on by a replace (`src/app/NotAvailable.tsx`): outside a
+  household that takes the address away, and inside one it is a jump between the tabs, so
+  going back from Home returns to the address that opened nothing, once, which
+  `src/shell/layout.test.tsx` holds as it is. A household's own answer is read by
+  `useHousehold` (`src/household/data.ts`), only
   for a member and of an id that can be one, by the frame and the replica's provider in one
   commit, and by the sync dev screen beside the provider it draws: whatever else needs it is
   handed it, as the bar above the screens is, a reader that mounts after the answer asking the
@@ -512,7 +548,12 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   gone (`src/ui/Menu.tsx`), as a select tells its owner of a choice (`src/ui/Select.tsx`), since by
   React Native's source iOS presents no modal while another of the same controller's is leaving. A
   modal that is to give the accessibility focus back names what opened it (`opener`): by the same
-  source iOS's host gives it back by itself and Android's restores none. A word only the mobile app
+  source iOS's host gives it back by itself and Android's restores none. A select's and a menu's
+  opening press put the keyboard away (`Keyboard.dismiss()`), their sheet taking the screen from
+  whatever field was being typed in, and so does the press that sends the dev sign-in form and
+  leads to another screen, while its field is still mounted (`src/dev/signin/index.tsx`): on
+  Android a keyboard whose field leaves with its screen stays or goes by a race (CI's tenth
+  run), and stands over the next screen until something puts it away. A word only the mobile app
   draws is a key under `device.`, which is in no part (`packages/i18n/src/parts.ts`), and the app
   imports `@household/i18n`'s own entry, all five catalogs ([D-195](docs/prd/09-decisions.md)). A
   permission a build asks for is a line of `build/asked.ts` with its reason, and one every build
