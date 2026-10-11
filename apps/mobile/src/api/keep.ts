@@ -3,14 +3,15 @@
 // keeps each one's apart, and removed with their sign-in however it ends (D-161's twin on a
 // device). A device that will not store keeps nothing, and the app reads from the server.
 //
-// It is kept for as long as its member's sign-in, and read back however old it is: the account,
-// the member's households and a household's own answer are what the shell and the replica open
-// on (session/SessionProvider.tsx, sync/ReplicaProvider.tsx), and a member who last had the app
-// open two days ago opens it with no connection as one who had it open an hour ago does (PRD 03
-// §2.1: reads work offline, days offline among them). What is restored is stale, and asked for
-// again as soon as there is a connection; the server's own answer, a `404` among them, stands
-// over it. The day the web keeps a read for (apps/web/src/api/query.ts) is a browser's, which
-// is no offline surface.
+// It is kept for as long as its member's sign-in, and read back however old it is and whichever
+// build of the app wrote it: the account, the member's households and a household's own answer
+// are what the shell and the replica open on (session/SessionProvider.tsx,
+// sync/ReplicaProvider.tsx), and a member who last had the app open two days ago, or whose
+// phone updated the app overnight, opens it with no connection as one who had it open an hour
+// ago does (PRD 03 §2.1: reads work offline, days offline among them). What is restored is
+// stale, and asked for again as soon as there is a connection; the server's own answer, a `404`
+// among them, stands over it. The day and the one build the web keeps a read for
+// (apps/web/src/api/query.ts) are a browser's, which is no offline surface.
 //
 // Its own, on the query client's `dehydrate` and `hydrate`, and not TanStack's persister: a
 // removal drops the write that was waiting and every write after it, where a throttled write
@@ -18,11 +19,26 @@
 // refuses is answered with nothing, where the persister's restore rejects.
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { dehydrate, hydrate, type DehydratedState, type QueryClient } from '@tanstack/react-query'
-import { clientName } from './client.ts'
 import { isKept } from './query.ts'
 
 /** How often the reads are written, at most: a burst of changes is one write of the last state. */
 export const writeEvery = 1000
+
+/**
+ * The shape the reads are kept in. What is stored says it, and what was stored under another
+ * number is not read back. It is raised only by the change after which this app can no longer
+ * draw what an earlier one kept: a query's key that comes to mean something else, a read kept
+ * as something other than its answer, a TanStack Query whose `hydrate` no longer takes what an
+ * earlier `dehydrate` wrote. The pull request that needs it raises it, and a release never
+ * does, which is the manner of the web's version (D-158).
+ *
+ * The reads are for one shape and not for one build (D-187). A read is the contract's own
+ * answer, which a later build of the same major (`/api/v1`) reads as it reads an older
+ * server's, so an update of the app is no reason to drop it: dropped at every update, the
+ * first start after one would need a connection, and a member whose phone updated the app
+ * overnight would open it with none to *could not be read* and no replica.
+ */
+export const keptShape = 1
 
 /** What every member's reads are kept under, before their id. */
 const keptUnder = 'household.queries.'
@@ -41,9 +57,9 @@ export async function keptMembers(): Promise<string[]> {
   return keys.filter((key) => key.startsWith(keptUnder)).map((key) => key.slice(keptUnder.length))
 }
 
-/** What is stored: the reads, when they were written, and the build that wrote them. */
+/** What is stored: the reads, when they were written, and the shape they are kept in. */
 interface Stored {
-  readonly build: string
+  readonly shape: number
   readonly at: number
   readonly state: DehydratedState
 }
@@ -52,7 +68,7 @@ function isStored(value: unknown): value is Stored {
   if (typeof value !== 'object' || value === null) return false
   const stored = value as Partial<Record<keyof Stored, unknown>>
   return (
-    typeof stored.build === 'string' &&
+    typeof stored.shape === 'number' &&
     typeof stored.at === 'number' &&
     typeof stored.state === 'object' &&
     stored.state !== null
@@ -61,9 +77,10 @@ function isStored(value: unknown): value is Stored {
 
 export interface Keep {
   /**
-   * Puts what the device kept into `queries`: what this build wrote, however long ago. Another
-   * build may keep a read otherwise, so what one kept is dropped by the next rather than shown:
-   * the first start after an update reads from the server.
+   * Puts what the device kept into `queries`: what was written in this shape, however long ago
+   * and by whichever build of the app. What was kept in another shape is dropped rather than
+   * shown, and read from the server; so is what a build kept before the shape had a number,
+   * which it named for itself.
    */
   readonly restore: (queries: QueryClient) => Promise<void>
   /** Writes `queries` as it changes, at most once a second, until the function it returns is called. */
@@ -75,15 +92,15 @@ export interface Keep {
 }
 
 export interface KeepOptions {
-  /** The build that writes, and whose reads alone are read back. Left out, this one. */
-  readonly build?: string
+  /** The shape that is written, and whose reads alone are read back. Left out, `keptShape`. */
+  readonly shape?: number
   readonly now?: () => number
 }
 
 /** What the device keeps of `member`'s reads. */
 export function createKeep(
   member: string,
-  { build = clientName(), now = Date.now }: KeepOptions = {},
+  { shape = keptShape, now = Date.now }: KeepOptions = {},
 ): Keep {
   const key = keepKey(member)
   let watched: QueryClient | undefined
@@ -102,7 +119,7 @@ export function createKeep(
       shouldDehydrateQuery: isKept,
       shouldDehydrateMutation: () => false,
     })
-    const stored: Stored = { build, at: now(), state }
+    const stored: Stored = { shape, at: now(), state }
     try {
       await AsyncStorage.setItem(key, JSON.stringify(stored))
     } catch {
@@ -120,7 +137,7 @@ export function createKeep(
         return
       }
       if (removed || !isStored(stored)) return
-      if (stored.build !== build) return
+      if (stored.shape !== shape) return
       hydrate(queries, stored.state)
     },
     watch: (queries) => {

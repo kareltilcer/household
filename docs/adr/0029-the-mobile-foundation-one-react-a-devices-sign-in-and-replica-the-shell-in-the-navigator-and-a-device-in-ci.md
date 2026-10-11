@@ -334,9 +334,13 @@ The query client is one member's at a time: its keys are the web's, without the 
 what it kept is restored under the member whose sign-in is in use, and an account it holds is
 taken for the one signed in only where its id is theirs. Its keep is the app's own, over
 `dehydrate` and `hydrate` (`src/api/keep.ts`), for as long as its member's sign-in and for one
-version of the app: what this build kept is read back however old it is, the account, the
-households and a household's own answer being what the shell and the replica open on with no
-connection (PRD 03 §2.1), and what another build kept is dropped. What outlives a sign-in is
+shape, not for one build: what was kept is read back however old it is and whichever build
+wrote it, the account, the households and a household's own answer being what the shell and
+the replica open on with no connection (PRD 03 §2.1), and what was kept under another number
+(`keptShape`) is dropped. The number is raised only by the pull request after which the app
+can no longer draw what an earlier one kept, and never by a release, in the manner of the
+web's version (D-158): a read is the contract's own answer, which a later build of the same
+major reads as it reads an older server's. What outlives a sign-in is
 the device's and no member's content: the display modes, the language, a member's arrangement
 of their modules (D-155), which household they were last in, their own choice to turn
 notifications off on this device, the installation's own id, and the address of the screen a
@@ -740,7 +744,7 @@ platform.
 | Nothing drawn until the vault is read | The router's stack must be mounted to be told where to go, and the splash is held already for the display's own reads. The session is *unknown* until then |
 | The member in every query key | Every screen's key would carry it, and the web's keys would stop being the app's. The cache is one member's at a time, and emptied when its member is forgotten |
 | TanStack's own persister | Its throttle writes a cache back after it was removed, and its restore rejects where storage refuses: the web's own reasons (ADR 0025) |
-| What another build kept, read back | A build may keep a read otherwise, a key's meaning or an answer's shape, and what is restored is drawn before any answer can correct it, with a connection as without. The first start after an update reads from the server (Consequences) |
+| The kept reads tied to the build that wrote them, as the web's are (D-161), and dropped by the next | What the tie was for is drift: a build may keep a read otherwise than the one before it, a key's meaning or an answer's shape, and what is restored is drawn before any answer can correct it, with a connection as without. But it drops every read at every update, and the first start after one would need a connection: a member whose phone updated the app overnight would open it with none to *could not be read* and no replica, on the client whose promise is that reads work offline (PRD 03 §2.1). A number answers the drift where it arises: `keptShape` is raised by the pull request that changes what is kept, and a read is the contract's own answer, which a later build of the same major reads as it reads an older server's |
 | The query client emptied in the providers' own cleanup | React runs a removed tree's cleanups parent first: the readers let go after the emptying, and each set a day's timer on a read the cache no longer held. It is emptied by a component that stands after everything that reads |
 | The device believed on `isInternetReachable`; *unknown* taken for offline | Where the platform cannot say, NetInfo asks a host of Google's. Every read at a cold start would wait for NetInfo's first answer, and a bar would be drawn for a state nobody reported. A network with nothing behind it is a request's own failure to say |
 | The offline bar hearing the device by a listener of its own, beside the query client's; a lint that keeps NetInfo to one file; the device asked once more as that file loads | Two stores of one fact, and the query client's is the one that holds a read back, so it is the one the bar must not disagree with: the bar reads what the query client was told. The lint's one rule of restricted imports is spent on `Text` for the same files, where a second block would replace it, so a test of the sources names the file. NetInfo hands a new listener the state it has *(read)* |
@@ -882,10 +886,12 @@ platform.
   hand first, or the dev screens' variable is read from the bundle before it
   ([runbook](../runbooks/mobile-builds.md)). Before an export or `expo start` outside turbo,
   `pnpm exec turbo run gen`.
-- What the app kept of what it read is one build's: **the first start after the app was updated
-  reads from the server**. With no connection that start draws *could not be read*, and the
-  replica stays shut, a household being read as its member's before it is opened, until one
-  start has had a connection.
+- What the app kept of what it read is one shape's and no build's: **a pull request that
+  changes what a kept read is, a key's meaning or what is stored of an answer, raises
+  `keptShape`** (`src/api/keep.ts`), and nothing else does. The first start after such a
+  change, and after no other update, reads from the server: with no connection that start
+  draws *could not be read*, and the replica stays shut, a household being read as its
+  member's before it is opened, until one start has had a connection.
 - A region's own conventions are not on a device: `de-AT`, `de-CH` and `en-GB` count and group
   as their language does, where the web formats them with the browser's whole CLDR. What a date
   prints on a device is its operating system's.
@@ -1009,9 +1015,9 @@ platform.
   shows (below). It decides the backups (above), and whether `VIBRATE`, the template's own,
   stays asked: it is left asked until a device shows whether a notification is still felt
   without it. Its critical paths on a device stand on this item's flows. On Android a member's
-  replica opening and receiving, and the offline bar arriving and leaving, are run; that a
-  household's clients name `mobile/<version>` is not yet seen, the step that asks having run in
-  no run, and no replica has opened on iOS (below). Its module is the first whose rows the
+  replica opening and receiving, and the offline bar arriving and leaving, are run, and so is
+  the step that asks whether a household's clients name `mobile/<version>`, which they did in
+  the eighth run; no replica has opened on iOS (below). Its module is the first whose rows the
   inbox can hold and More can arrange.
 - **Item 33**, the first module with screens on a device, adds its line to
   `src/modules/registry.ts`, its routes to `src/app/paths.ts` and `app/`, and the place they
@@ -1055,9 +1061,11 @@ platform.
   would then follow; `expo/fetch` taking a file by its place; a patched `braces`, `node-forge`
   or a `query-string` that takes the patched `decode-uri-component`; a hosted runner on which
   a flow can answer the system's own dialog.
-- **Run on a device, as of CI's seventh run (38070872439, 2026-10-10).** This bullet says what
-  that run and the six before it showed, and nothing later: it is brought up to date from the
-  last green run before the pull request is marked ready. On the iOS simulator all eight of its
+- **Run on a device, as of CI's eighth run (38126916736, 2026-10-11, on `cb26a93`), the first
+  to pass whole, every job.** This bullet says what that run and the seven before it showed,
+  and nothing later: it is brought up to date from the last green run before the pull request
+  is marked ready. That run was of the tree before the first review round's fixes (`fc4e1df`),
+  so what that round changed has been on no device yet. On the iOS simulator all eight of its
   flows passed: the app opens at sign-in with nothing kept; the engine screen's checks hold on
   Hermes, the vectors' 87 format cases and 8 match cases under the polyfills, the five families
   registered, the random source and the client's name; the theme changes at a press; the
@@ -1067,22 +1075,27 @@ platform.
   it, a module is hidden from its row's menu, the panes are one at a phone's width and two at a
   tablet's, and the neutral screen leads home; and a refused change is given up, its
   confirmation drawn inside its sheet, both leaving and a toast after them. The release
-  build's `Info.plist` holds neither of the dev launcher's keys. On the Android emulator eleven
-  of twelve passed: those of the simulator less the resolvers', and beside them a link in the
-  app's scheme opens its screen; the dev form signs in against the real server over plain
-  `http`, the household's Home is drawn in its frame over its tab bar, and drawn again after a
-  restart, the pair read back from the keystore by a build without the biometric permissions;
-  the bar's Today and More open their places, and More's sign-out leads back to sign-in; and
-  **a member's replica opens on a device and receives**, with nothing in its inbox, reports
-  itself when asked, and the offline bar arrives with the connection taken away and leaves
-  when it is back. The built APK asked for eight permissions, each with its reason. The one
-  flow that failed is the resolvers' on Android, and it is the flow's to mend, nothing of the
-  app's: its tap landed on the band behind the three navigation buttons, the control's bounds
-  being `[87,2223][642,2347]` on a screen of 1080 × 2400 and the tap at `(364, 2285)`, since
-  the flow's scroll stops as soon as its control is in the display and the app draws under
-  the band. Because a flow failed, the two steps after the flows did not run: that the server
-  lists the account's device, and that a household's clients name `mobile/<version>`, is
-  still unseen. In the fifth and sixth runs the sync dev screen drew on neither platform: a
+  build's `Info.plist` holds neither of the dev launcher's keys. On the Android emulator all
+  twelve passed, as in no run before: those of the simulator, the resolvers' among them, and
+  beside them a link in the app's scheme opens its screen; the dev form signs in against the
+  real server over plain `http`, the household's Home is drawn in its frame over its tab bar,
+  and drawn again after a restart, the pair read back from the keystore by a build without
+  the biometric permissions; the bar's Today and More open their places, and More's sign-out
+  leads back to sign-in; and **a member's replica opens on a device and receives**, with
+  nothing in its inbox, reports itself when asked, and the offline bar arrives with the
+  connection taken away and leaves when it is back. Then the job asked the server what the
+  device had left there, in two steps that had run in no run before: the account lists the
+  device that signed in, the emulator by its name, on Android at the app's version, and **the
+  household's clients name the replica that reported as a client of type `mobile` at the
+  app's version**, `mobile/0.1.0` (D-178). The built APK asked for eight permissions, each
+  with its reason. In the seventh run the resolvers' flow had failed on Android, and it was
+  the flow's to mend, nothing of the app's: its tap landed on the band behind the three
+  navigation buttons, the control's bounds being `[87,2223][642,2347]` on a screen of
+  1080 × 2400 and the tap at `(364, 2285)`, since the flow's scroll stopped as soon as its
+  control was in the display and the app draws under the band; a scroll that the next
+  command presses now brings its control clear of the band first. A flow having failed, the
+  two steps after the flows did not run in that run; they are asked now whatever became of
+  the flows. In the fifth and sixth runs the sync dev screen drew on neither platform: a
   fixture called `Array.prototype.toSorted` at its module's scope, which Node has and the
   Hermes this React Native ships lacks, so every Jest test passed, and `e2e/engine.test.ts`
   now reads the sources for such a built-in.
@@ -1094,15 +1107,15 @@ platform.
   that is shut while its device is locked; that the native half of `expo/fetch` honours
   `credentials: 'omit'` is read. A member's own sign-out is read by a flow, on Android.
 - **Run on Android, and on no iOS device: the replica.** Its flow is the Android job's, with
-  the stack. In the seventh run a member's replica opened and received, its inbox was read, it
-  reported when asked, and the offline bar arrived with the connection taken away and left
-  when it was back: op-sqlite, PowerSync's extension and the SDK link and run there. The step
-  after the flows, which asks the server for a client named `mobile/<version>`, has run in no
-  run. No flow reads a replica's removal: that op-sqlite's own deletion removes PowerSync's
-  file, and that expo-router loads every route's file as the app starts, so that the
-  forgetter is registered before a sign-in can end, are read. And no flow opens a replica on
-  iOS, where it is believed from the conformance suite, which holds the library on Node's
-  SQLite, and from Jest.
+  the stack. In the seventh run and in the eighth a member's replica opened and received, its
+  inbox was read, it reported when asked, and the offline bar arrived with the connection taken
+  away and left when it was back: op-sqlite, PowerSync's extension and the SDK link and run
+  there. The step after the flows, which asks the server for a client named `mobile/<version>`,
+  ran for the first time in the eighth, and the server named one. No flow reads a replica's
+  removal: that op-sqlite's own deletion removes PowerSync's file, and that expo-router loads
+  every route's file as the app starts, so that the forgetter is registered before a sign-in
+  can end, are read. And no flow opens a replica on iOS, where it is believed from the
+  conformance suite, which holds the library on Node's SQLite, and from Jest.
 - **Not run at all: an upload, a push, and EAS.** No route takes a file, so `File.upload` has
   met no server. No EAS project exists, so no permission was asked for, no token registered,
   no notification shown or pressed, and no build made from `eas.json`.
@@ -1113,14 +1126,14 @@ platform.
 - **Run on the dev screens, and little of it around a real household: the shell and the
   overlays.** Two flows read some of it on the dev screens, with no server. On both platforms:
   a slot opening its place and saying that it is open, Add's sheet, a module hidden from a
-  menu's item, the panes at a phone's width and at a tablet's, the neutral screen's way out.
-  On the simulator alone so far: a refused change given up, its confirmation drawn inside its
-  sheet, both leaving and a toast after them. With the stack, on Android, two flows read the
-  frame and the bar around a real household, two of its places and the way out. No flow reads
-  the frame's inset meeting the bar's, the bar's measured height reaching the toasts, a tab's
-  screen keeping its place, a real tablet, a toast inside an open sheet, the keyboard under a
-  sheet on Android, or the focus given back on Android to an opener that is named, where the
-  modal's host restores none by itself *(read)*.
+  menu's item, the panes at a phone's width and at a tablet's, the neutral screen's way out;
+  and, on the emulator too since the eighth run, a refused change given up, its confirmation
+  drawn inside its sheet, both leaving and a toast after them. With the stack, on Android, two
+  flows read the frame and the bar around a real household, two of its places and the way out.
+  No flow reads the frame's inset meeting the bar's, the bar's measured height reaching the
+  toasts, a tab's screen keeping its place, a real tablet, a toast inside an open sheet, the
+  keyboard under a sheet on Android, or the focus given back on Android to an opener that is
+  named, where the modal's host restores none by itself *(read)*.
 - **Heard by nobody: everything a screen reader does.** No run has VoiceOver or TalkBack on.
   A screen's title as a header, the hold's three activations, the tab bar's traits, the
   adjustable handle and its two actions, a field's label read once on each platform, the focus

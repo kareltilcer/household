@@ -17,8 +17,9 @@ import { ids } from '../test/fixtures.ts'
 import { render } from '../test/render.tsx'
 import { sourcesIn } from '../test/sources.ts'
 import { Text } from '../ui/Text.tsx'
+import * as app from './client.ts'
 import { clientName, namedFetch, setting } from './client.ts'
-import { createKeep, keepKey, keptMembers, writeEvery } from './keep.ts'
+import { createKeep, keepKey, keptMembers, keptShape, writeEvery } from './keep.ts'
 import { ApiProblemError, isRetryable, problemIn, retryAt, unwrap } from './problem.ts'
 import { createProblemHub, type Problem } from './problems.ts'
 import { useProblemText } from './problemText.ts'
@@ -303,7 +304,7 @@ describe('what the device keeps of what was read', () => {
     expect(stored).toContain('households')
     expect(stored).not.toContain('a password')
     expect(stored).not.toContain('a link good for minutes')
-    expect(JSON.parse(stored)).toMatchObject({ build: clientName(), state: { mutations: [] } })
+    expect(JSON.parse(stored)).toMatchObject({ shape: keptShape, state: { mutations: [] } })
   })
 
   it('is removed with its member: the write that was waiting is dropped, and every one after it', async () => {
@@ -324,17 +325,50 @@ describe('what the device keeps of what was read', () => {
     stop()
   })
 
-  it('reads back nothing another build wrote, and nothing that is no cache', async () => {
+  // The reads are for one shape and not for one build (D-187): a phone that updated the app
+  // overnight opens it in the morning with no connection, on what the build before kept.
+  it('is read back by the next build of the app, which keeps its reads in the same shape', async () => {
     const client = queryClient()
-    const kept = createKeep(ids.member, { build: 'mobile/0.0.9', now: () => 1000 })
+    const kept = createKeep(ids.member)
     const stop = kept.watch(client)
     client.setQueryData(['households'], [{ id: ids.household }])
     await kept.flush()
     stop()
+    // What is stored says its shape, and nothing of the build that wrote it.
+    const stored = (await AsyncStorage.getItem(key)) ?? ''
+    expect(JSON.parse(stored)).toMatchObject({ shape: keptShape })
+    expect(stored).not.toContain(clientName())
 
-    const newer = queryClient()
-    await createKeep(ids.member, { build: 'mobile/0.1.0', now: () => 2000 }).restore(newer)
-    expect(newer.getQueryData(['households'])).toBeUndefined()
+    // The app as an update names it, to the server and to any file of its own that asks.
+    const named = jest.spyOn(app, 'clientName').mockReturnValue('mobile/99.0.0')
+    const updated = queryClient()
+    await createKeep(ids.member).restore(updated)
+    const asked = clientName()
+    named.mockRestore()
+    expect(asked).toBe('mobile/99.0.0')
+    expect(updated.getQueryData(['households'])).toEqual([{ id: ids.household }])
+  })
+
+  it('reads back nothing kept in another shape, nothing a build named for itself, and nothing that is no cache', async () => {
+    const client = queryClient()
+    const kept = createKeep(ids.member, { shape: keptShape, now: () => 1000 })
+    const stop = kept.watch(client)
+    client.setQueryData(['households'], [{ id: ids.household }])
+    await kept.flush()
+    stop()
+    const stored = JSON.parse((await AsyncStorage.getItem(key)) ?? '') as Record<string, unknown>
+
+    // The number was raised: this app no longer draws what the one before it kept.
+    const reshaped = queryClient()
+    await createKeep(ids.member, { shape: keptShape + 1, now: () => 2000 }).restore(reshaped)
+    expect(reshaped.getQueryData(['households'])).toBeUndefined()
+
+    // As a build wrote it before the shape had a number: dropped once, and written over.
+    const before = { build: clientName(), at: stored.at, state: stored.state }
+    await AsyncStorage.setItem(key, JSON.stringify(before))
+    const older = queryClient()
+    await createKeep(ids.member).restore(older)
+    expect(older.getQueryData(['households'])).toBeUndefined()
 
     await AsyncStorage.setItem(key, '{"not": "a cache"')
     const broken = queryClient()
