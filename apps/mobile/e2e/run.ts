@@ -5,26 +5,29 @@
 // docs/runbooks/mobile-builds.md says how CI makes it and how a developer does.
 //
 // It builds nothing and starts no device: it runs the flows and leaves what they left under
-// dist/e2e, which CI keeps as an artifact. Maestro keeps the device's own log beside each
-// flow, so nothing here follows it. Where more than one device is up, `HOUSEHOLD_E2E_DEVICE`
-// names the one: a simulator's id, an emulator's serial. `--stack` says the API and the sync
-// service are up and the environment names a member to sign in as (e2e/stack.ts), which only
-// CI's Android job can say.
+// dist/e2e, which CI keeps as an artifact. Maestro keeps its own log beside each flow and
+// nothing of the device's, so an emulator's is followed here (`follow`). Where more than one
+// device is up, `HOUSEHOLD_E2E_DEVICE` names the one: a simulator's id, an emulator's serial.
+// `--stack` says the API and the sync service are up and the environment names a member to
+// sign in as (e2e/stack.ts), which only CI's Android job can say.
 //
 // A flow that failed because Maestro's driver on the device was gone is run again, once, with
 // the others it took, in a session of their own (dist/e2e/again): on iOS a crash of the app
-// in one flow takes the driver some minutes later, and every flow after that (maestro.ts,
-// `outcome`). A flow that failed for itself is not run again, and fails the run.
+// in one flow takes the driver some minutes later, and every flow after that, and on Android
+// the emulator's adb has gone twelve minutes after its start (maestro.ts, `outcome`). A flow
+// that failed for itself is not run again, and fails the run.
 //
 // What the flows are told is written by Maestro beside each of them, the member's password
 // among it, and CI keeps the folder where anybody can read it. It is a password to nothing,
 // an account in the job's own database, which goes with the runner; it is taken out of what
 // the run wrote all the same, so that no artifact holds anything that reads as a credential.
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import {
+  closeSync,
   cpSync,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -41,7 +44,7 @@ if (platform === undefined) {
   process.exit(2)
 }
 const stack = flags.includes('--stack')
-// After the suite, the check that takes the API away and brings it back (`kept`, below): for
+// Before the suite, the check that takes the API away and brings it back (`kept`, below): for
 // a run whose API is the one api.sh knows how to stop and start, which is CI's Android job's.
 const withKept = flags.includes('--kept')
 if (withKept && !stack) {
@@ -104,8 +107,46 @@ function redact(secret: string): void {
   }
 }
 
+/** The emulator adb is to ask, where the run names one. */
+const serial = platform === 'android' && device !== undefined ? ['-s', device] : []
+const following: ChildProcess[] = []
+
+/**
+ * Follows an emulator's own log into `file` for as long as its adb answers. It is the one
+ * place that can say why a device went, and Maestro keeps none of it.
+ */
+function follow(file: string): void {
+  if (platform !== 'android') return
+  const to = openSync(join(output, file), 'w')
+  const logcat = spawn('adb', [...serial, 'logcat', '-v', 'threadtime'], {
+    stdio: ['ignore', to, to],
+  })
+  // No adb to start: nothing is followed, and the flows say for themselves what is missing.
+  logcat.on('error', () => undefined)
+  closeSync(to)
+  following.push(logcat)
+}
+
+/**
+ * Whether an emulator whose driver was lost answers again, given a minute. Its adb went in
+ * the middle of a flow in two runs with the emulator's own process still there, and neither
+ * run stayed to see whether it came back: the job's log says so here, either way.
+ */
+function back(): boolean {
+  if (platform !== 'android') return true
+  const adb = (args: readonly string[], limit: number): string => {
+    const ran = spawnSync('adb', [...serial, ...args], { encoding: 'utf8', timeout: limit })
+    return ran.error === undefined ? ran.stdout : ''
+  }
+  adb(['wait-for-device'], 60_000)
+  const booted = adb(['shell', 'getprop', 'sys.boot_completed'], 10_000).trim() === '1'
+  console.error(`e2e: what adb lists once the driver was lost:\n${adb(['devices'], 10_000)}`)
+  return booted
+}
+
 /** The run's own way out: with what it wrote fit to be kept. */
 function leave(status: number): never {
+  for (const logcat of following) logcat.kill()
   const secret = run.told.PASSWORD
   if (secret !== undefined) redact(secret)
   process.exit(status)
@@ -117,6 +158,14 @@ function suite(): number {
   const written = join(output, 'report.xml')
   const { failed, lost } = outcome(existsSync(written) ? readFileSync(written, 'utf8') : '')
   if (lost.length === 0) return status
+  if (!back()) {
+    console.error(
+      `e2e: the emulator was gone under ${lost.join(', ')} and did not answer again ` +
+        'within a minute: nothing is run again.',
+    )
+    return 1
+  }
+  follow('logcat-again.txt')
 
   // The flows the driver's death took, in a folder of their own with the steps they share:
   // a folder is what Maestro runs as a suite, with a report, as it ran the first time.
@@ -142,29 +191,35 @@ function api(what: 'stop' | 'start'): number {
 }
 
 /**
- * A read that was kept is kept though its re-read fails (flows/after): signed in with the
+ * A read that was kept is kept though its re-read fails (flows/kept): signed in with the
  * server there, then the server taken away, the app brought to the front and started again.
- * Two flows, since the server goes between them, and no flow can take it; after the suite,
- * whatever that came to, since it asks nothing of the suite. The API is started again
- * whatever the second flow came to: the job asks it what the devices left, after this.
+ * Two flows, since the server goes between them, and no flow can take it. The API is started
+ * again whatever the second flow came to: the suite's flows sign in at it, and the job asks
+ * it what the devices left.
+ *
+ * Before the suite, in the emulator's first minutes: no other device makes this check, and
+ * an emulator has not lasted a suite that runs past its twelfth minute (maestro.ts,
+ * `outcome`). The API comes back as it was, its keys development's own and its sessions the
+ * database's, so the suite is asked nothing new by it.
  */
 function kept(): number {
-  const after = join(flows, 'after')
+  const apart = join(flows, 'kept')
   const signedIn = maestro({
     ...run,
-    flows: join(after, 'kept-signed-in.yaml'),
+    flows: join(apart, 'kept-signed-in.yaml'),
     output: join(output, 'kept', 'signed-in'),
   })
   if (signedIn !== 0) return signedIn
   if (api('stop') !== 0) return 1
   const away = maestro({
     ...run,
-    flows: join(after, 'kept-server-away.yaml'),
+    flows: join(apart, 'kept-server-away.yaml'),
     output: join(output, 'kept', 'server-away'),
   })
   return api('start') === 0 ? away : 1
 }
 
-const suiteStatus = suite()
+follow('logcat.txt')
 const keptStatus = withKept ? kept() : 0
+const suiteStatus = suite()
 leave(suiteStatus !== 0 ? suiteStatus : keptStatus)

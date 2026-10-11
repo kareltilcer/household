@@ -428,7 +428,7 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         timeout-minutes: 30
         env:
-          # With a member to sign in as, the flows that sign in are taken, and after the suite
+          # With a member to sign in as, the flows that sign in are taken, and before the suite
           # the one check that takes this API away and starts it again (e2e/run.ts, `--kept`;
           # e2e/api.sh): a read the device kept is kept though the server is gone when it
           # asks again.

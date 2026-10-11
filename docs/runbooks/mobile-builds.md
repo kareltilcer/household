@@ -298,12 +298,13 @@ one that reports, its step fails too and prints what the server holds instead.
 
 **One check takes the server away** (`e2e/run.ts`, `--kept`, which the Android job passes with
 `--stack`): a read the device kept is kept though the server is gone when it asks again. It is
-two flows that the suite does not run (`e2e/flows/after`), with the API stopped between them
+two flows that the suite does not run (`e2e/flows/kept`), with the API stopped between them
 and started again after (`e2e/api.sh`, which is the job's own way of starting it, written a
 second time): signed in and put behind the launcher; then, with no server, brought to the
 front, given six seconds, stopped and started, and still at the member's household. It runs
-after the suite, whatever that came to. Taking the connection away would not do: offline, the
-app does not ask at all.
+before the suite, in the emulator's first minutes, since no other device makes it; the API
+comes back as it was, its keys development's own and its sessions the database's. Taking the
+connection away would not do: offline, the app does not ask at all.
 
 **The way to a dev screen is by presses, and not by a link.** The sign-in screen has a control that
 leads to the dev sign-in form (`sign-in:dev`), and every dev screen leads to their index
@@ -363,11 +364,16 @@ build has no screen to draw an error on, and an exception nothing caught ends it
   a flow that began and ended in between passes. `e2e/run.ts` reads the
   report for them and runs them again, once, in a session of their own, whose report and
   folders are under `again/`. The flow that crashed is not run again, and fails the job.
-  On Android the driver died once with no crash of the app's, eleven minutes into a session,
-  while the harness's page was being read: that flow says `DeviceServerDiedException`, and
-  the one after it only `Unknown error`, in milliseconds, with adb saying `device offline`
-  at the end. Those two are read as the driver's too and run again; whether the emulator is
-  still there for the second session is the session's to find.
+- **An emulator's adb has gone twelve minutes after its start.** In the eleventh and twelfth
+  runs, the first two whose flows ran that long, adb said `device offline` 721.4 s and
+  721.6 s after the emulator was launched, at two different steps of the same flow, with no
+  crash of the app's and the emulator's own process still answering its console. The flow
+  running by then says `DeviceServerDiedException` or only `Unknown error`, and the one after
+  it `Unknown error` in milliseconds. Why is not known: `e2e/run.ts` follows the emulator's
+  log into `logcat.txt` for the next time. It reads such flows as the driver's, waits a
+  minute for adb to answer again, says in the job's log what adb lists, and runs them again
+  where it does (`again/`, `logcat-again.txt`). If the emulator does not come back, the
+  suite needs two emulators: the flows a first one lost, run on a second.
 
 ### On a developer's machine
 

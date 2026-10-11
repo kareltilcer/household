@@ -122,8 +122,11 @@ describe('what a report says became of the flows', () => {
       ]),
     )
     expect(read.lost).toEqual(['harness', 'link'])
-    // A failure with no reason is its flow's own where no driver was lost before it.
-    expect(outcome(report([failedWith('link', 'Unknown error')])).lost).toEqual([])
+    // And where no flow before it said so: the next run's report gave no reason for either.
+    expect(
+      outcome(report([failedWith('harness', 'Unknown error'), failedWith('link', 'Unknown error')]))
+        .lost,
+    ).toEqual(['harness', 'link'])
   })
 
   it('reads a report that is none as one that names no flow', () => {

@@ -3,8 +3,9 @@
 # the one check that needs a server that is gone while the device is online (e2e/run.ts,
 # `--kept`). CI's Android job alone: the API is the binary the job built into `RUNNER_TEMP`
 # and started itself (.github/workflows/ci.yml, "Start the API where the emulator reaches
-# it"), and `start` starts it again exactly so, for the steps after the flows, which ask it
-# what the device left. The four settings are that step's: change them there and here.
+# it"), and `start` starts it again exactly so, for the suite's flows that sign in and the
+# steps after them, which ask it what the device left. The four settings are that step's:
+# change them there and here.
 set -euo pipefail
 
 binary="${RUNNER_TEMP:?is not set: it is the folder the job built the API into}/household-api"
