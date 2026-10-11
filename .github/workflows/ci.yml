@@ -191,8 +191,11 @@ jobs:
 
   # The mobile app is proven on a device of each platform, which no developer's machine need be
   # able to launch, and only where a change can have reached it: the three jobs after this one
-  # run when this one says so, and are skipped otherwise, which holds nothing up. Its unit tests
-  # are Jest's, in the typescript job with every other package's, whatever changed.
+  # are skipped where this one says nothing of the app's changed, which holds nothing up, and
+  # run otherwise. That is also where this job failed and said nothing: a filter that broke
+  # would otherwise read as nothing having changed, and the app would go unproven for as long
+  # as nobody looked at why. Its unit tests are Jest's, in the typescript job with every other
+  # package's, whatever changed.
   mobile-changes:
     name: Mobile — whether the app, or anything it bundles, changed
     runs-on: ubuntu-latest
@@ -240,7 +243,7 @@ jobs:
   mobile:
     name: Mobile — bundle budget and no dev screen
     needs: mobile-changes
-    if: needs.mobile-changes.outputs.changed == 'true'
+    if: ${{ !cancelled() && needs.mobile-changes.outputs.changed != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -270,7 +273,7 @@ jobs:
   mobile-android:
     name: Mobile — the app on an Android emulator, under Maestro
     needs: mobile-changes
-    if: needs.mobile-changes.outputs.changed == 'true'
+    if: ${{ !cancelled() && needs.mobile-changes.outputs.changed != 'false' }}
     runs-on: ubuntu-latest
     # A cold build is most of it: the first run downloads Gradle, its dependencies and the NDK
     # React Native names. An emulator that hangs is stopped by its own step's limit, below.
@@ -311,8 +314,14 @@ jobs:
       # decides the versions of, and no more: all of Gradle's own folder was 1.6 GB of the
       # repository's ten, most of it what a build made of the downloads. Nothing a build made
       # is kept from one run to the next.
+      #
+      # Restored here and kept below, as soon as the build has passed, in two steps: the one
+      # action that does both keeps nothing of a job that failed, and while the flows failed
+      # after a good build each run downloaded it all again (the fifth still found nothing
+      # kept).
       - name: Gradle's downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: gradle
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.gradle/caches/modules-2
@@ -333,6 +342,17 @@ jobs:
         working-directory: apps/mobile/android
         timeout-minutes: 40
         run: ./gradlew --no-daemon --console=plain :app:assembleRelease -PreactNativeArchitectures=x86_64
+      # What the build downloaded, kept whatever the flows come to, where it was not already.
+      - name: Keep Gradle's downloads
+        if: ${{ steps.gradle.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            !~/.gradle/caches/modules-2/modules-2.lock
+            !~/.gradle/caches/modules-2/gc.properties
+            ~/.gradle/wrapper/dists
+          key: ${{ steps.gradle.outputs.cache-primary-key }}
       # What the build asks of its device, as the manifests of the template and of every
       # library merged into it leave it (FR-PR1): a list that is in no file of the repository
       # until a build is made. Read here, and held after the flows, below.
@@ -489,7 +509,7 @@ jobs:
   mobile-ios:
     name: Mobile — the app on an iOS simulator, under Maestro
     needs: mobile-changes
-    if: needs.mobile-changes.outputs.changed == 'true'
+    if: ${{ !cancelled() && needs.mobile-changes.outputs.changed != 'false' }}
     # Named, and not `macos-latest`: the Xcode and the simulator below are this image's.
     runs-on: macos-26
     # The pods and a cold build are most of it. A simulator or a driver that hangs is stopped
@@ -538,15 +558,24 @@ jobs:
         run: pnpm --filter @household/mobile exec expo prebuild --platform ios --no-install
       # What CocoaPods downloads, React Native's and Expo's precompiled frameworks among it,
       # which the lockfile decides the versions of. Neither the pods as installed nor anything
-      # Xcode built is kept from one run to the next.
+      # Xcode built is kept from one run to the next. Restored here and kept once the pods are
+      # installed, in two steps, so that a build or a flow that fails afterwards does not cost
+      # the next run the downloads (the Android job's cache says the same of Gradle's).
       - name: CocoaPods' downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: pods
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/CocoaPods
           key: mobile-pods-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Install the pods
         working-directory: apps/mobile/ios
         run: pod install
+      - name: Keep CocoaPods' downloads
+        if: ${{ steps.pods.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: ${{ steps.pods.outputs.cache-primary-key }}
       # A release build for the simulator made above, and for its architecture alone. The
       # workspace and its scheme are named for the app, so they are found and not written
       # here. Xcode's own output is kept whole for the artifact, and drawn shorter in the log.

@@ -57,3 +57,11 @@ appId: com.kareltilcer.household.dev
 - assertVisible:
     id: 'engine:client:found'
     text: ${CLIENT}
+# And the engine's built-ins, as the list has them that the sources are read by with no
+# device (src/dev/engine/builtins.ts, e2e/engine.test.ts): none of what it says a device
+# lacks, all of what it says a device has. Where the engine has moved, the line fails and
+# names each one the list has wrong.
+- scrollUntilVisible:
+    element:
+      id: 'engine:built-ins:passed'
+    direction: DOWN

@@ -8,6 +8,7 @@ import { vectors } from '@household/test-vectors'
 import { fonts } from '@household/tokens'
 import { isLoaded } from 'expo-font'
 import { clientName } from '../../api/client.ts'
+import { held, lacking, type BuiltIn } from './builtins.ts'
 
 /** One line of the engine screen: what was checked, how much of it held, and what did not. */
 export interface Check {
@@ -101,6 +102,25 @@ export function client(): Check {
   }
 }
 
+/**
+ * The engine's built-ins, held to the list the sources are read by (builtins.ts): each one the
+ * list says a device lacks is absent here, and each newer one it says a device has is here. A
+ * line that fails is a list to correct, and on Node, where Jest runs, it always fails: Node has
+ * them all, which is why a list is kept.
+ */
+export function builtIns(has: (builtIn: BuiltIn) => boolean = (builtIn) => builtIn.has()): Check {
+  return {
+    id: 'built-ins',
+    cases: lacking.length + held.length,
+    failed: [
+      // Listed as lacking, and here: the engine has gained it.
+      ...lacking.filter(has).map(({ name }) => `gained: ${name}`),
+      // Listed as held, and not here.
+      ...held.filter((builtIn) => !has(builtIn)).map(({ name }) => `absent: ${name}`),
+    ],
+  }
+}
+
 export function allChecks(): readonly Check[] {
-  return [...i18nVectors(), fontFamilies(), randomSource(), client()]
+  return [...i18nVectors(), fontFamilies(), randomSource(), client(), builtIns()]
 }

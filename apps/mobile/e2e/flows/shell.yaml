@@ -68,10 +68,17 @@ appId: com.kareltilcer.household.dev
 
 # Arranging: a module is hidden by an item of its row's menu. A module that is listed has a
 # menu, and one that is hidden has the control that shows it again, and neither has both.
+#
+# The way back to the page's controls is up, and they are brought down from the head of the
+# screen before one is pressed, as a control is brought up from its foot: scrolled a little,
+# one can stand under the status bar, whole on the screen as Maestro counts it, where a
+# press is the system's and on iOS scrolls the page to its head and presses nothing.
 - scrollUntilVisible:
     element:
       id: 'shell:only:arrange'
     direction: UP
+    centerElement: true
+    timeout: 60000
 - tapOn:
     id: 'shell:only:arrange'
 - scrollUntilVisible:
@@ -106,6 +113,8 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'shell:only:panes'
     direction: UP
+    centerElement: true
+    timeout: 60000
 - tapOn:
     id: 'shell:only:panes'
 - scrollUntilVisible:
@@ -138,6 +147,8 @@ appId: com.kareltilcer.household.dev
     element:
       id: 'shell:only:not-available'
     direction: UP
+    centerElement: true
+    timeout: 60000
 - tapOn:
     id: 'shell:only:not-available'
 - scrollUntilVisible:

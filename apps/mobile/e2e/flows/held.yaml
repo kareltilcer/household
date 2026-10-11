@@ -1,0 +1,39 @@
+# An address held for a visitor, and reached once they have signed in (PRD 02 FR-ID3; src/links):
+# with nobody signed in, a link into a household opens sign-in and is kept; signed in through
+# the dev form, the member is led to the address that was held, their household's More, and
+# not to where the app opens. Led to where the app opens, the first household's own guard
+# would take the held address as reached, and it would open nowhere: the dev form once did so.
+#
+# The household is the one e2e/stack.ts made, which the run tells the flow. A link from outside
+# the app is Android's alone (link.yaml says why), and so is the stack.
+appId: com.kareltilcer.household.dev
+tags:
+  - stack
+  - android
+---
+- launchApp:
+    clearState: true
+# The first wait of a flow (parts/dev.yaml).
+- extendedWaitUntil:
+    visible:
+      id: 'route:signIn'
+    timeout: 180000
+- openLink: household-dev:///households/${HOUSEHOLD}/more
+# A visitor's: sign-in stays, and says that an address waits for them. Waited for, so that the
+# link has been taken before anything is pressed. The part signs in from there.
+- extendedWaitUntil:
+    visible:
+      id: 'sign-in:destination'
+    timeout: 30000
+- runFlow: parts/sign-in.yaml
+# Where the link led, in the household's frame, and the bar says that place is the one open.
+- extendedWaitUntil:
+    visible:
+      id: 'route:more'
+    timeout: 60000
+- assertVisible:
+    id: 'household-frame'
+- assertVisible:
+    id: 'tab-bar:more'
+    selected: true
+- takeScreenshot: held-more

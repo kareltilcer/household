@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { catalogs, pseudolocalize } from '@household/i18n'
 import { act, fireEvent, screen, userEvent, waitFor } from '@testing-library/react-native'
 import { router } from 'expo-router'
+import { Keyboard } from 'react-native'
 import { version } from '../../../package.json'
 import { clientName } from '../../api/client.ts'
 import {
@@ -136,6 +137,24 @@ describe('the dev sign-in form', () => {
     expect(order).toEqual(['signed in', 'led on'])
     // Busy still: idle, it would take a second press that signs in a second time.
     expect(screen.getByTestId('dev-sign-in:submit')).toBeBusy()
+  })
+
+  // On a device the keys stayed over the household's tab bar where the form left with them
+  // up: Android's own dismissal races the screen's removal.
+  it('puts the keyboard away at the press, before it leads anywhere', async () => {
+    const order: string[] = []
+    jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {
+      order.push('keyboard away')
+    })
+    jest.mocked(router.replace).mockImplementation(() => {
+      order.push('led on')
+    })
+    await form(() => json(200, { user: me, tokens }))
+    await submit()
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledTimes(1)
+    })
+    expect(order).toEqual(['keyboard away', 'led on'])
   })
 
   it('leads on to the address that was held for whoever signs in, as the sign-in screen said', async () => {

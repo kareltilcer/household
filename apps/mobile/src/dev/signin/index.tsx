@@ -11,6 +11,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { router } from 'expo-router'
 import { useState } from 'react'
+import { Keyboard } from 'react-native'
 import { useApi } from '../../api/ApiProvider.tsx'
 import { ApiProblemError, problemIn, unwrap } from '../../api/problem.ts'
 import { useProblemText } from '../../api/problemText.ts'
@@ -145,6 +146,12 @@ export default function DevSignIn() {
         testID="dev-sign-in:submit"
         loading={busy}
         onPress={() => {
+          // The keyboard is put away at the press, while the field it serves is still on the
+          // screen. Left up, it is the next screen's to wear: whether Android puts it away as
+          // this one goes is a race the system sometimes loses (`ABORT input: ServedView must
+          // be attached to a Window` in the device's log), and the keys then stand over the
+          // household's tab bar until somebody sends them away.
+          Keyboard.dismiss()
           setPresses((count) => count + 1)
           signIn.mutate(
             { email, password },

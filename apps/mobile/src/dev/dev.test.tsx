@@ -10,7 +10,15 @@ import { router } from 'expo-router'
 import { paths } from '../app/paths.ts'
 import { expectAccessible } from '../test/a11y.ts'
 import { render } from '../test/render.tsx'
-import { allChecks, client, fontFamilies, i18nVectors, randomSource } from './engine/checks.ts'
+import { held, lacking } from './engine/builtins.ts'
+import {
+  allChecks,
+  builtIns,
+  client,
+  fontFamilies,
+  i18nVectors,
+  randomSource,
+} from './engine/checks.ts'
 import Engine from './engine/Engine.tsx'
 import DevIndex, { devRoutes } from './Index.tsx'
 import { devMarker } from './marker.ts'
@@ -46,15 +54,38 @@ describe('the engine’s checks', () => {
     expect(client()).toMatchObject({ id: 'client', failed: [] })
     expect(client().found).toMatch(/^mobile\/\d+\.\d+\.\d+$/)
   })
+
+  it('hold the engine to the list of what a device lacks and what it has', () => {
+    // An engine that is as the list says: none of the first, all of the second.
+    const device = builtIns((builtIn) => held.includes(builtIn))
+    expect(device).toEqual({ id: 'built-ins', cases: lacking.length + held.length, failed: [] })
+    // One that has gained what the list says it lacks, and lost what it says is there.
+    const other = builtIns((builtIn) => !held.includes(builtIn))
+    expect(other.failed).toEqual([
+      ...lacking.map(({ name }) => `gained: ${name}`),
+      ...held.map(({ name }) => `absent: ${name}`),
+    ])
+    // And Node, which Jest runs on, has every one the list says a device lacks: a call of one
+    // passes every test here, which is why the sources are read for them (e2e/engine.test.ts).
+    expect(lacking.filter((builtIn) => !builtIn.has()).map(({ name }) => name)).toEqual([])
+  })
 })
 
 describe('the engine screen', () => {
   it('says how each check came out by a `testID`, and that all passed where all did', async () => {
+    // The fonts are the binary's and the built-ins a device's engine's: neither is Node's.
     const checks = allChecks().map((check) =>
-      check.id === 'fonts' ? { ...check, failed: [] } : check,
+      check.id === 'fonts' || check.id === 'built-ins' ? { ...check, failed: [] } : check,
     )
     await render(<Engine checks={checks} />)
-    for (const id of ['vectors-format', 'vectors-match', 'fonts', 'random', 'client']) {
+    for (const id of [
+      'vectors-format',
+      'vectors-match',
+      'fonts',
+      'random',
+      'client',
+      'built-ins',
+    ]) {
       expect(screen.getByTestId(`engine:${id}:passed`)).toBeOnTheScreen()
     }
     expect(screen.getByTestId('engine:all:passed')).toBeOnTheScreen()

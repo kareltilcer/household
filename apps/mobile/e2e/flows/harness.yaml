@@ -79,6 +79,14 @@ appId: com.kareltilcer.household.dev
     direction: DOWN
     timeout: 120000
     visibilityPercentage: 20
+# The first row brought onto the screen whole, its action with it, for the screenshot. Where
+# that action stands at twice the text, under the words or beside them, is row.yaml's to
+# hold: this flow reads that each kind of cell is drawn, and fails for that alone.
+- scrollUntilVisible:
+    element:
+      id: 'list:open'
+    direction: DOWN
+    timeout: 120000
 - takeScreenshot: harness-populated-light
 - scrollUntilVisible:
     element:
@@ -138,4 +146,13 @@ appId: com.kareltilcer.household.dev
     direction: DOWN
     timeout: 120000
     visibilityPercentage: 20
+# The row in conflict, whole on the screen for a person to look at: its words above, and
+# under them its mark and its action, every glyph of each. The mark is brought up from the
+# foot of the screen, which brings the row with it.
+- scrollUntilVisible:
+    element:
+      id: 'status:conflict'
+    direction: DOWN
+    centerElement: true
+    timeout: 120000
 - takeScreenshot: harness-conflicted

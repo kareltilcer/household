@@ -163,12 +163,15 @@ describe('the flows', () => {
     }
   })
 
-  it('bring a control up from the foot of the screen before they press it', () => {
-    // What stands under Android's navigation bar is on the screen as Maestro counts it, and a
-    // press there is the bar's: a scroll that stopped with its control whole in that strip
-    // was followed by a press that opened nothing (run 38070872439). `centerElement` has a
-    // scroll go on until the control is clear of the lowest part of the screen.
-    const pressedLow: string[] = []
+  it('bring a control in from the edge of the screen before they press it', () => {
+    // The app draws under the system's two bars, and what stands under one is on the screen
+    // as Maestro counts it, while a press there is the system's. At the foot, Android's
+    // navigation bar: a scroll that stopped with its control whole in that strip was followed
+    // by a press that opened nothing (run 38070872439). At the head, the status bar: a press
+    // on a control that a scroll up had left under it scrolled the page to its head on iOS and
+    // pressed nothing (run 38131404522). `centerElement` has a scroll go on until the control
+    // is clear of the three tenths of the screen it came in by, whichever way it scrolls.
+    const pressedAtAnEdge: string[] = []
     const said = (command: string, key: string) =>
       new RegExp(`^\\s+${key}: '?([^'\\n]+?)'?$`, 'm').exec(command)?.[1]
     for (const { name, steps } of [...flows, ...parts]) {
@@ -179,16 +182,15 @@ describe('the flows', () => {
         .split(/^(?=- )/m)
       commands.forEach((command, at) => {
         const next = commands[at + 1] ?? ''
-        if (!command.startsWith('- scrollUntilVisible:') || said(command, 'direction') !== 'DOWN')
-          return
+        if (!command.startsWith('- scrollUntilVisible:')) return
         if (!/^- (tapOn|longPressOn):/.test(next)) return
         if (said(next, 'id') !== said(command, 'id')) return
         if (said(next, 'index') !== said(command, 'index')) return
         if (said(command, 'centerElement') !== 'true') {
-          pressedLow.push(`${name}: ${String(said(command, 'id'))}`)
+          pressedAtAnEdge.push(`${name}: ${String(said(command, 'id'))}`)
         }
       })
     }
-    expect(pressedLow).toEqual([])
+    expect(pressedAtAnEdge).toEqual([])
   })
 })
