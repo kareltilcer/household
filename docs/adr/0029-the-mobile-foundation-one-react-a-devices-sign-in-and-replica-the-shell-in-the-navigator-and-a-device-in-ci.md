@@ -661,10 +661,17 @@ The development variant may speak plain `http` on Android, which the template al
 build alone. The flows (`e2e/flows`) select by `testID` and never by a word, and
 `e2e/flows.test.ts` holds each to the app's own names, since nothing where they are written
 runs them: its `appId`, a link's scheme and address, and each piece of each `id`. The flows are
-twelve. Eight ask nothing of a server and run on both platforms: the launch, the engine, the
-theme, the harness, the primitives, the hold, the shell and the resolvers. Four run in the
-Android job alone: a link, and with the stack, which only that job has, a sign-in that outlasts
-a restart, signing out, and the replica.
+sixteen. Eleven carry no tag, ask nothing of a server and run on both platforms: the launch,
+the engine, the theme, the harness, the primitives, the hold, the shell and the resolvers, and
+three that each read one thing only a device shows, a flow of its own so that it fails for
+that alone: a list row at twice the text (`row`), a drag that begins on a stepper's count
+(`stepper`), and a toast with Undo at twice the text (`toast`). Five run in the Android job alone. A link (`link`) is
+tagged `android`: iOS asks before it opens one that came from outside the app, in a dialog no
+`testID` finds. A sign-in that outlasts a restart (`stack`) and signing out (`sign-out`) are
+tagged `stack`: they need the API, the sync service and a member, which only that job has, a
+macOS runner having no Docker. The replica (`replica`) and an address held for a visitor and
+reached once they have signed in (`held`) are tagged both: the one takes the device's
+connection away, which Maestro does on Android alone, and the other is sent as a link.
 Three tags keep a flow out of a run: `stack`, `android`, and `awaiting`, for a flow written
 ahead of its screens, which excuses it its names and which no flow carries now. Maestro is
 fetched as its release's own archive and held to its digest (`e2e/install-maestro.sh`), and one
