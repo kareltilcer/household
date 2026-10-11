@@ -3,9 +3,10 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { catalogs } from '@household/i18n'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { act, screen, userEvent, waitFor } from '@testing-library/react-native'
 import { answering, json, testClient, unanswered } from '../api/testing.ts'
-import { rememberHousehold, type HouseholdSummary } from '../household/data.ts'
+import { householdsKey, rememberHousehold, type HouseholdSummary } from '../household/data.ts'
 import { SessionFixture } from '../session/fixture.tsx'
 import { expectAccessible } from '../test/a11y.ts'
 import { households, ids, summaryOf } from '../test/fixtures.ts'
@@ -229,6 +230,50 @@ describe('a member in no household', () => {
     await userEvent.press(button)
     expect(signOut).toHaveBeenCalledTimes(2)
     expectAccessible()
+  })
+
+  // The list is asked for again each time the app is looked at again. The screen waited for
+  // each asking as it does for the first, and was taken down and built again around a wait.
+  it('stays as it is while the list is read again, and leads on where that names a household', async () => {
+    let answer: ((response: Response) => void) | undefined
+    let asked = 0
+    const api = answering({
+      'GET /households': () => {
+        asked += 1
+        if (asked === 1) return json(200, { items: [] })
+        return new Promise<Response>((resolve) => {
+          answer = resolve
+        })
+      },
+    })
+    let queries: QueryClient | undefined
+    function Client() {
+      queries = useQueryClient()
+      return null
+    }
+    await render(
+      <SessionFixture api={testClient(api.transport)} signOut={signOut}>
+        <Client />
+        <Home />
+      </SessionFixture>,
+    )
+    await waitFor(() => {
+      expect(screen.getByTestId('route:home')).toBeOnTheScreen()
+    })
+    await act(async () => {
+      void queries?.refetchQueries({ queryKey: householdsKey })
+      await Promise.resolve()
+    })
+    await waitFor(() => {
+      expect(api.sent('GET /households')).toHaveLength(2)
+    })
+    expect(screen.getByTestId('route:home')).toBeOnTheScreen()
+    expect(screen.getByTestId('home:sign-out')).toBeOnTheScreen()
+    // Somebody who joined one since is led to it, as at the first reading.
+    await act(() => {
+      answer?.(json(200, { items: [own] }))
+    })
+    await leadsTo(inHousehold.home(ids.household))
   })
 
   it('survives the largest text, in the longest language', async () => {

@@ -24,7 +24,7 @@
 // moved into its place. A stepper that takes no change at all, read-only or out of its form,
 // has no buttons: a control that cannot act is absent.
 import { controls } from '@household/icons'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Platform, View } from 'react-native'
 import { useTarget, useTheme } from '../display/DisplayProvider.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
@@ -105,30 +105,47 @@ export function Stepper({
   const low = min ?? Number.MIN_SAFE_INTEGER
   const high = max ?? Number.MAX_SAFE_INTEGER
   const held = (next: number) => Math.min(high, Math.max(low, next))
+  // The number the typing last came to, while the field is typed in. An owner that takes a
+  // number later than it is given still shows the one before it, and a number typed back to
+  // that one was told to nobody by its `value` alone: its owner then came to the number
+  // before it, with the field showing the other.
+  const given = useRef<number | undefined>(undefined)
   const stepTo = (next: number) => {
+    given.current = undefined
     setTyped(undefined)
     onChange(held(next))
   }
+  // A step is counted from the number the typing last came to, where the field is being typed
+  // in, and else from the one its owner shows: they are one number but over an owner that has
+  // not yet taken what it was given, and a step from the number before would undo the typing.
   const down = () => {
-    if (value > low) stepTo(value - step)
+    const from = given.current ?? value
+    if (from > low) stepTo(from - step)
   }
   const up = () => {
-    if (value < high) stepTo(value + step)
+    const from = given.current ?? value
+    if (from < high) stepTo(from + step)
   }
   // What `text` is made as a value of the field, given to its owner where it is another than
-  // the one held. Between two whole numbers, it is the nearer; outside its bounds, it is held
-  // to them. What is no number, an emptied field among it, gives nothing: it is what it was.
+  // the one held, or than the one the typing last came to. Between two whole numbers, it is
+  // the nearer; outside its bounds, it is held to them. What is no number, an emptied field
+  // among it, gives nothing: it is what it was.
   const give = (text: string) => {
     const next = typedNumber(text)
     if (!Number.isFinite(next)) return
     const whole = held(Math.round(next))
-    if (whole !== value) onChange(whole)
+    const last = given.current
+    given.current = whole
+    if (whole !== value || (last !== undefined && whole !== last)) onChange(whole)
   }
-  // The field shows its value again, and no longer what was typed. Each key gave what this
-  // gives, so it gives again only to an owner that did not take it.
+  // The field shows its value again, and no longer what was typed. It gives nothing: each key
+  // gave what leaving the field makes of it. Given again here, as it first was, what was typed
+  // was put back over a number its owner had changed since for a reason of its own: another
+  // control of its form sets it, a press on which takes no focus from the field (the head of
+  // this file), and the field, left afterwards, undid that press.
   const settle = () => {
+    given.current = undefined
     setTyped(undefined)
-    if (typed !== undefined) give(typed)
   }
   const decrease = t(controls.decrease.labelKey, { name: label })
   const increase = t(controls.increase.labelKey, { name: label })

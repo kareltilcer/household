@@ -327,7 +327,10 @@ notifications off here, which outlives their sign-in; the first is said to the s
 kept of its member, so that a note written back by a registration answered after their
 sign-in ended is removed at the next start. Nothing is registered over a choice the device
 would not read back, a registration removing the note of it; nor for a member who left while
-Expo was asked, the request being signed for whoever is signed in as it leaves; and a
+Expo was asked, the request being signed for whoever is signed in as it leaves. Nor are
+notifications turned off where the device would not say whether it holds a registration:
+taken for none, the server was asked nothing and the choice kept, the device reading as
+turned off while the server went on sending to it. And a
 notification's press is taken from the system as it is handed on, which otherwise gives the
 last one again to whoever listens next in the same run (`src/push/device.ts`) *(read)*. The
 system's question is put by
@@ -487,7 +490,19 @@ credential throw has ended the sign-in already.
 connected, false once an attempt has failed, for as long as the SDK keeps that failure, and
 nothing before that; never off `connecting` nor `hasSynced`. Whether the device is online is
 its own word, believed in one direction: NetInfo's `isConnected`, with *unknown* taken for
-connected and `isInternetReachable` not read. One file hears it (`src/api/query.ts`, the one
+connected and `isInternetReachable` not read. Nor is it worked out. Left as it comes, the
+library asks a host of Google's whether the internet can be reached wherever the platform does
+not say, which is on iOS, whose native half says only whether there is a connection: as soon
+as anything listens, and from then on each minute while it is answered and every five seconds
+while it is not, by the global `fetch`, whether or not its answer is read. So its check is
+turned off before the app listens (`reachabilityShouldRun`, `watchConnection`): a request a
+minute, at the least, from every iPhone the app is open on, to a host that is
+none of the app's, which the product's own rules leave no room for (PRD 05 §1 and §2, D-5:
+no third party in the apps, and nothing outside the EU in the product's own requests), is not
+what leaving its answer unread was for *(read in NetInfo 12.0.1, its JavaScript and
+`ios/RNCNetInfo.mm`; run under Jest over the library's own JavaScript, its native half stood in
+for as an iPhone's answers, `src/api/netinfo.test.ts`; and on no device, where nothing reads
+what an app asks of the network)*. One file hears it (`src/api/query.ts`, the one
 file that imports NetInfo, which a test of the sources holds): it tells TanStack's online
 manager, whose focus is the app coming to the front, and a screen reads the manager
 (`useOnline`), so the bar cannot say that there is no connection over a read that was sent.
@@ -657,7 +672,14 @@ nearest whole number held to its bounds, while the field goes on showing what wa
 device the press that sends a form takes no focus from the field, and iOS's number pad has no
 key that ends the typing *(read)*, so a number typed past a bound stood in the field while the
 form sent the one before it. Its owner hears each key's number, those on the way to a longer
-one among them, as it already heard one within the bounds on its way. Its count is never
+one among them, as it already heard one within the bounds on its way. Leaving the field gives
+nothing again: given again there, as it first was, what was typed was put back over a number
+its owner had changed meanwhile by another control of its form, whose press takes no focus
+from the field either. So each key gives its number where that is another than the one its
+owner shows, or than the one the typing last came to: an owner that takes a number later than
+it is given still shows the one before, and a number typed back to that one would be told to
+nobody by what its owner shows alone; and a button's step is counted from the number the
+typing last came to, for the same owner. Its count is never
 narrower than a target, so that three targets and two gaps
 are what it needs, 280 pt at 200 %, which a dialog leaves on a phone 360 pt wide; where there
 is less its row wraps and cuts nothing; and where its owner gives it no bounds it is held to
@@ -690,11 +712,17 @@ The development variant may speak plain `http` on Android, which the template al
 build alone. The flows (`e2e/flows`) select by `testID` and never by a word, and
 `e2e/flows.test.ts` holds each to the app's own names, since nothing where they are written
 runs them: its `appId`, a link's scheme and address, and each piece of each `id`. The flows are
-sixteen. Eleven carry no tag, ask nothing of a server and run on both platforms: the launch,
+twenty. Fifteen carry no tag, ask nothing of a server and run on both platforms: the launch,
 the engine, the theme, the harness, the primitives, the hold, the shell and the resolvers, and
-three that each read one thing only a device shows, a flow of its own so that it fails for
-that alone: a list row at twice the text (`row`), a drag that begins on a stepper's count
-(`stepper`), and a toast with Undo at twice the text (`toast`). Five run in the Android job alone. A link (`link`) is
+seven that each read one thing only a device shows, a flow of its own so that it fails for
+that alone: a list row at twice the text (`row`), a sync mark that arrives after its row
+(`mark`), a drag that begins on a stepper's count (`stepper`), a stepper in a sheet at twice
+the text (`sheet`), a select's choices opened with a field's keyboard up (`keyboard`), a toast
+with Undo at twice the text (`toast`), and what the app's own formatters write on a device's
+`Intl` (`formats`). Two more are no flows of the suite (`e2e/flows/kept`): the Android job
+runs them before it (`e2e/run.ts`, `--kept`), with the API stopped between the two, to hold
+that a device signed in and brought back with the server away, and then started again, still
+opens on what it kept of its reads. Five run in the Android job alone. A link (`link`) is
 tagged `android`: iOS asks before it opens one that came from outside the app, in a dialog no
 `testID` finds. A sign-in that outlasts a restart (`stack`) and signing out (`sign-out`) are
 tagged `stack`: they need the API, the sync service and a member, which only that job has, a
@@ -845,6 +873,8 @@ platform.
 | A read kept only while its last asking succeeded, which is TanStack's own rule for what it stores, and the web's; a read that nothing draws let go from memory after a day, as the web's is | An app opened once while the server was away, or on a network with nothing behind it, wrote everything it kept out of the device a second after its re-reads failed, and the next start with no connection opened on *could not be read*, with no replica: an outage met twice shut the app that is to work with none (PRD 03 §2.1). And what is written is what the cache holds: another household's own answer, read by nothing while its member is in the first, went from the device after a day of the app's life. The web's rules are a browser's, which is no offline surface |
 | The query client emptied in the providers' own cleanup | React runs a removed tree's cleanups parent first: the readers let go after the emptying, and each left held again a read the cache had just put away. It is emptied by a component that stands after everything that reads |
 | The device believed on `isInternetReachable`; *unknown* taken for offline | Where the platform cannot say, NetInfo asks a host of Google's. Every read at a cold start would wait for NetInfo's first answer, and a bar would be drawn for a state nobody reported. A network with nothing behind it is a request's own failure to say |
+| NetInfo's own check of whether the internet can be reached left running with its answer unread, as it first was; the check pointed at a host of the app's own | The check is the library's and not its reader's: on iOS, whose native half does not say, it asked Google's host as soon as the app listened, and each minute after while it was answered and every five seconds while it was not, for a listener that read `isConnected` alone, which the row above took for not asked *(read, and run under Jest over the library's JavaScript)*. Pointed at the API it would be the app asking its own server once a minute for what a request that fails says already, and for an answer nothing reads |
+| The kept reads written only for a change an answer made, told by the kind of each change of a read (TanStack's `action`), and not for every change of one | A read that only begins to be asked for again, as the account is each time the app is looked at, schedules a write of what the device already holds: one write a second at the most, of some kilobytes while the reads are the account's and its households'. Telling the kinds apart ties what is kept to names TanStack keeps as its own, and a kind left out is a read that is not written |
 | The offline bar hearing the device by a listener of its own, beside the query client's; a lint that keeps NetInfo to one file; the device asked once more as that file loads | Two stores of one fact, and the query client's is the one that holds a read back, so it is the one the bar must not disagree with: the bar reads what the query client was told. The lint's one rule of restricted imports is spent on `Text` for the same files, where a second block would replace it, so a test of the sources names the file. NetInfo hands a new listener the state it has *(read)* |
 | The ended sign-in's notice in the `warning` or the `danger` tone; always announced; never announced | Calm is a design decision of that notice (A-11). A screen that opens with it reads it in its place, and would say it twice; a renewal refused while a visitor sits on the screen would otherwise change it silently |
 | A member in no household told the web's sentence, or left with no control | The shared body speaks of *the rest of this page*, and every other way out of the account is inside a household until item 29: the index offers signing out |
@@ -880,6 +910,7 @@ platform.
 | The web's *Reload* where a replica cannot be opened | A device has no page to reload: without a way to ask again its member would have to leave the household and come back |
 | *Receiving* read off `connecting` or `hasSynced` | ADR 0026: every retry is connecting, and a replica opened again has synced before and has not tried yet |
 | The file deleted, and that called the wipe; the removal waited for by the sign-out; not even its note waited for; every noted replica removed whose member is not the one signed in | A file that could not be deleted would keep its member's rows until some later start, and the deletion is the uncertain half. A sign-out's screen would be held by SQLite. An app killed after the sign-out and before the note would never remove anything. The session hands out one member, and item 29 signs several in: what the app removes as it starts goes by every sign-in the vault holds, and not by the one in use |
+| The session's first reading of the device not waiting on a removal left over from the run before | Whose replicas the device keeps is asked in the removals' own turn (`keptReplicas`, `src/sync/databases.ts`), so a start that follows a sign-out the app was closed in the middle of shows its wait for as long as that wipe and deletion take. The member whose replica is still leaving is one the vault holds no sign-in of, whom that start marks and removes in the same turn anyway, and no replica is opened while one is being removed: what would be gained is the sign-in screen a moment sooner, at the one start after an interrupted removal, for another order of the same steps. A wipe that never answered would hold that start for good, as it would hold every opening of the household it is of, which waits in the same turn: a wipe that fails is passed over and its file deleted all the same, and whether one can go unanswered is not known, no removal having run on a device |
 | The database's file deleted through expo-file-system; deleted with no checkpoint first | Its default place is op-sqlite's own, which on Android is outside the directories expo-file-system may touch *(read)*. A log left by a run that ended badly, found later beside a new file of the same name, is read into it |
 | A replica opened though what an ended sign-in left of it could be neither emptied nor deleted; one whose sign-in ended as it was opening let open and then closed; one that could not be emptied left for the wipe alone | What an ended sign-in left would be drawn as the new one's. A file made for nobody, with a note that says it is kept. A wipe that fails may fail at every start, on a device with no room left or over a file that is damaged: its rows would stay for good, and the household be shut to its member, so its file is deleted all the same |
 | A household's replica removed as its address answers `404` | A suspended household answers `404` too (D-115), and what a device had not sent of it must be there still when the suspension is lifted: the frame cannot tell gone from suspended. The member's list can, which item 29's lockout reads (Consequences) |
@@ -930,6 +961,7 @@ platform.
 | The platform's pickers for a select, and `combobox` as its role; the platform's switch | A wheel and a dialog, in neither the app's type nor the reader's scale; iOS has no trait for the role *(read)*. One size whatever the text is, and a second target inside its row |
 | A select with nothing chosen taking its first option; a radio option that is disabled; a stepper's buttons disabled at its bound | D-172. Absence: an option that cannot be chosen is not offered, and a control that cannot act is not drawn |
 | One keyboard for the stepper; its two actions on a wrapper; with no label | The digits' keyboard has no minus. An accessible wrapper hides the field and the two buttons inside it on iOS, and an action with no label is listed under its English identifier *(both read)* |
+| A stepper showing its owner's number over what is typed, whenever that number becomes another than the one what is typed gives; an emptied field giving back the number it held before the typing began | An owner whose number follows what it was given late, a row read back from the replica, would have what its member is typing replaced by the number of a key before, and is told from an owner that changed the number itself only by remembering every number the typing gave. What was typed is the field's to show until it is left, and leaving it gives nothing again, so an owner's own change stands. And the numbers on the way are heard on the way down as on the way up: "12" emptied a key at a time leaves its owner at 1, as the web's does of a number within its bounds, where emptied at once it leaves 12 |
 | The password's *Show* as a toggle button with `selected` | iOS gives it the button's trait alone *(read)*, and what *selected* means of *Show* is not said. It is a switch |
 | The prototype's 20 pt box for a checkbox; a link in a row underlined | The base set's smallest reviewed glyph is 20, which fills such a box to its edge. `Text` takes no decoration: a chevron after the word is the more-than-colour |
 | The ring as a `Pressable`; a plain view with `onClick` as the button | Its press-out comes up to 130 ms late, a finger slid off and back begins a hold nobody began, and on a release it calls press-out and then press in one turn, so one control could not tell its own touch from a keyboard's *(read)*. `onClick` is not in React Native's public types for a view |
@@ -994,6 +1026,23 @@ platform.
   change, and after no other update, reads from the server: with no connection that start
   draws *could not be read*, and the replica stays shut, a household being read as its
   member's before it is opened, until one start has had a connection.
+- **Every read through the query client is kept, and held for as long as its member's sign-in,
+  unless it says otherwise.** A later item's read that nobody reads again, or that is keyed by
+  what a member types or by a page, says `persist: false` and names a `gcTime` of its own
+  (`QueryNotes`, `src/api/query.ts`): left to the defaults it stays in memory, and in the one
+  entry the device keeps for its member, until they sign out, on a device whose sign-in never
+  lapses (D-99). That entry is one row of AsyncStorage's. On Android its database is held to
+  six megabytes in all unless a build says otherwise *(read: `ReactDatabaseSupplier.java` and
+  `android/config.gradle`, 2.2.0)*, and a row is read back through a cursor whose window is
+  some two megabytes *(recalled of Android, whose source is not in the repository; run on
+  nothing)*: a row past that would be written and not read back, and a store that would not be
+  read back is neither restored nor written over for the rest of that run, so at every run
+  until its member signs out. This build's reads are the account, the list of households and a
+  household's own answer, some kilobytes. And a read the API answered *not found* holds
+  nothing from then on, so a body drawn by `readState` (`src/household/data.ts`) draws it as
+  *could not be read*, with the way to ask again, where F-17 has *not available*: the first
+  screen that reads something of a household which can be *not found* for its reader alone
+  asks the read's own problem (`isAbsent`), as the household's reader does.
 - A region's own conventions are not on a device: `de-AT`, `de-CH` and `en-GB` count and group
   as their language does, where the web formats them with the browser's whole CLDR. What a date
   prints on a device is its operating system's.
@@ -1125,8 +1174,9 @@ platform.
   *Open* on a line of its own beginning where the avatar does. **The thirteenth run
   (38148919981, on `8b0936e`) showed it on both platforms**: the `row` flow passed on the
   simulator and on the emulator, *Open* not to the right of the avatar and below it. A row
-  whose mark arrives after it was drawn is read by no flow: the harness has no control that
-  gives a drawn row a mark.
+  whose mark arrives after it was drawn has a flow of its own since (`mark`, on the page of
+  primitives, where a press gives a drawn row a mark that waits), which the fifteenth run
+  (38155421110) passed on both platforms.
 - **Read after that, and run on no device: a `flex` given to an element that was first laid out
   without one keeps the basis of its earlier layout.** It is the same guard: `flex: 1` is a
   basis of nothing (`Node::processFlexBasis`), which is written only while the element has
@@ -1141,7 +1191,23 @@ platform.
   (`src/ui/charts/Charts.tsx`): each would have kept, as its width, the height it had in the
   column. Both are now drawn anew, by a key, when that changes. A rule cannot hold it, a drawn
   tree having no history: **an element whose style gains a `flex` under a condition is keyed
-  by the condition.** The dev shell page draws one bar of five slots whose room a press turns
+  by the condition, and so is a container whose direction is conditional over children that
+  have a `flex`**, though their own style never changes. The fourth review round read the
+  second half: the branch that is computed once is taken only where the container has a size
+  along its direction (`useResolvedFlexBasis`, `CalculateLayout.cpp`), so in a column of no
+  height of its own, a page that scrolls, a child with `flex: 1` is measured, its height
+  written as its basis at every layout, and once that column is a row the guarded branch
+  finds a basis there and keeps it. That is the flow chart's case, which its container's key
+  covers; no other container of the app turns *(read, and run on no device)*. The two panes
+  are one tree in both layouts, each pane the same element alone or beside the other, the
+  list's room a `width` and the other's a `flex` it has from its first layout, in a row
+  (`src/shell/Panes.tsx`): as two trees, a turn of the room, a phone on its side being wide
+  enough for two, took the list and what was opened down and built them again, and what they
+  held, where a list was scrolled to and what was half typed, went with them, which
+  `src/shell/Panes.test.tsx` now holds. That a device then lays the turned panes out, the
+  list's `width` going from the whole room to its share on an element that is mounted, is
+  read (the branch a `width` takes is computed at every layout) and run on no device: the dev
+  shell page has no pane whose room a press turns. The dev shell page draws one bar of five slots whose room a press turns
   from a tablet's to 320 pt, the bar mounted all the while (`shell:turned`), so that a flow on
   CI's phones can read it: after the press, Home and More within the room, where unmended
   each slot would be 144 pt and the two ends past the screen's edges. No flow reads it yet,
@@ -1221,6 +1287,24 @@ platform.
   30**'s first push on Android is where it shows, and the mend is one field: `channelId` in the
   server's message to Expo, or the plugin's `defaultChannel`. A channel of its own for urgent
   pushes is a product decision with a server half, the push naming no channel today.
+- **Once a build can ask Expo for a token, expo-notifications goes on telling Expo's service
+  of the device's push token by itself** *(read: `getExpoPushTokenAsync.ts`,
+  `DevicePushTokenAutoRegistration.fx.ts` and `utils/updateDevicePushTokenAsync.ts`, 57.0.22;
+  run on nothing, no build being able to ask yet)*. Asking for a token turns that on for the
+  installation, and nothing of the app's turns it off: at each start from then on, as the
+  library is loaded, and whenever the system gives the device another token, it sends Expo
+  the device's token where that is another than the last one sent or a week has passed,
+  whoever is signed in, or nobody, and whether or not notifications were turned off here. It
+  tells Expo nothing of a member, Expo's service is what the contract's `expo` transport sends
+  a push through (FR-NT1), and the server sends to no token it was told to forget; but it is a
+  request the app did not ask for, of the kind
+  this record turned off in NetInfo. Read off an export's bytecode, by a search of its strings
+  for addresses, which one put together from pieces would escape, the hosts it names that
+  are not the app's, the addresses of documentation apart, are three: Google's, which NetInfo
+  no longer asks; Expo's push service; and Expo's asset host, which `expo-asset` falls back to
+  inside Expo Go alone. `setAutoServerRegistrationEnabledAsync(false)` ends it: whether a
+  sign-out, or a turning-off here, calls it is **item 30**'s to decide with the first project,
+  where it can first run.
 - `expo-localization`'s `supportedLocales`, by which the operating system offers the app's
   language in its own settings, is not set: the UI language is the member's (PRD 03 §9), and
   whether the system's setting may choose it is undecided.
@@ -1253,7 +1337,14 @@ platform.
   `toast`, `held`, `stack`, `sign-out` and `replica` among them; `harness` failed there after
   some three minutes and `link` after it in 35 ms, the emulator having gone from under
   Maestro's driver (`device 'emulator-5554' not found`), as at the end of the eleventh run,
-  and why it goes is not known. What the third review round changed has been on no device.
+  and why it goes is not known. What the third review round changed (`9123bec`) was first on a
+  device in the fifteenth run (38155421110, on `426838e`), not green either: the emulator's
+  job passed, the two flows of the kept read's check and all twenty of the suite, four of
+  them, `replica`, `launch`, `harness` and `link`, at a second asking after the driver had
+  gone; and fourteen of the simulator's fifteen passed, `formats` failing there
+  (`engine:formats:passed` not found), which is read apart from this record. `stepper` and
+  `shell` passed on both, the second reading nothing of the bar whose room turns. What the
+  fourth round changed has been on no device.
   In the eighth run, on the iOS simulator all eight of its
   flows passed: the app opens at sign-in with nothing kept; the engine screen's checks hold on
   Hermes, the vectors' 87 format cases and 8 match cases under the polyfills, the five families

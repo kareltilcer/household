@@ -53,8 +53,11 @@ function MemberHome({ me }: { readonly me: Me }) {
     // In none, as this device last read it, which may be long ago: somebody who has joined one
     // since, by an invitation answered elsewhere, is not told they are in none. The list is
     // being read again, and where the app opens waits for it. With no connection nothing is
-    // being read, and what was kept is what there is to go by.
-    if (households.isFetching) return <Waiting />
+    // being read, and what was kept is what there is to go by. It waits for the first reading
+    // since it opened and for no later one: the list is asked for again each time the app is
+    // looked at again, and the screen that says *in none* would be taken down for a wait at
+    // every one, and built again with whatever a screen reader was on in it lost.
+    if (households.isFetching && !households.isFetchedAfterMount) return <Waiting />
     return <InNone />
   }
   return <Redirect href={inHousehold.home(open.id)} />

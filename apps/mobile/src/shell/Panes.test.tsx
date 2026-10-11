@@ -3,6 +3,7 @@
 import { describe, expect, it } from '@jest/globals'
 import { catalogs } from '@household/i18n'
 import { screen } from '@testing-library/react-native'
+import { useEffect } from 'react'
 import { View } from 'react-native'
 import { expectAccessible } from '../test/a11y.ts'
 import { render, styleOf } from '../test/render.tsx'
@@ -81,6 +82,59 @@ describe('two panes', () => {
     expect(screen.getByTestId('panes:one')).toBeOnTheScreen()
     expect(screen.getByTestId('list')).toBeOnTheScreen()
     expect(screen.queryByText(empty)).toBeNull()
+  })
+
+  // What its owner left out, or decided against by a condition, is nothing opened, as `null` is.
+  it.each([undefined, false])(
+    'take a detail of %p for nothing opened: a phone draws the list',
+    async (nothing) => {
+      const view = await render(<Panes list={list} detail={nothing} width={phone} />)
+      expect(screen.getByTestId('list')).toBeOnTheScreen()
+      expect(screen.queryByText(empty)).toBeNull()
+      await view.unmount()
+      await render(<Panes list={list} detail={nothing} width={tablet} />)
+      expect(screen.getByTestId('list')).toBeOnTheScreen()
+      expect(screen.getByText(empty)).toBeOnTheScreen()
+    },
+  )
+
+  // The room turns under what is drawn: a phone on its side has room for two, a tablet beside
+  // another app for one. What a pane holds, where its list was scrolled to and what was half
+  // typed into it, is its own, and went each time the pane was taken down and built again.
+  it('keep what a pane holds as the room turns: neither is drawn anew between one and two', async () => {
+    const built = { list: 0, detail: 0 }
+    function Held({ pane }: { readonly pane: keyof typeof built }) {
+      useEffect(() => {
+        built[pane] += 1
+      }, [pane])
+      return <View testID={`held:${pane}`} />
+    }
+    const panes = (room: number, opened: boolean) => (
+      <Panes
+        list={<Held pane="list" />}
+        detail={opened ? <Held pane="detail" /> : null}
+        width={room}
+      />
+    )
+    // What was opened, on a phone: beside its list on the phone's side, and alone again.
+    const view = await render(panes(phone, true))
+    expect(built).toEqual({ list: 0, detail: 1 })
+    await view.rerender(panes(tablet, true))
+    expect(screen.getByTestId('panes:two')).toBeOnTheScreen()
+    expect(built).toEqual({ list: 1, detail: 1 })
+    await view.rerender(panes(phone, true))
+    expect(screen.getByTestId('panes:one')).toBeOnTheScreen()
+    expect(screen.queryByTestId('held:list')).toBeNull()
+    expect(built).toEqual({ list: 1, detail: 1 })
+    await view.unmount()
+    // And the list, with nothing opened from it.
+    built.list = 0
+    const alone = await render(panes(phone, false))
+    await alone.rerender(panes(tablet, false))
+    expect(screen.getByTestId('panes:two')).toBeOnTheScreen()
+    await alone.rerender(panes(phone, false))
+    expect(screen.getByTestId('panes:one')).toBeOnTheScreen()
+    expect(built.list).toBe(1)
   })
 
   it('take the window’s width where they are told no other', async () => {

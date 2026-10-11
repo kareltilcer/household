@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals'
 import { createTranslator } from '@household/i18n'
 import { fireEvent, screen, userEvent } from '@testing-library/react-native'
 import { useState } from 'react'
-import { Platform, StyleSheet, type StyleProp, type TextStyle } from 'react-native'
+import { Platform, Pressable, StyleSheet, type StyleProp, type TextStyle } from 'react-native'
 import type { TestInstance } from 'test-renderer'
 import { expectAccessible, violations } from '../test/a11y.ts'
 import { render, styleOf } from '../test/render.tsx'
@@ -150,6 +150,63 @@ describe('a stepper', () => {
       await retype('0')
       await userEvent.press(screen.getByRole('button', { name: increase }))
       expect(shows()).toBe('2')
+    })
+
+    // Another control of a form may set the number, and its press leaves no field: what was
+    // typed is the field's until it is left, and is given to nobody a second time then.
+    it('gives nothing again as the field is left: a number its owner changed meanwhile stands', async () => {
+      const onChange = jest.fn()
+      function Form() {
+        const [value, setValue] = useState(3)
+        return (
+          <>
+            <Stepper
+              label={sample.members}
+              value={value}
+              min={1}
+              max={12}
+              onChange={(next) => {
+                onChange(next)
+                setValue(next)
+              }}
+            />
+            <Pressable
+              testID="form:reset"
+              onPress={() => {
+                setValue(3)
+              }}
+            />
+          </>
+        )
+      }
+      await render(<Form />)
+      await retype('7')
+      expect(onChange.mock.calls).toEqual([[7]])
+      await fireEvent.press(screen.getByTestId('form:reset'))
+      await leave()
+      expect(shows()).toBe('3')
+      expect(onChange.mock.calls).toEqual([[7]])
+    })
+
+    // An owner may take a number later than it is given, and shows the one before it until
+    // then. Leaving the field no longer says the last one again, so each key must.
+    it('gives a number typed back to the one its owner still shows, which is not the one it was last given', async () => {
+      const onChange = jest.fn()
+      await render(
+        <Stepper label={sample.members} value={3} min={1} max={12} onChange={onChange} />,
+      )
+      await fireEvent.changeText(field(), '5')
+      await fireEvent.changeText(field(), '')
+      await fireEvent.changeText(field(), '3')
+      expect(onChange.mock.calls).toEqual([[5], [3]])
+      // And once left, what is typed next is held against what its owner shows alone.
+      await leave()
+      await fireEvent.changeText(field(), '3')
+      expect(onChange.mock.calls).toEqual([[5], [3]])
+      // A step is counted from the number typed, and not from the one its owner still shows.
+      await fireEvent.changeText(field(), '9')
+      await userEvent.press(screen.getByRole('button', { name: decrease }))
+      expect(onChange.mock.lastCall).toEqual([8])
     })
   })
 

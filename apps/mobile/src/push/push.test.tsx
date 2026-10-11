@@ -217,6 +217,25 @@ describe('turning notifications off on this device', () => {
     expect(await AsyncStorage.getItem(tokenKey)).toBe(token)
     expect(await AsyncStorage.getItem(offKey)).toBeNull()
   })
+
+  // A device that will not say whether it is registered has not said that it is not: taken
+  // for that, the server would be asked nothing, and the device read as turned off while the
+  // server went on sending to it.
+  it('changes nothing where the device would not say whether it is registered, and says so', async () => {
+    allows('granted')
+    const { client } = server()
+    await subscribePush(registration(client))
+    const { api, client: asked } = server()
+    jest
+      .mocked(AsyncStorage.getItem)
+      .mockImplementationOnce(() => Promise.reject(new Error('the store would not open')))
+    await expect(unsubscribePush(asked, ids.member, project)).rejects.toThrow(
+      'the store would not open',
+    )
+    expect(api.asked).toEqual([])
+    expect(await AsyncStorage.getItem(tokenKey)).toBe(token)
+    expect(await AsyncStorage.getItem(offKey)).toBeNull()
+  })
 })
 
 describe('registering again, for a member who is signed in', () => {

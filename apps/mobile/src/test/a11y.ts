@@ -464,12 +464,20 @@ export const controlsWithinReach: Rule = (tree) =>
  * `flex: n` and a `flexBasis` of nothing are passed, and are computed once all the same: Yoga
  * takes `flex: n` for a basis of nothing through that very branch *(read:
  * `Node::processFlexBasis`, node/Node.cpp:329-339)*. Nothing is what they give at any text
- * size, so an element that has had one from its first layout is drawn as it says. One that is
- * given `flex: n` later is not: it keeps the basis its earlier layout measured, its own width
- * or height there, and grows from that. That is an element's history, which no drawn tree
- * holds and this rule cannot see: an element whose style has `flex` in one state and not in
- * another is drawn anew between the two, by a key, and its own test holds that it is
- * (shell/TabBar.tsx, the flow's two sides in ui/charts/Charts.tsx).
+ * size, so an element that has had one from its first layout is drawn as it says, where what
+ * it stands in had a size along its own direction at that layout. One that is given `flex: n`
+ * later is not: it keeps the basis its earlier layout measured, its own width or height there,
+ * and grows from that. Nor is one whose `flex: n` never changes, in a container that turns
+ * from a column of no height of its own, as a page that scrolls is, into a row: in such a
+ * column that branch is not taken, the element is measured and its height kept as its basis,
+ * and in the row the branch is taken and keeps it *(read: `useResolvedFlexBasis` asks that
+ * the main axis have a size, CalculateLayout.cpp:101-103, and the measuring branch writes
+ * what it measured, :284-287; run on no device)*. Both are an element's history, which no
+ * drawn tree holds and this rule cannot see: an element whose style has `flex` in one state
+ * and not in another, and a container whose direction is one in one state and the other in
+ * the next over children that have a `flex`, is drawn anew between the two, by a key, and
+ * its own test holds that it is (shell/TabBar.tsx; the flow's two sides, by their container's
+ * key, in ui/charts/Charts.tsx).
  */
 export const roomByWidth: Rule = (tree) =>
   elementsOf(tree)

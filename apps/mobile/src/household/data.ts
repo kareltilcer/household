@@ -248,6 +248,12 @@ export interface Read {
  * member: the body could not be read, and no skeleton says otherwise. With something kept it
  * is drawn, and `offline` where it is as it was last read. `online` is the device's own word
  * for it (`useOnline`, api/query.ts).
+ *
+ * A read the API answered *not found* holds nothing from then on (api/query.ts, `letGo`) and
+ * is told here as any read that failed, *could not be read* with the way to ask again, a
+ * `Read` carrying no problem. A body whose read can be *not found* for its reader, where F-17
+ * has *not available*, asks the read's own problem first (`isAbsent`), as `useHousehold`
+ * does: no screen of this build reads such a thing but the household itself.
  */
 export function readState(read: Read, online: boolean, empty = false): DataState {
   if (read.data === undefined) return couldNotBeRead(read) ? 'error' : 'loading'

@@ -157,15 +157,27 @@ export function watchFocus(): () => void {
  * The device is believed in one direction only: one that says it has no connection has none.
  * One that does not know yet, as it starts, or that has a network with nothing behind it, is
  * taken to have one, and a request that then fails says so itself. Whether the internet can be
- * reached is not asked: what the device says of that it works out by asking a host that is none
- * of the app's. It answers with what stops it, after which the query client is told nothing
- * and takes it that there is a connection.
+ * reached is not asked, by the app or by the library for it. Left as it comes, the library
+ * works that out wherever the platform does not say, which is on iOS, whose native half says
+ * only whether there is a connection (`ios/RNCNetInfo.mm`): it asks a host of Google's, by the
+ * global `fetch`, as soon as anything listens and from then on each minute while it is
+ * answered and every five seconds while it is not, whether or not its answer is read
+ * (`src/internal/internetReachability.ts`, `defaultConfiguration.ts`; read in 12.0.1, and run
+ * under Jest over the library's own JavaScript, on no device). That is a request a minute, at
+ * the least, from every iPhone the app is open on to a host that is none of the app's, which
+ * the product's own rules leave no room for (PRD 05 §1, §2), so the check is turned off before
+ * anything listens: configuring the library ends whatever listened before. Android's native
+ * half says for itself, and asks nobody.
+ *
+ * It answers with what stops it, after which the query client is told nothing and takes it
+ * that there is a connection.
  *
  * This is the app's one listener to the device, started with the app (session/Providers.tsx):
  * the device tells whoever starts listening what it knows now, and then of each change, so by
  * the time a household is drawn the answer is the device's. A screen reads it with `useOnline`.
  */
 export function watchConnection(): () => void {
+  NetInfo.configure({ reachabilityShouldRun: () => false })
   const stop = NetInfo.addEventListener((state) => {
     onlineManager.setOnline(state.isConnected !== false)
   })

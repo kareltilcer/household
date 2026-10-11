@@ -175,13 +175,19 @@ export function subscribePush(registration: Registration): Promise<PushState> {
  * Turns notifications off on this device, by its member's own choice: the server forgets the
  * token, and the choice is kept, so that the next sign-in leaves it off. Where the server cannot
  * be told it rejects, and nothing is changed.
+ *
+ * Nor where the device would not say whether it holds a registration: the note is read from
+ * the device itself, and not as one that is absent where it could not be read. Taken for no
+ * registration, the server would be asked nothing and the choice kept all the same: the device
+ * would read as turned off, the renewal pass over it from then on, and the server go on
+ * sending to it for as long as the sign-in lived.
  */
 export async function unsubscribePush(
   api: ApiClient,
   member: string,
   project: string | undefined,
 ): Promise<PushState> {
-  const token = await kept(tokenKey(member))
+  const token = await AsyncStorage.getItem(tokenKey(member))
   if (token !== null) {
     unwrap(await api.DELETE('/push/subscriptions', { params: { query: { endpoint: token } } }))
     await keep(tokenKey(member), null)

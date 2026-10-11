@@ -712,6 +712,22 @@ describe('what the query client is told of the device’s connection', () => {
     expect(hearing).toEqual(['src/api/query.ts'])
   })
 
+  // Left as it comes, the library asks a host of Google's whether the internet can be reached,
+  // on iOS and each minute, whoever reads its answer (netinfo.test.ts runs that). Configuring
+  // it ends whatever listened before, so the check is turned off first.
+  it('turns the library’s own check of the internet off before it listens', () => {
+    jest.mocked(NetInfo.configure).mockClear()
+    jest.mocked(NetInfo.addEventListener).mockClear()
+    const stopWatching = watchConnection()
+    expect(NetInfo.configure).toHaveBeenCalledTimes(1)
+    const [configuration] = jest.mocked(NetInfo.configure).mock.calls[0] ?? []
+    expect(configuration?.reachabilityShouldRun?.()).toBe(false)
+    const configured = jest.mocked(NetInfo.configure).mock.invocationCallOrder[0] ?? Infinity
+    const listening = jest.mocked(NetInfo.addEventListener).mock.invocationCallOrder[0] ?? 0
+    expect(configured).toBeLessThan(listening)
+    stopWatching()
+  })
+
   it('is what the device says, believed only where it says it has none', () => {
     const stop = jest.fn()
     jest.mocked(NetInfo.addEventListener).mockReturnValueOnce(stop)
