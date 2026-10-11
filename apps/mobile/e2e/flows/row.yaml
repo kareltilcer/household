@@ -1,0 +1,64 @@
+# A list row at twice the text, on a phone (02-components §3; src/ui/ListRow.tsx): its action
+# stands under the avatar and the words, at the row's own edge, and is not squeezed in beside
+# them, where the words are left a column a few letters wide and break by the syllable. Where
+# a row's parts come to stand is the layout engine's on a device, which no Jest test runs.
+#
+# The harness's list is read (src/dev/harness), at the 200 % it holds its cells to, in the
+# cell that is populated and light: its first row's two ends are named for this
+# (src/dev/harness/bodies.tsx), `list:whose` around the avatar, which begins the row, and
+# `list:open` on its action. The row names neither itself, and its words are one thing to
+# assistive technology, whose tree a flow reads.
+#
+# A flow of its own, so that it fails for this alone and the harness's does not.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devHarness'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'dev-index:devHarness'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:harness'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: 'harness:only:list'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- tapOn:
+    id: 'harness:only:list'
+- scrollUntilVisible:
+    element:
+      id: 'list:populated:light'
+    direction: DOWN
+    timeout: 120000
+    visibilityPercentage: 20
+# The first row with an action, whole on the screen: no cell before this one has a row.
+- scrollUntilVisible:
+    element:
+      id: 'list:open'
+    direction: DOWN
+    timeout: 120000
+- assertVisible:
+    id: 'list:whose'
+- takeScreenshot: row-200
+# Under, and not beside. An action that has gone under the words begins where the row does,
+# as the avatar does; one squeezed in beside them stands to the avatar's right. That is the
+# line that tells the two apart: Maestro's `below` compares upper edges alone, and an action
+# set beside taller words can pass it or fail it by how tall each happens to be.
+- assertNotVisible:
+    id: 'list:open'
+    rightOf:
+      id: 'list:whose'
+- assertVisible:
+    id: 'list:open'
+    below:
+      id: 'list:whose'

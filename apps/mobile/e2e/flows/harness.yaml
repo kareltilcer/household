@@ -79,27 +79,14 @@ appId: com.kareltilcer.household.dev
     direction: DOWN
     timeout: 120000
     visibilityPercentage: 20
-# A row at twice the text, on a phone: its action stands under the avatar and the words, at
-# the row's own edge, and is not squeezed in beside them, where it once left the title one
-# letter's width (src/ui/ListRow.tsx). The first row's two ends are named for this
-# (src/dev/harness/bodies.tsx). Maestro's `below` compares two things by their upper edges
-# alone, which an action set beside taller words would pass as well; that it is not to the
-# right of the avatar, which begins the row, is what tells under from beside.
+# The first row brought onto the screen whole, its action with it, for the screenshot. Where
+# that action stands at twice the text, under the words or beside them, is row.yaml's to
+# hold: this flow reads that each kind of cell is drawn, and fails for that alone.
 - scrollUntilVisible:
     element:
       id: 'list:open'
     direction: DOWN
     timeout: 120000
-- assertVisible:
-    id: 'list:whose'
-- assertVisible:
-    id: 'list:open'
-    below:
-      id: 'list:whose'
-- assertNotVisible:
-    id: 'list:open'
-    rightOf:
-      id: 'list:whose'
 - takeScreenshot: harness-populated-light
 - scrollUntilVisible:
     element:

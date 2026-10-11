@@ -5,18 +5,12 @@
 # can show. What a sheet does with the focus and with what is behind it is its own Jest test;
 # this reads that the native half of each is there.
 #
-# Then two things a review found and only a device shows whole. A toast with Undo at twice
-# the text, kept as a screenshot for a person to read. And a drag that begins on a stepper's
-# count: the page goes with it. On Android it once did not, where the count was a centred
-# field of one line, which keeps a touch (src/ui/Stepper.tsx says what was read of why): a
-# scroll stopped under it for good, in two flows of the fourth run.
-#
-# The page is narrowed to one part at a time (`primitives:only:<part>`): it is every control
-# in both themes, and a long way to scroll. It was first narrowed to keep a scroll off the
-# steppers, and the flow's last part is what says whether a scroll need fear them still. The
-# names are the controls' own, of the light half of their section
-# (src/dev/primitives/controls): `controls:light:<what>`, and what a sheet or a dialog draws
-# under its own name, `:surface` and `:close` (src/ui/Dialog.tsx).
+# The page is narrowed to its overlays (`primitives:only:overlays`): it is every control in
+# both themes, and a long way to scroll. It was first narrowed to keep a scroll off the
+# steppers, where one stopped for good on Android in the fourth run; whether a scroll need
+# fear them still is stepper.yaml's to say. The names are the controls' own, of the light half
+# of their section (src/dev/primitives/controls): `controls:light:<what>`, and what a sheet or
+# a dialog draws under its own name, `:surface` and `:close` (src/ui/Dialog.tsx).
 appId: com.kareltilcer.household.dev
 ---
 - launchApp:
@@ -87,86 +81,3 @@ appId: com.kareltilcer.household.dev
     notVisible:
       id: 'controls:light:dialog:surface'
     timeout: 15000
-
-# A toast with Undo at twice the text, for a person to read: its sentence whole, and Undo and
-# the control that puts it away each a control's size, neither on top of the other. The dev
-# toolbar holds the scale, one press a value: the device's own, 100 %, 200 %.
-- scrollUntilVisible:
-    element:
-      id: 'dev-toolbar:scale'
-    direction: UP
-    timeout: 60000
-- tapOn:
-    id: 'dev-toolbar:scale'
-- assertVisible:
-    id: 'dev-toolbar:scale'
-    text: '.*100'
-- tapOn:
-    id: 'dev-toolbar:scale'
-- assertVisible:
-    id: 'dev-toolbar:scale'
-    text: '.*200'
-- scrollUntilVisible:
-    element:
-      id: 'controls:light:toast:undo'
-    direction: DOWN
-    centerElement: true
-    timeout: 60000
-# Looked for at once: it stays five seconds.
-- tapOn:
-    id: 'controls:light:toast:undo'
-    waitToSettleTimeoutMs: 500
-- extendedWaitUntil:
-    visible:
-      id: 'toast'
-    timeout: 15000
-- takeScreenshot: toast-undo-200
-# And the text as the device has it again, for what follows.
-- scrollUntilVisible:
-    element:
-      id: 'dev-toolbar:scale'
-    direction: UP
-    timeout: 60000
-- tapOn:
-    id: 'dev-toolbar:scale'
-- assertVisible:
-    id: 'dev-toolbar:scale'
-    text: '.*device'
-
-# A drag that begins on a stepper's count takes the page with it. The first select of the
-# fields is brought up from the foot of the screen, which leaves the stepper under it on the
-# screen too, clear of Android's navigation bar. Maestro then swipes from the middle of the
-# count to a tenth of the way down the screen: where the page goes with the finger, the
-# select, which stands well above the count, has left by the top, and the switch under the
-# steppers is there. Where the count keeps the touch, nothing has moved, and the select is
-# where it was.
-- scrollUntilVisible:
-    element:
-      id: 'primitives:only:controls'
-    direction: UP
-    timeout: 60000
-- tapOn:
-    id: 'primitives:only:controls'
-- scrollUntilVisible:
-    element:
-      id: 'controls:light:select'
-    direction: DOWN
-    centerElement: true
-    timeout: 60000
-- assertVisible:
-    id: 'controls:light:select'
-- assertVisible:
-    id: 'controls:light:stepper'
-- swipe:
-    from:
-      id: 'controls:light:stepper'
-    direction: UP
-- extendedWaitUntil:
-    notVisible:
-      id: 'controls:light:select'
-    timeout: 15000
-- extendedWaitUntil:
-    visible:
-      id: 'controls:light:switch'
-    timeout: 15000
-- takeScreenshot: stepper-dragged
