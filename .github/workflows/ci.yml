@@ -431,8 +431,13 @@ jobs:
           # With a member to sign in as, the flows that sign in are taken, and before the suite
           # the one check that takes this API away and starts it again (e2e/run.ts, `--kept`;
           # e2e/api.sh): a read the device kept is kept though the server is gone when it
-          # asks again.
-          STACK: ${{ steps.member.outcome == 'success' && '--stack --kept' || '' }}
+          # asks again. And where that check leaves the device, signed in with its account and
+          # household read and nothing cleared since, the emulator is asked as root for the
+          # files of the app's own HTTP cache, which must be none but the cache's journal
+          # (`--cache`, e2e/cache.ts; D-197). It is asked by the script that runs the flows
+          # and by no step after this one: the emulator goes with this step, and each flow of
+          # the suite starts the app with nothing kept, its cache among it.
+          STACK: ${{ steps.member.outcome == 'success' && '--stack --kept --cache' || '' }}
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 29

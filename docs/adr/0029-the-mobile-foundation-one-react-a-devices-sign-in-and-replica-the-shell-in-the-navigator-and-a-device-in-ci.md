@@ -1408,10 +1408,14 @@ platform.
   decided nowhere: **item 29**, whose screens first draw one on a device, puts it to the
   product's rules, for both clients, a link that answers otherwise being the object store's
   `ResponseCacheControl` to sign.
-- **No device run reads the HTTP cache.** That the API's header keeps it empty is held on the
-  server and read of the two clients. The line that would show it is the emulator job's, after
-  the stack's flows, as root: no file under the app's `cache/http-cache` but the cache's own
-  journal.
+- **The emulator's HTTP cache is read by the run, which no run has made yet.** That the API's
+  header keeps it empty is held on the server and read of the two clients. The emulator job
+  asks the device as root for the files under the app's `cache/http-cache`, and fails on one
+  that is not the cache's own journal (`e2e/run.ts`, `--cache`; `e2e/cache.ts`): where the
+  kept read's check leaves it, signed in with its account and household read, and not after
+  the suite, each of whose flows starts the app with nothing kept, the cache among it; and
+  from the script that runs the flows, the emulator being gone with that step. iOS's
+  `URLCache` is read by no run: the simulator's job has no server to be answered by.
 - `expo-localization`'s `supportedLocales`, by which the operating system offers the app's
   language in its own settings, is not set: the UI language is the member's (PRD 03 §9), and
   whether the system's setting may choose it is undecided.

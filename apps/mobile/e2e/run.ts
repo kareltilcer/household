@@ -1,4 +1,4 @@
-// `pnpm --filter @household/mobile run e2e <android|ios> [--stack [--kept]]`: Maestro's flows (e2e/flows)
+// `pnpm --filter @household/mobile run e2e <android|ios> [--stack [--kept [--cache]]]`: Maestro's flows (e2e/flows)
 // over the app's end-to-end build, on the emulator or the simulator that is up with that build
 // installed (PL-3, 06-clients §8). The build is a release one of the development variant with
 // the dev screens in it (`EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS=1`), which is what the flows walk:
@@ -35,6 +35,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { app, setting, version } from './app.ts'
+import { addresses, asking, folderOf, held, naming } from './cache.ts'
 import { outcome, platforms, test, type Run } from './maestro.ts'
 
 const [named, ...flags] = process.argv.slice(2)
@@ -49,6 +50,15 @@ const stack = flags.includes('--stack')
 const withKept = flags.includes('--kept')
 if (withKept && !stack) {
   console.error('e2e: --kept signs a member in, and so goes with --stack.')
+  process.exit(2)
+}
+// After that check, what the device's own HTTP cache holds (`cache`, below): for an emulator
+// that answers as root, which CI's Android job's does.
+const withCache = flags.includes('--cache')
+if (withCache && !(withKept && platform === 'android')) {
+  console.error(
+    'e2e: --cache reads what the kept check left on an emulator, and so goes with android and --kept.',
+  )
   process.exit(2)
 }
 const output = join(app, 'dist', 'e2e')
@@ -219,7 +229,59 @@ function kept(): number {
   return api('start') === 0 ? away : 1
 }
 
+/**
+ * The device's own HTTP cache holds nothing of what the app was answered (D-197; cache.ts
+ * says where it is and why it is asked as root): 0 where it holds none.
+ *
+ * Read where the kept check leaves the device, and nowhere else in a run: a member signed in
+ * there, their account and their household were read with the server answering, and the app
+ * was started again, with nothing cleared since. Every flow of the suite starts the app with
+ * nothing kept, the cache among it, in an order of Maestro's own, so what the device holds
+ * once the suite has run is whatever its last flow left; and the emulator is gone with the
+ * step that ran the flows, so no step of the job's after it can ask.
+ */
+function cache(): number {
+  // The app the kept check's flows name, which flows.test.ts holds to the build's own.
+  const flow = readFileSync(join(flows, 'kept', 'kept-signed-in.yaml'), 'utf8')
+  const appId = /^appId: (\S+)$/m.exec(flow)?.[1] ?? ''
+  const folder = folderOf(appId)
+  const adb = (line: string) =>
+    spawnSync('adb', [...serial, 'shell', line], { encoding: 'utf8', timeout: 30_000 })
+
+  const asked = adb(asking(appId))
+  if (asked.error !== undefined) {
+    console.error(`e2e: the device's HTTP cache was not read: adb, ${asked.error.message}`)
+    return 1
+  }
+  const found = asked.status === 0 ? held(appId, asked.stdout) : undefined
+  if (found === undefined) {
+    console.error(
+      `e2e: the device's HTTP cache (${folder}) could not be read as root: adb answered ` +
+        `${String(asked.status)}, and wrote:\n${asked.stdout}${asked.stderr}`,
+    )
+    return 1
+  }
+  if (found.answers.length === 0) {
+    // Which of the two is said: a folder that is not there, after a member's reads, would be
+    // a cache kept somewhere else, and nothing read of it.
+    console.log(
+      `e2e: the device's HTTP cache holds nothing of what the app was answered: ${folder} ` +
+        (found.there ? "holds no file but the cache's own journal." : 'is not there.'),
+    )
+    return 0
+  }
+  console.error(
+    `e2e: the device's HTTP cache kept what the app was answered, ${String(found.answers.length)} ` +
+      `files under ${folder}, which nothing removes when its member signs out (D-197):\n` +
+      `${found.answers.join('\n')}\nThe answers they are of:\n` +
+      addresses(adb(naming(appId)).stdout).join('\n'),
+  )
+  return 1
+}
+
 follow('logcat.txt')
 const keptStatus = withKept ? kept() : 0
+// Only where the check passed: a device that did not sign in was answered nothing to keep.
+const cacheStatus = withCache && keptStatus === 0 ? cache() : 0
 const suiteStatus = suite()
-leave(suiteStatus !== 0 ? suiteStatus : keptStatus)
+leave(suiteStatus !== 0 ? suiteStatus : keptStatus !== 0 ? keptStatus : cacheStatus)

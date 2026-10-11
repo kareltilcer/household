@@ -209,6 +209,7 @@ job of its own.
 | `toast` | a toast with Undo at 200 % text, in a screenshot for a person | both |
 | `mark` | a sync mark that arrives after its row, at 200 % text: under the avatar and words, and not beside them | both |
 | `sheet` | a stepper in a sheet at 200 % text, its two buttons whole, in a screenshot | both |
+| `sides` | a sheet, a dialog and a toast at 200 % text with the device turned on its side, each in a screenshot for a person: no edge of any under the camera's housing or the band of Android's buttons | both |
 | `keyboard` | a select's choices opened with a field's keyboard up, in a screenshot with no keys over them | both |
 | `formats` | the app's own formatters on the device's `Intl`: a sample of each thing they write, a number as Node writes it and a date by its fields | both |
 | `hold` | hold to complete: let go early, and held | both |
@@ -309,7 +310,15 @@ any ICU. What a device wrote another way and was let is drawn under the line
   five: the tap that brings one says `waitToSettleTimeoutMs: 500`.
 - **The connection is given back whatever became of the flow** (`onFlowComplete`, in
   `replica`): a flow that failed with the emulator in aeroplane mode would fail every flow after
-  it that asks the server.
+  it that asks the server. So is a device that a flow turned on its side set upright again
+  (`sides`): a turn outlasts the app's own start, and every other flow is written for a
+  device held upright.
+- **A toast is raised with the device on its side already, and not turned under.** A turn
+  (`setOrientation`) and the wait for the screen to come to rest after it
+  (`waitForAnimationToEnd`), which a screenshot read for the device's insets needs, are most
+  of a toast's five seconds: `sides` turns the device with a dialog up and has the dialog's
+  answer raise the toast *(written from the lesson above and from Maestro 2.11.0's source,
+  which has both commands and counts a turned screen in its presses; run on no device yet)*.
 - **A limit is set by the slowest run seen, with room.** A wait can pass after its limit, where
   the one look under way when the limit came returns with the screen: whichever flow a
   simulator runs first starts the app for the first time, and its wait for sign-in took 73
@@ -333,6 +342,20 @@ front, given six seconds, stopped and started, and still at the member's househo
 before the suite, in the emulator's first minutes, since no other device makes it; the API
 comes back as it was, its keys development's own and its sessions the database's. Taking the
 connection away would not do: offline, the app does not ask at all.
+
+**And one reads the device itself** (`--cache`, which the Android job passes with `--kept`;
+`e2e/cache.ts`): the API answers everything `Cache-Control: no-store` (D-197), and a device's
+own HTTP client keeps on disk whatever does not say so, past its member's sign-out. Where the
+check above leaves the emulator, signed in, its account and household read and nothing cleared
+since, the run asks it as root (`su`) for the files under the app's `cache/http-cache` and
+fails on one that is not the cache's own journal, printing each and the address its answer was
+of. The job's log says which it found: *holds no file but the cache's own journal*, or *is not
+there*, which after a member's reads would mean the cache is kept somewhere else and nothing
+was read of it. It is no step of the job's after the flows: the emulator goes with the step
+that ran them, and every flow of the suite starts the app with nothing kept, its cache among
+it, so what a device holds after the suite is what its last flow left *(where the folder is
+was read in React Native's source, and what OkHttp writes in it is recalled; that the
+emulator's `su` answers so has been seen in no run yet)*.
 
 **The way to a dev screen is by presses, and not by a link.** The sign-in screen has a control that
 leads to the dev sign-in form (`sign-in:dev`), and every dev screen leads to their index
