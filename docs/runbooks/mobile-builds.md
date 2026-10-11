@@ -210,9 +210,10 @@ job of its own.
 | `mark` | a sync mark that arrives after its row, at 200 % text: under the avatar and words, and not beside them | both |
 | `sheet` | a stepper in a sheet at 200 % text, its two buttons whole, in a screenshot | both |
 | `keyboard` | a select's choices opened with a field's keyboard up, in a screenshot with no keys over them | both |
-| `formats` | the app's own formatters on the device's `Intl`: a sample of each thing they write, as Node writes it | both |
+| `formats` | the app's own formatters on the device's `Intl`: a sample of each thing they write, a number as Node writes it and a date by its fields | both |
 | `hold` | hold to complete: let go early, and held | both |
 | `shell` | a tab bar's slot opens its place and says so, Add is a sheet over it; a module is hidden from its row's menu; one pane at a phone's width and two at a tablet's; *not available* leads home | both |
+| `turned` | a tablet's tab bar told the narrowest room: laid out anew as a phone's, both its ends whole on the screen | both |
 | `resolvers` | a change that was not accepted is given up: its sheet, the confirmation inside it, both gone and a toast | both |
 | `link` | a link opens the app at its address | Android |
 | `stack` | a member signs in against the real server, in their household's frame over its tab bar, and is signed in still after a restart. The job then asks the server for the account's devices (`e2e:stack devices`) | Android, with the stack |
@@ -226,6 +227,18 @@ macOS runner has no Docker); and `android`, on one that does what only Android l
 send a link, or take the connection away. Maestro runs the flows in an order of its own, so none
 leans on another: each starts the app with nothing kept, which on Android is a new installation
 to the server, and `stack`'s sign-in is still there for the job to find whatever `sign-out` did.
+
+**What `formats` holds, and what it lets vary** (`src/dev/engine/checks.ts`). A number, an
+amount and a size are FormatJS's on every device, so each is held to the very string Node
+writes, and one that differs is a defect of the app's. A date, and a list where an engine has
+its own, is the operating system's ICU, of that system's age: it is held to its fields in
+their order, the digits, the colon of a time, a month's name and *PM*, with every kind of
+space, a comma, a full stop and English's joining *at* folded between them. The simulator of
+iOS 26 writes *Mar 3, 2026 at 6:41 PM* and *3. 3. 2026 18:41* with narrow no-break spaces
+where Node writes *Mar 3, 2026, 6:41 PM* and plain ones (run 38152216148), which is no defect;
+the wrong hour for the zone, a day that is one off or a month in another language fails on
+any ICU. What a device wrote another way and was let is drawn under the line
+(`engine:formats:found`), and is in the flow's screenshot.
 
 **How a flow finds a thing**, each learnt from a run that failed:
 
@@ -270,6 +283,21 @@ to the server, and `stack`'s sign-in is still there for the job to find whatever
   middle is clear of the three tenths of the screen it came in by, and `flows.test.ts` fails
   one that does not. Where the page ends first, the scroll gives up after five more swipes
   and takes the control where it is, so such a scroll is given a minute.
+- **Whole on the screen is asked of a scroll, and not asserted.** `assertVisible` passes an
+  element any part of whose frame is on the screen, and on iOS a frame is the element's own,
+  whatever the room it stands in cuts off: in run 38152216148 the tablet's panes were found
+  832 pt wide on a screen of 402, and a cell still below the screen was not found until its
+  first points were on it. `scrollUntilVisible` measures the frame against the screen, asks
+  for all of it where it is told nothing, and swipes nothing where it has it. That is what
+  `turned` asks of a bar's two ends: a slot past its room's edge with ten points of its
+  frame on the screen would pass an assertion. **A percentage under a hundred asks for
+  nothing**: at Maestro 2.11.0 the same log says `visibilityPercentageNormalized: 0.0` for
+  each scroll told 90, 20 or 10, and `1.0` for one told nothing, so such a scroll ends as soon
+  as its element is found, with whatever part of it on the screen. On Android the bounds a
+  flow reads are cut to the screen already, so no percentage says anything there, and what a
+  room cuts off altogether is in no tree a flow reads *(both as Maestro's Android driver and
+  Android's `View.isVisibleToUser` are remembered: read in no source for this, and seen in
+  no run, the Android artifact not having been opened)*.
 - **One thing a flow, where the thing may fail.** A line added to the end of a flow is not
   run where an earlier line of it fails, and one added to its middle takes what follows with
   it: in the tenth run a wrong reading of the dev toolbar kept the stepper's drag from ever

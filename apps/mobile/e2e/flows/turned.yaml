@@ -1,0 +1,77 @@
+# A tab bar whose room changes under it (04-navigation §3; src/shell/TabBar.tsx): a tablet's
+# bar, its slots as wide as their words from 9 rem, told the narrowest room an app is given, as
+# a tablet turned upright or an app opened beside this one tells it. It is laid out anew, a
+# phone's five shares of the room, and both its ends are in the room. Left as they were, the
+# five slots kept a tablet's width, 720 pt in the 304 the room leaves them and laid out from
+# its middle: Home ended 64 pt before the room begins, and More began 64 pt after it ends
+# (src/dev/shell/index.tsx, `Turned`). Whether a slot keeps a width is the layout engine's on
+# a device, which no Jest test runs.
+#
+# The shell's dev screen has one bar that a press turns (`shell:only:turned`): the ground it
+# stands on is named for the room it is in, `shell:turned:wide` and then `shell:turned:narrow`,
+# which is how the press is known to have been taken, and the room, the ground and the bar
+# are the same elements in both.
+#
+# A flow of its own, so that it fails for this alone and the shell's does not.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devShell'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'dev-index:devShell'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:shell'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: 'shell:only:turned'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'shell:only:turned'
+# The page is now a heading, the control and one bar, and too short to scroll: where the
+# control is not yet clear of the screen's foot, the scroll gives up after five swipes and
+# takes it where it stands, and has a minute for that.
+- scrollUntilVisible:
+    element:
+      id: 'shell:turned:turn'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- assertVisible:
+    id: 'shell:turned:wide'
+- tapOn:
+    id: 'shell:turned:turn'
+- extendedWaitUntil:
+    visible:
+      id: 'shell:turned:narrow'
+    timeout: 15000
+# Each end of the bar, whole on the screen: a scroll that asks for all of its element's frame
+# and swipes nothing where it has it. Not `assertVisible`, which passes an element any part
+# of whose frame is on the screen, and on iOS a frame is the element's own, whatever the room
+# it stands in cuts off (run 38152216148 found one 832 pt wide on the simulator's 402). The
+# room is narrower than the screen: left as it was, More began at 392 pt, ten of its 144 on
+# the screen and none of them drawn, and Home ended before the screen begins. On Android
+# what a room cuts off altogether is in no tree a flow reads, as Maestro's driver there is
+# remembered and as no run has shown: there it is being found at all that would tell.
+- scrollUntilVisible:
+    element:
+      id: 'shell:turned:bar:home'
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 100
+- scrollUntilVisible:
+    element:
+      id: 'shell:turned:bar:more'
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 100
+- takeScreenshot: shell-bar-turned
