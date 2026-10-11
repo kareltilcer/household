@@ -92,6 +92,13 @@ export interface Outcome {
  * reading it (runs 38066536920 and 38068892430: one crash, in one flow, and the three flows
  * after it failed with it, then the two after one that passed meanwhile). Such flows are run
  * again (run.ts), so that one failure is one.
+ *
+ * On Android it died once with no crash of the app's, eleven minutes into a session, as the
+ * harness's page was read (run 38145377182): that flow says `DeviceServerDiedException`, and
+ * the one after it nothing but `Unknown error`, in a few milliseconds. So a failure that
+ * gives no reason is the driver's too where a flow before it in the report lost the driver,
+ * and its own anywhere else. Whether the emulator is still there for a second session is
+ * that session's to find.
  */
 export function outcome(report: string): Outcome {
   const failed: string[] = []
@@ -102,7 +109,9 @@ export function outcome(report: string): Outcome {
     const name = /\bname="([^"]*)"/.exec(attributes)?.[1]
     if (name === undefined || !body.includes('<failure')) continue
     failed.push(name)
-    if (body.includes('DeviceUnreachableException')) lost.push(name)
+    const died = /Device(Unreachable|ServerDied)Exception/.test(body)
+    const unsaid = lost.length > 0 && /<failure>\s*Unknown error\s*<\/failure>/.test(body)
+    if (died || unsaid) lost.push(name)
   }
   return { failed, lost }
 }
