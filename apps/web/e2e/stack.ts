@@ -625,12 +625,21 @@ function fromBase32(secret: string): Buffer {
 }
 
 /**
- * The six-digit code an authenticator shows for `secret` at `at` (RFC 6238: HMAC-SHA-1 over the
- * count of thirty-second steps), as the member reads it off their phone.
+ * The six-digit code an authenticator shows for `secret` (RFC 6238: HMAC-SHA-1 over the count of
+ * thirty-second steps), as the member reads it off their phone: the one it shows now, or the one
+ * it shows `next`.
+ *
+ * The server takes the code of the step its own clock is in and of the step on either side of
+ * it, each once and none as old as the last it took (ADR 0010; `Match`, internal/platform/mfa).
+ * A test reads the clock before the server does, and a step may end between the two: the code of
+ * now is taken on either side of that end, where the one before it is taken only until then, so
+ * no older code is given here. A test that needs a second code before the first one's step has
+ * ended types the `next` one, which the server takes as it does the code of a clock a step
+ * fast, whether or not a step ends on its way.
  */
-export function totp(secret: string, at: number = Date.now()): string {
+export function totp(secret: string, shown: 'now' | 'next' = 'now'): string {
   const counter = Buffer.alloc(8)
-  counter.writeBigUInt64BE(BigInt(Math.floor(at / 30_000)))
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000) + (shown === 'next' ? 1 : 0)))
   const digest = createHmac('sha1', fromBase32(secret)).update(counter).digest()
   const offset = (digest.at(-1) ?? 0) & 0x0f
   const code = (digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000
