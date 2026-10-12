@@ -1,7 +1,7 @@
 import { focusManager, onlineManager } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router'
+import { createMemoryRouter, matchRoutes, MemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createWebClient } from '../api/client.ts'
 import { csrfCookie } from '../api/names.ts'
@@ -145,6 +145,23 @@ function open(
   return { router, asked }
 }
 
+/**
+ * Loads the files of the routes `address` names, the shell's and its screen's, as the router
+ * does when the address is opened. The router draws nothing of an address until every file it
+ * names has come, the shell's own *not available* neither, and a file imported for the first
+ * time is transformed as it is asked for, as is whatever it imports that nothing imported
+ * before: on a machine with other work that takes longer than the second a find waits by
+ * itself. The first test's wait is long enough for the shell's own files. A test that is the
+ * first here to open another screen with as many files behind it, the inbox or a page of the
+ * settings, loads them before it opens it, and waits for what is drawn and no more.
+ */
+async function loaded(address: string): Promise<void> {
+  const named = matchRoutes(routes, address) ?? []
+  await Promise.all(
+    named.flatMap(({ route }) => (typeof route.lazy === 'function' ? [route.lazy()] : [])),
+  )
+}
+
 describe('a household’s shell', () => {
   it('draws the household the address names: its name, its navigation, and one landmark', async () => {
     open(inHousehold.home(home))
@@ -236,7 +253,11 @@ describe('a household’s shell', () => {
   })
 
   it('does not ask the server for an address that names no household at all', async () => {
-    const { asked } = open('/households/not-an-id/sync')
+    // The address names the inbox, which no test before this one opened: what stands in a
+    // household's place is drawn once the inbox's file has come, as the inbox would be.
+    const address = '/households/not-an-id/sync'
+    await loaded(address)
+    const { asked } = open(address)
     expect(
       await screen.findByRole('heading', {
         level: 1,
@@ -320,6 +341,8 @@ describe('a household’s shell', () => {
   })
 
   it('leads from a module’s name to where the module opens, for one this build has screens for', async () => {
+    // Where it leads is the household's profile, which no test before this one opened.
+    await loaded(inHousehold.settings(home))
     const { router } = open(inHousehold.module(home, 'admin'))
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(inHousehold.settings(home))
