@@ -86,6 +86,9 @@ function Surface({
     const leave = enterTopLayer(element)
     setShown(true)
     return () => {
+      // Said first, while it is shown still, and said for the dialogs open inside it, which are
+      // closed with it below: the toasts leave it then, as they are, and not a dialog that has
+      // closed or left the document, from which nothing is moved as it is.
       leave()
       setShown(false)
       // Closed by its owner, or with the screen that held it, so the page is not left inert.

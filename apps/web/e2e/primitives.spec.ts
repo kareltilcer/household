@@ -400,6 +400,67 @@ test.describe('inside a side panel, which makes the page outside it inert', () =
     await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
   })
 
+  // The toasts are moved as they are where the platform can (`moveBefore`), as this browser
+  // can, and taken out and put in where it cannot, as this browser does with the move taken
+  // away from it: an element put in so begins an animation that is on it from the start.
+  for (const moved of ['as it is', 'taken out and put in'] as const) {
+    test(`a toast is the one element when the panel closes under it, and does not arrive again, moved ${moved}`, async ({
+      page,
+    }) => {
+      if (moved === 'taken out and put in') {
+        await page.addInitScript(() => {
+          Reflect.deleteProperty(Element.prototype, 'moveBefore')
+        })
+      }
+      // The toast's dwell is held with the clock, and what it animates by is not the clock's.
+      await holdTheClock(page)
+      const panel = await openPanel(page)
+      expect(await page.evaluate(() => 'moveBefore' in Element.prototype)).toBe(
+        moved === 'as it is',
+      )
+      await panel.getByRole('button', { name: serial }).click()
+      await panel.getByRole('menuitem', { name: 'Clear the serial number' }).click()
+      const toast = page
+        .locator('[data-third-party] li')
+        .filter({ hasText: 'Serial number cleared' })
+      await expect(toast).toBeVisible()
+      await expect(panel.locator('[data-third-party] li')).toHaveCount(1)
+      /** Whatever the toast is animating by has run to its end, and said so. */
+      const settled = () =>
+        toast.evaluate(async (element) => {
+          await Promise.all(element.getAnimations().map((animation) => animation.finished))
+        })
+      // Its arrival is over once the app has marked it so, and has no animation on it from then
+      // on. The test marks the element for itself, and the element notes any arrival begun on
+      // it after that.
+      await expect(toast).toHaveAttribute('data-arrived', '')
+      await toast.evaluate((element) => {
+        element.setAttribute('data-marked', 'in the panel')
+        element.addEventListener('animationstart', () => {
+          element.setAttribute('data-arrived-again', '')
+        })
+      })
+      await panel.getByRole('button', { name: 'Close' }).click()
+      await expect(panel).toBeHidden()
+      // The toast that was in the panel, on the page: drawn anew, it would be another element,
+      // and one whose arrival was on it still would begin it again as it was put on the page.
+      await expect(toast).toBeVisible()
+      await expect(toast).toHaveAttribute('data-marked', 'in the panel')
+      expect(await toast.evaluate((element) => element.closest('dialog') === null)).toBe(true)
+      await settled()
+      await expect(toast).not.toHaveAttribute('data-arrived-again')
+
+      // And into a panel that opens over it, where it fades in with the panel and by no arrival
+      // of its own.
+      await page.getByRole('button', { name: 'Edit the cellar meter' }).click()
+      await expect(panel).toBeVisible()
+      const inside = panel.locator('[data-third-party] li')
+      await expect(inside).toHaveAttribute('data-marked', 'in the panel')
+      await settled()
+      await expect(inside).not.toHaveAttribute('data-arrived-again')
+    })
+  }
+
   test('a toast stays, its undo with it, when Escape closes the panel under it', async ({
     page,
   }) => {
@@ -433,10 +494,56 @@ test.describe('inside a side panel, which makes the page outside it inert', () =
     // The key was spent on the toast: the editor around it was not asked to close by it too.
     await expect(panel).toBeVisible()
     await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '0')
-    // The next one is the panel's.
+    // The next one is the panel's. The focus, which the toast left on the toasts' region, goes
+    // to what opened the panel, as it does from anywhere else in a dialog that closes: left to
+    // React it would be on that region still, on the page by then and with nothing in it.
     await page.keyboard.press('Escape')
     await expect(panel).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Edit the cellar meter' })).toBeFocused()
   })
+
+  // A dialog's owner closes it inside a commit of React's, which puts the focus back on what held
+  // it before the commit, if that lost it and is in the document still: the toasts are, moved to
+  // the page either way, so they give the focus up as they are moved (ui/topLayer.ts).
+  for (const moved of ['as it is', 'taken out and put in'] as const) {
+    test(`a toast gives the focus up to what opened the panel when the panel closes under it, moved ${moved}`, async ({
+      page,
+    }) => {
+      if (moved === 'taken out and put in') {
+        await page.addInitScript(() => {
+          Reflect.deleteProperty(Element.prototype, 'moveBefore')
+        })
+      }
+      // The toast's dwell is held with the clock.
+      await holdTheClock(page)
+      const panel = await openPanel(page)
+      expect(await page.evaluate(() => 'moveBefore' in Element.prototype)).toBe(
+        moved === 'as it is',
+      )
+      await panel.getByRole('button', { name: serial }).click()
+      await panel.getByRole('menuitem', { name: 'Clear the serial number' }).click()
+      const toast = page
+        .locator('[data-third-party] li')
+        .filter({ hasText: 'Serial number cleared' })
+      const undo = toast.getByRole('button', { name: 'Undo' })
+      await expect(toast).toBeVisible()
+      await undo.focus()
+      await expect(undo).toBeFocused()
+      // Closed by its owner with the focus where it is, as a confirmation is closed by a write
+      // that was answered: its control is pressed by the page's own script, where a member's
+      // press would take the focus to the control first.
+      await panel.getByRole('button', { name: 'Close' }).evaluate((close: HTMLElement) => {
+        close.click()
+      })
+      await expect(panel).toBeHidden()
+      await expect(page.getByRole('button', { name: 'Edit the cellar meter' })).toBeFocused()
+      // The toast is on the page, and takes a press as before: it took no focus for that turn
+      // alone.
+      await expect(toast).toBeVisible()
+      await undo.click()
+      await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
+    })
+  }
 
   test('Escape in a menu closes the menu alone, though a toast arrived while it was open', async ({
     page,

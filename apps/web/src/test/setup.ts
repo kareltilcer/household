@@ -39,13 +39,21 @@ afterEach(() => {
 })
 
 // jsdom draws nothing, so a <dialog> is never modal there: these give it the two methods the
-// component calls, as far as a test can see them. What the browser does with a modal dialog, the
-// focus it traps and gives back, is the end-to-end suite's to hold (e2e/primitives.spec.ts).
+// component calls, as far as a test can see them, and of the events the platform sends a dialog
+// by them the two the components hear, a `beforetoggle` before a close and the `close` after
+// it. What the browser does with a modal dialog, the focus it traps and gives back, is the
+// end-to-end suite's to hold (e2e/primitives.spec.ts).
 if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
   HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
     this.setAttribute('open', '')
   }
   HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    if (!this.hasAttribute('open')) return
+    // The platform says a dialog is closing while it is open still, whoever closes it, and
+    // closes it then unless what heard that closed it already (ui/topLayer.ts listens).
+    this.dispatchEvent(
+      Object.assign(new Event('beforetoggle'), { oldState: 'open', newState: 'closed' }),
+    )
     if (!this.hasAttribute('open')) return
     this.removeAttribute('open')
     // The platform queues the event, and so tells of a close after whatever closed it is done:

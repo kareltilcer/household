@@ -22,7 +22,7 @@ import {
 import { createPortal } from 'react-dom'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import styles from './Toast.module.css'
-import { useTopModal } from './topLayer.ts'
+import { standOnTop } from './topLayer.ts'
 
 export interface ToastOptions {
   /** What happened, naming what it happened to: "7 checked items cleared from Weekly shop". */
@@ -56,6 +56,12 @@ const hotkey = 'F8'
  * they take while one is shown inside it. A side panel reads it (Dialog.module.css).
  */
 const toastsRoom = '--toasts-room'
+
+/**
+ * The attribute a toast whose arrival is over is marked by, for as long as its element lives:
+ * the stylesheet animates only a toast without it (Toast.module.css).
+ */
+const arrived = 'data-arrived'
 
 export function ToastProvider({ children }: { readonly children: ReactNode }) {
   const t = useTranslate()
@@ -102,9 +108,21 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
     focused.current = false
   }, [run.number])
 
-  // While a modal is open the toasts are drawn inside it, and announced from inside it: the page
+  // While a modal is open the toasts stand inside it, and are announced from inside it: the page
   // outside it is inert, where an Undo could not be pressed and a toast would not be read out.
-  const modal = useTopModal()
+  // They are drawn once, in an element of their own that is moved into the modal and out of it
+  // again (ui/topLayer.ts): a toast on the screen is the same element whatever opens or closes
+  // under it, and so is what reads it out, which is in that element too. Radix puts a toast's
+  // words into the region that reads them out two frames after the toast is drawn, and takes
+  // the region away a second later: moved before its words are in it, it says them where it
+  // stands by then, and moved with them in it, it has said them. What a reader makes of a region
+  // that arrives with its words in it is the reader's own (ADR 0025), and nothing is hidden
+  // from one to keep it from saying a toast twice: hidden a moment too early, the toast would
+  // not be said at all.
+  const [place] = useState(() => document.createElement('div'))
+  /** The modal the toasts stand in, as the move itself tells it: null while they are on the page. */
+  const [modal, setModal] = useState<HTMLDialogElement | null>(null)
+  useLayoutEffect(() => standOnTop(place, setModal), [place])
 
   // They are drawn over the foot of the window there as on the page, in the same place, so that
   // a pointer on a toast is on it still when the modal goes. A side panel keeps its actions at
@@ -134,7 +152,7 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
       measured.disconnect()
       modal.style.removeProperty(toastsRoom)
     }
-    // Each modal, and each run of toasts, has a region of its own to measure.
+    // Each modal is told for itself, and each run of toasts has a region of its own to measure.
   }, [modal, run.number, shown])
   const viewport = (
     <RadixToast.Viewport
@@ -161,7 +179,7 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
         // What Radix says before each toast as it reads it out: the one word, and not the
         // region's name, which the viewport carries.
         label={t('ui.toast.label')}
-        {...(modal === null ? {} : { announcerContainer: modal })}
+        announcerContainer={place}
       >
         {run.toasts.map(({ undo, ...toast }) => (
           <RadixToast.Root
@@ -170,6 +188,16 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
             // is is decided below.
             open
             className={styles.toast}
+            onAnimationEnd={(event) => {
+              // An animation of something drawn inside it is not its arrival.
+              if (event.target !== event.currentTarget) return
+              // Its arrival is over for good. Where the platform cannot move the toasts as they
+              // are, they are taken out of a modal and put on the page, and the browser would
+              // begin the arrival of every toast on the screen again. Written on the element,
+              // as Radix writes a swipe's state on it: nothing is drawn by it but what the
+              // stylesheet draws.
+              event.currentTarget.setAttribute(arrived, '')
+            }}
             onPointerDown={() => {
               pressed.current = true
             }}
@@ -232,7 +260,7 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
             </RadixToast.Close>
           </RadixToast.Root>
         ))}
-        {modal === null ? viewport : createPortal(viewport, modal)}
+        {createPortal(viewport, place)}
       </RadixToast.Provider>
     </ToastContext>
   )

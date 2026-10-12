@@ -28,9 +28,11 @@ import {
   members,
   noContent,
   open,
+  openOver,
   origin,
   petr,
   problem,
+  routed,
   tilcerovi,
   type HouseholdServer,
 } from './testing.tsx'
@@ -143,6 +145,44 @@ describe('leaving a household', () => {
     })
     await router.navigate(-1)
     expect(router.state.location.pathname).toBe(paths.home.path)
+  })
+
+  it('says they left inside the question while where it leads is on its way, and the same sentence on the page after', async () => {
+    const server = createServer(accountOf(petr))
+    server.on(leaving, noContent)
+    // Where the app opens is a file that has not come: the question stays, busy, until it has.
+    let come = () => {}
+    const file = new Promise<void>((resolve) => {
+      come = resolve
+    })
+    const table = routed({ household: [[paths.leave, Leave]] }).map((route) =>
+      route.path === paths.home.path
+        ? {
+            path: route.path,
+            lazy: async () => {
+              await file
+              return { Component: Elsewhere }
+            },
+          }
+        : route,
+    )
+    const { user, router } = openOver(table, inHousehold.leave(home), server)
+    await screen.findByRole('heading', { level: 2, name: 'What you leave behind' })
+    const dialog = await confirmLeaving(user)
+    // Said where it can be read: the page behind the question is inert for as long as it is open.
+    const said = await within(dialog).findByText('You left Tilcerovi.')
+    expect(within(dialog).getByRole('button', { name: title })).toHaveAttribute('aria-busy', 'true')
+    expect(router.state.location.pathname).toBe(inHousehold.leave(home))
+
+    come()
+    await waitFor(() => {
+      expect(dialog).not.toBeInTheDocument()
+    })
+    expect(router.state.location.pathname).toBe(paths.home.path)
+    // The sentence that was in the question, and no other drawn in its place as the question
+    // went: a toast drawn anew there arrives twice, with what reads it out made again beside it.
+    expect(said).toBeVisible()
+    expect(screen.getAllByText('You left Tilcerovi.')).toEqual([said])
   })
 
   it('keeps nothing of the household in this browser once its member has left', async () => {
