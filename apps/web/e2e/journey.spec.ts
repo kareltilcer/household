@@ -74,9 +74,11 @@ test('a person registers, verifies their address, signs in, turns the second ste
   await expect(key).toBeVisible()
   const secret = (await key.innerText()).replace(/\s/g, '')
   await expectAccessible(page)
-  // A code is taken once, and none older than the last one taken: the authenticator's last code
-  // turns the step on, and the one it shows now is left for the sign-in that follows.
-  await page.getByLabel('Code from the app').fill(totp(secret, Date.now() - 30_000))
+  // A code is taken once, and none as old as the last one taken: the code the authenticator
+  // shows now turns the step on, taken wherever its thirty seconds end on the way to the server,
+  // and the sign-in that follows, before they have ended as often as not, is left the one it
+  // shows next (stack.ts).
+  await page.getByLabel('Code from the app').fill(totp(secret))
   await page.getByRole('button', { name: 'Turn it on' }).click()
 
   // The ten recovery codes, shown once (A-6), and saved as a file the page makes itself.
@@ -106,7 +108,7 @@ test('a person registers, verifies their address, signs in, turns the second ste
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByText('That code isn’t right.', { exact: false })).toBeVisible()
   await expectAccessible(page)
-  await page.getByLabel('Six-digit code').fill(totp(secret))
+  await page.getByLabel('Six-digit code').fill(totp(secret, 'next'))
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page).toHaveURL(paths.householdNew.path)
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
