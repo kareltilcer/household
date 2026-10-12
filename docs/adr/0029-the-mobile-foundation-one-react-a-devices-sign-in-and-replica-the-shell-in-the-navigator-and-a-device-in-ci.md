@@ -1134,7 +1134,9 @@ platform.
   answers `404` too (D-115), and what a device had not sent of it must be there still when the
   suspension is lifted, so the two are told apart by the member's list and not by the frame:
   **item 29**'s lockout reads that list, and removes the replica of a household it no longer
-  names.
+  names. A file that waits to be sent is held to the same: an upload answered `404` keeps its
+  file, bytes and row, but for a row the replica holds as a tombstone
+  (`packages/sync/src/attachments.ts`, ADR 0019).
 - **The address held for whoever signs in next outlives a sign-in that was ended from
   elsewhere**: it is where they are led, and today an id and a screen's name, with no word of
   its member's. The first route whose address carries such a word, a note's slug, holds the
@@ -1305,8 +1307,9 @@ platform.
   no build can ask for a push token. It gives the app a link host and its association files,
   the scheme alone opening it today, and the store's pages. Its first upload route must not
   take the part's file name for the file's, which is the row's id on a device, and an upload
-  it refuses `update_required` keeps its file; the way in still takes bytes, so a camera's file
-  would be read whole once. Two things of an upload are read and left to it. A file sent from
+  it refuses `update_required`, or answers `404` for a row that is no tombstone, keeps its
+  file; the way in still takes bytes, so a camera's file would be read whole once. Two things
+  of an upload are read and left to it. A file sent from
   its place that its transport cannot read ends every run of the queue at itself:
   `File.upload` rejects for it as for a request that got no answer, the same exception on
   both platforms, so the queue, which passes over a file it reads itself and cannot, cannot

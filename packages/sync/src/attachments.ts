@@ -6,13 +6,15 @@
 // network or the server failed is tried again at the next run, as is one the household's state refused
 // (FR-BI2), one refused by no problem of the API's (a proxy's answer, which has not judged the file),
 // one refused because the app is older than the server serves (update_required, which is about the
-// build and not the file), or one the server's limit refused (a 429), once the time each asks to be
-// waited has passed: a run starts at every checkpoint, and every try sends the whole file. A file whose
-// bytes the device no longer holds is kept as refused too (bytesLost), and one the queue reads itself
-// and cannot read is passed over until the next run: neither keeps the files behind it waiting. One
-// that is sent from where it waits (byUri) is read by its transport, which cannot tell a file it could
-// not read from a request that did not arrive: it ends the run as that does, and is the first file of
-// the next one, so for as long as it cannot be read no file behind it is sent.
+// build and not the file), one the API answered as not found (a 404, which every route of a suspended
+// household answers, D-115) unless the replica holds its row as deleted, or one the server's limit
+// refused (a 429), once the time each asks to be waited has passed: a run starts at every checkpoint,
+// and every try sends the whole file. A file whose bytes the device no longer holds is kept as refused
+// too (bytesLost), and one the queue reads itself and cannot read is passed over until the next run:
+// neither keeps the files behind it waiting. One that is sent from where it waits (byUri) is read by
+// its transport, which cannot tell a file it could not read from a request that did not arrive: it
+// ends the run as that does, and is the first file of the next one, so for as long as it cannot be
+// read no file behind it is sent.
 
 import type { CommonPowerSyncDatabase, LocalStorageAdapter } from '@powersync/common'
 import { maxRetryAfterMs, retryAfterMs, type Credential } from './connector.ts'
@@ -23,7 +25,8 @@ import { localTables } from './schema.ts'
  * How long the queue waits, once the household's state has refused a file, before it sends one again:
  * a household in grace writes and does not upload (PRD 04 §3), for days, and its rows keep syncing
  * meanwhile. The app that sees the household's state change ends the wait at once (resume). A refusal
- * that is no problem of the API's, and one of the build that sent the file, are waited out as long.
+ * that is no problem of the API's, one of the build that sent the file, and the API's not found are
+ * waited out as long.
  */
 export const stateRetryMs = 15 * 60_000
 
@@ -315,20 +318,31 @@ export class Attachments {
         return
       }
       const code = await problemCode(response)
-      // No refusal of the file, which waits, and its row with it, in three cases. It was refused for the
+      // No refusal of the file, which waits, and its row with it, in four cases. It was refused for the
       // household's state, which does not upload now (grace, a restriction) and may again (PRD 04
       // §3). Or it was refused by no problem of the API's, which says why with a code: whatever
       // answered in its place, a proxy that lost its upstream or a host that is not the API, has not
       // judged the file, and its bytes are not dropped on its word. Or the API refused the build that
       // sent it as older than it serves, which it answers every request of that build with, the push's
-      // too, where the mutation waits as well: the file is sent by the app its member updates to.
+      // too, where the mutation waits as well: the file is sent by the app its member updates to. Or
+      // the API answered that what the file was sent to is not found, which every route of a
+      // suspended household answers (D-115), as it answers for whatever its caller cannot see: a
+      // suspension empties the replica and lifts, the rows fill it again, and a file that had not
+      // been sent must be there still. Only where the replica holds the row as deleted is that
+      // answer the row's own, and the file's end.
       // Whichever it was, no file is sent for a while: what refused this one refuses the next.
-      if (code === null || isEntitlement(code) || code === updateRequired) {
+      if (
+        code === null ||
+        isEntitlement(code) ||
+        code === updateRequired ||
+        (response.status === 404 && !(await this.deleted(a)))
+      ) {
         this.notBefore = this.now().getTime() + stateRetryMs
         await this.attempted(a.id)
         return
       }
-      // Refused for what it is: the row is marked failed on the server; the bytes are of no further use.
+      // Refused for what it is, and the row is marked failed on the server, or sent for a row its
+      // household deleted: the bytes are of no further use.
       if (await this.options.storage.fileExists(a.local_uri))
         await this.options.storage.deleteFile(a.local_uri)
       await this.db.execute(
@@ -336,6 +350,22 @@ export class Attachments {
         [code, a.id],
       )
     }
+  }
+
+  /**
+   * Whether the replica holds a's row as deleted. A row its household deleted stays in its streams, a
+   * tombstone, where one its member can no longer see, or one of a suspended household, leaves the
+   * replica (PRD 03 §2.6): of the three, only the first is never the server's to take a file for
+   * again. It is read once the upload is answered, since the checkpoint that brings a tombstone may
+   * land while the file is on its way.
+   */
+  private async deleted(a: PendingAttachment): Promise<boolean> {
+    // Every column, since not every client table has this one, and naming it would fail the read.
+    const row = await this.db.getOptional<{ deleted_at?: string | null }>(
+      `SELECT * FROM ${a.table_name} WHERE id = ?`,
+      [a.id],
+    )
+    return typeof row?.deleted_at === 'string'
   }
 
   private async attempted(id: string): Promise<void> {

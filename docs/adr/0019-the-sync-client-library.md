@@ -168,8 +168,13 @@ before a file added meanwhile; a refusal of the file itself is kept with its cod
 and the server marks the row; a refusal for the household's state (`entitlement_*`) is not one, nor is
 one that carries no problem of the API's, sent by a proxy or a host that never judged the file, nor one
 of the build that sent it (`update_required`, which the API answers every request of a build older than
-it serves with, and which judges no file, so that the app its member updates to sends it), and the file
-waits, its bytes and its row. After such a refusal the queue sends no file for fifteen minutes, or
+it serves with, and which judges no file, so that the app its member updates to sends it), nor the
+API's `404`, which every route of a suspended household answers (D-115) while its rows leave the
+replica, to fill it again when the suspension is lifted, and the file waits, its bytes and its row. A
+`404` is the row's own, and the file kept as refused with it, only where the replica holds the row as a
+tombstone: a row its household deleted stays in its streams, where one its member can no longer see
+leaves (FR-SY7), and left waiting its file would be answered so at every run, before any file behind
+it. After such a refusal the queue sends no file for fifteen minutes, or
 until the app's `resume()`, and after a `429` none until its `Retry-After`, a day at most: a household
 in grace writes and does not upload for days, a run starts at every checkpoint and every upload, and
 each try sends the whole file. The wait is kept in memory, so a replica opened again tries once more.
@@ -207,6 +212,9 @@ download losing nothing queued; the web build passes the same in Playwright's Ch
 | **Counting an entity's redacted projection as an entity type of its own** | The contract's entity types are module-qualified entities; counting each id once over both tables is what the server can compute from the entity's rows alone |
 | **Comparing every entity type the server syncs, reported or not** | An app older than the server subscribes to fewer streams, and would be told to download itself again for ever |
 | **PowerSync's attachment queue** (`AttachmentQueue`, alpha) | It manages downloads and an archive the platform does not want, behind a remote storage interface that does not fit a module's upload route and the server marking the row; its storage adapters are used |
+| **A waiting file dropped at the API's `404`**, as at a refusal of the file | A `404` says what its caller cannot see, never what a file is. Every route of a suspended household answers it (D-115), and a photo taken offline and still waiting then would be deleted from the device at the next try, and be gone when the suspension is lifted |
+| **The app telling the queue, from its member's list of households, what a `404` was** | The list tells a suspended household from one its member is no longer in, and the queue does the same for both: the file waits, and goes with the replica where the app removes that. What the queue has to tell is a row gone for good, whose file would stand at its head and be answered `404` at every run; the replica holds such a row as a tombstone, and needs nobody's word for it |
+| **A file answered `404` passed over, and the files behind it sent** | In a suspended household each of them would be sent whole, at every run, to be answered the same |
 | **One TypeScript program for every build** | The DOM's, Node's and React Native's globals cannot be one program's, and merged they hide exactly the React Native gaps a separate check found |
 
 ## Consequences

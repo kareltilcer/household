@@ -1331,13 +1331,110 @@ describe('a replica', waits, () => {
     // Nor is it sent again at every run: what answered the first answers the next.
     await replica.attachments().upload()
     expect(sends()).toBe(1)
-    // The API's own refusal, a problem with its code, is one of the file.
-    answer = () => json(404, { code: 'not_found' })
+    // The API's own refusal of the file, a problem with its code, is another matter.
+    answer = () => json(413, { code: 'payload_too_large' })
     now += stateRetryMs
     await replica.attachments().upload()
     expect(sends()).toBe(2)
     expect(await replica.attachments().list()).toMatchObject([
-      { id: scan, status: 'failed', code: 'not_found' },
+      { id: scan, status: 'failed', code: 'payload_too_large' },
+    ])
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(false)
+  })
+
+  it('keeps a file, bytes and all, that the API answers as not found: a suspended household answers so, and its files are sent once it is lifted (D-115)', async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    let now = Date.parse('2026-10-02T10:00:00Z')
+    // What every route of a suspended household answers, an upload's among them.
+    let answer = (): Response => json(404, { code: 'not_found' })
+    const { fetch, calls } = routes({ '/content': () => answer() })
+    const { replica } = await open({ fetch, storage, now: () => new Date(now) })
+    const sends = (): number => calls.filter((c) => c.url.endsWith('/content')).length
+    const file = {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'r.pdf',
+    }
+    const [receipt, scan] = [newId(), newId()]
+    for (const id of [receipt, scan]) {
+      await arrive(replica, 'items', id, { household_id: household, title: 'Paper', version: 1 })
+      await replica.attach('items', id, file)
+    }
+    await replica.attachments().upload()
+    // The run ends at it: what answered for the household answers the file behind it the same.
+    expect(sends()).toBe(1)
+    const waiting = await replica.attachments().list()
+    expect(waiting).toMatchObject([
+      { id: receipt, status: 'pending', attempts: 1, code: null },
+      { id: scan, status: 'pending', attempts: 0, code: null },
+    ])
+    expect(waiting.map((a) => existsSync(a.local_uri))).toEqual([true, true])
+    // Nor is it sent again at every run, each of which would send the whole file to be refused.
+    await replica.attachments().upload()
+    expect(sends()).toBe(1)
+    // The suspension empties the replica of the household's rows, which are no tombstones: with no
+    // row to be sent for, a file is not sent, and waits as it was.
+    for (const id of [receipt, scan])
+      await replica.db.execute('DELETE FROM ps_data__items WHERE id = ?', [id])
+    now += stateRetryMs
+    await replica.attachments().upload()
+    expect(sends()).toBe(1)
+    const emptied = await replica.attachments().list()
+    expect(emptied.map((a) => a.status)).toEqual(['pending', 'pending'])
+    expect(emptied.map((a) => existsSync(a.local_uri))).toEqual([true, true])
+    // Lifted, the rows fill the replica again, and both files are sent.
+    answer = () => json(201, {})
+    for (const id of [receipt, scan])
+      await arrive(replica, 'items', id, { household_id: household, title: 'Paper', version: 1 })
+    await replica.attachments().upload()
+    expect(sends()).toBe(3)
+    expect(await replica.attachments().list()).toEqual([])
+  })
+
+  it("takes the API's not found for the end of a file whose row the replica holds as deleted, and sends the files behind it", async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    let now = Date.parse('2026-10-02T10:00:00Z')
+    const [receipt, scan] = [newId(), newId()]
+    // Another member deleted the first file's row before its bytes were sent: the server has no row
+    // to take them for, and has the second's.
+    const { fetch, calls } = routes({
+      [`/items/${receipt}/content`]: () => json(404, { code: 'not_found' }),
+      '/content': () => json(201, {}),
+    })
+    const { replica } = await open({ fetch, storage, now: () => new Date(now) })
+    const sent = (): string[] =>
+      calls.filter((c) => c.url.endsWith('/content')).map((c) => c.url.split('/').at(-2) ?? '')
+    const file = {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'r.pdf',
+    }
+    for (const id of [receipt, scan]) {
+      await arrive(replica, 'items', id, { household_id: household, title: 'Paper', version: 1 })
+      await replica.attach('items', id, file)
+    }
+    // The checkpoint that brings the tombstone has not landed: to the replica the row is there, and
+    // the answer could be the household's. The file waits, and the one behind it.
+    await replica.attachments().upload()
+    expect(sent()).toEqual([receipt])
+    const [waiting] = await replica.attachments().list()
+    expect(waiting).toMatchObject({ id: receipt, status: 'pending', attempts: 1, code: null })
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(true)
+    // The tombstone lands. Sent again, the file is refused for good, and no longer stands before
+    // the one behind it: left waiting, it would be answered so at every run, and that one never sent.
+    await arrive(replica, 'items', receipt, {
+      household_id: household,
+      title: 'Paper',
+      version: 2,
+      deleted_at: '2026-10-02T10:00:05Z',
+    })
+    now += stateRetryMs
+    await replica.attachments().upload()
+    expect(sent()).toEqual([receipt, receipt, scan])
+    expect(await replica.attachments().list()).toMatchObject([
+      { id: receipt, status: 'failed', attempts: 2, code: 'not_found' },
     ])
     expect(existsSync(waiting?.local_uri ?? '')).toBe(false)
   })
