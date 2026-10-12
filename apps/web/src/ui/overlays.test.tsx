@@ -618,13 +618,23 @@ describe('a toast', () => {
     expect(region().contains(document.activeElement)).toBe(true)
   })
 
+  /**
+   * What reads the toasts out: what Radix has assistive technology say, beside each toast it
+   * draws, for a second from when the toast is raised.
+   */
+  const readOut = () => [
+    ...document.querySelectorAll<HTMLElement>('[role="status"][aria-live="assertive"]'),
+  ]
+  /** How long Radix waits before it puts a toast's words into what reads it out: two frames. */
+  const twoFrames = 2 * 16
+
   it('is read out as a notification, by that one word and not by its region’s name', async () => {
     draw(<Clear />)
     await userEvent.click(screen.getByRole('button', { name: 'clear' }))
-    // What Radix has assistive technology say, for a moment, beside the toast it draws.
-    const said = () => document.querySelector('[role="status"][aria-live="assertive"]')
     await waitFor(() => {
-      expect(said()).toHaveTextContent(/^Notification 7 checked items cleared from Weekly shop$/)
+      expect(readOut()[0]).toHaveTextContent(
+        /^Notification 7 checked items cleared from Weekly shop$/,
+      )
     })
   })
 
@@ -678,15 +688,10 @@ describe('a toast', () => {
     expect(await within(panel).findByText(words.cleared)).toBeVisible()
     expect(panel).toContainElement(screen.getByRole('region', { name: 'Notifications (F8)' }))
     // What reads it out is inside the dialog too: outside it, nothing is read.
-    expect(panel.querySelector('[role="status"][aria-live="assertive"]')).not.toBeNull()
+    expect(panel).toContainElement(readOut()[0] ?? null)
     await userEvent.click(within(panel).getByRole('button', { name: 'Undo' }))
     expect(undo).toHaveBeenCalledTimes(1)
   })
-
-  /** What reads the toasts out, for a second from when each is raised. */
-  const readOut = () => [
-    ...document.querySelectorAll<HTMLElement>('[role="status"][aria-live="assertive"]'),
-  ]
 
   it('stays, on the page again, when the dialog it was raised in closes', async () => {
     draw(<Editing undo={() => undefined} />)
@@ -743,19 +748,21 @@ describe('a toast', () => {
     expect(screen.getAllByText(words.cleared)).toEqual([raised])
   })
 
-  it('is read out by the one region, which goes where the toast goes', async () => {
+  it('is read out by the one region, which goes where the toast goes', () => {
+    // The clock is the test's: Radix takes what reads a toast out away a second after the toast
+    // is raised, and a machine with other work may take as long over two presses.
+    vi.useFakeTimers()
     draw(<Editing undo={() => undefined} />)
     const panel = screen.getByRole('dialog', { name: words.meter })
-    await userEvent.click(within(panel).getByRole('button', { name: 'clear' }))
-    await waitFor(() => {
-      expect(readOut()).toHaveLength(1)
-    })
+    fireEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+    expect(readOut()).toHaveLength(1)
     const [said] = readOut()
-    await waitFor(() => {
-      expect(said).toHaveTextContent(/^Notification 7 checked items cleared from Weekly shop/)
+    act(() => {
+      vi.advanceTimersByTime(twoFrames)
     })
+    expect(said).toHaveTextContent(/^Notification 7 checked items cleared from Weekly shop/)
     expect(panel).toContainElement(said ?? null)
-    await userEvent.click(within(panel).getByRole('button', { name: 'Close' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Close' }))
     // What said it in the panel is on the page with it, and nothing was made beside it to say
     // it over again.
     expect(readOut()).toEqual([said])
@@ -763,7 +770,8 @@ describe('a toast', () => {
     expect(panel).not.toContainElement(said ?? null)
   })
 
-  it('is read out where it stands by then, when its dialog goes before its words are said', async () => {
+  it('is read out where it stands by then, when its dialog goes before its words are said', () => {
+    vi.useFakeTimers()
     draw(<Editing undo={() => undefined} />)
     const panel = screen.getByRole('dialog', { name: words.meter })
     // Raised and left in one turn: Radix puts a toast's words into what reads it out two
@@ -777,33 +785,46 @@ describe('a toast', () => {
     // that is what is said.
     expect(readOut()).toEqual([said])
     expect(panel).not.toContainElement(said ?? null)
-    await waitFor(() => {
-      expect(said).toHaveTextContent(/^Notification 7 checked items cleared from Weekly shop/)
+    act(() => {
+      vi.advanceTimersByTime(twoFrames)
     })
+    expect(said).toHaveTextContent(/^Notification 7 checked items cleared from Weekly shop/)
     expect(readOut()).toEqual([said])
   })
 
   describe('where the platform moves an element as it is', () => {
     /** What `moveBefore` was asked to move, and how the dialog it left stood as it was asked. */
     const moves: { readonly to: string; readonly left: string }[] = []
+    /** The platform's own `moveBefore`, where it has one, to put back after each test. */
+    let platforms: PropertyDescriptor | undefined
 
     beforeEach(() => {
       moves.length = 0
+      platforms = Object.getOwnPropertyDescriptor(Element.prototype, 'moveBefore')
       // jsdom has no `moveBefore`: one that tells of the move, and makes it as jsdom can.
       Object.defineProperty(Element.prototype, 'moveBefore', {
         configurable: true,
         value: function moveBefore(this: Element, node: Element, child: Node | null) {
-          const from = node.closest('dialog')
+          const around: HTMLDialogElement[] = []
+          let at = node.closest('dialog')
+          while (at !== null) {
+            around.push(at)
+            at = at.parentElement?.closest('dialog') ?? null
+          }
+          // What is inside a dialog is drawn only while it is open, and every dialog around it.
+          const shown = node.isConnected && around.every((dialog) => dialog.open)
           moves.push({
             to: this.nodeName,
-            left: from === null ? 'the page' : from.open && from.isConnected ? 'open' : 'closed',
+            left: around.length === 0 ? 'the page' : shown ? 'open' : 'closed',
           })
           this.insertBefore(node, child)
         },
       })
     })
     afterEach(() => {
-      Reflect.deleteProperty(Element.prototype, 'moveBefore')
+      // As it was: a jsdom that has the move by then keeps its own for the tests after this.
+      if (platforms === undefined) Reflect.deleteProperty(Element.prototype, 'moveBefore')
+      else Object.defineProperty(Element.prototype, 'moveBefore', platforms)
     })
 
     it('leaves a dialog that is shown still, and is in the document still', async () => {
@@ -830,6 +851,117 @@ describe('a toast', () => {
       ])
       expect(raised).toBeVisible()
     })
+
+    /** A panel with a question open inside it, as an editor that asks before it discards. */
+    function Asked({ asking = true }: { asking?: boolean }) {
+      return (
+        <Sheet open onClose={() => undefined} title={words.meter}>
+          <Clear />
+          <Dialog open={asking} onClose={() => undefined} title={words.discard} />
+        </Sheet>
+      )
+    }
+
+    it('leaves a question for the panel around it, and the two while both are shown when they go together', () => {
+      const { rerender } = draw(<Asked />)
+      const panel = screen.getByRole('dialog', { name: words.meter })
+      const question = screen.getByRole('dialog', { name: words.discard })
+      // jsdom holds nothing inert: the press lands on the panel under its question.
+      fireEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+      const raised = within(question).getByText(words.cleared)
+      moves.length = 0
+      rerender(<Asked asking={false} />)
+      expect(moves).toEqual([{ to: 'DIALOG', left: 'open' }])
+      expect(panel).toContainElement(raised)
+      expect(question).not.toContainElement(raised)
+
+      // Taken away together, React undoes the panel's effect before its question's: the panel
+      // closes its question and itself there, and the question's own effect is undone only
+      // after. Left for the question to say, the toast would leave a dialog that had closed.
+      rerender(<Asked />)
+      expect(question).toContainElement(raised)
+      moves.length = 0
+      rerender(<Press name="elsewhere" onPress={() => undefined} />)
+      expect(moves).toEqual([{ to: 'BODY', left: 'open' }])
+      expect(raised).toBeVisible()
+    })
+
+    /** A panel whose owner keeps it open whatever asks it to close, as one that is saving. */
+    function Kept() {
+      return (
+        <Sheet open onClose={() => undefined} title={words.meter}>
+          <Clear />
+        </Sheet>
+      )
+    }
+
+    it('leaves a dialog the platform closes behind its owner’s back while it is shown still, and is in it again once it is shown again', async () => {
+      draw(<Kept />)
+      const panel = screen.getByRole<HTMLDialogElement>('dialog', { name: words.meter })
+      fireEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+      const raised = within(panel).getByText(words.cleared)
+      moves.length = 0
+      await act(async () => {
+        // As the platform does it: a `cancel` the page may not refuse, and then the close,
+        // which it says is coming while the dialog is open still (`beforetoggle`).
+        panel.dispatchEvent(new Event('cancel'))
+        panel.close()
+        await Promise.resolve()
+      })
+      expect(panel.open).toBe(true)
+      expect(moves).toEqual([
+        { to: 'BODY', left: 'open' },
+        { to: 'DIALOG', left: 'the page' },
+      ])
+      expect(panel).toContainElement(raised)
+    })
+
+    it('leaves such a dialog when its owner hears of the close, where the platform says nothing first', async () => {
+      draw(<Kept />)
+      const panel = screen.getByRole<HTMLDialogElement>('dialog', { name: words.meter })
+      fireEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+      const raised = within(panel).getByText(words.cleared)
+      moves.length = 0
+      await act(async () => {
+        // A browser that sends a dialog no `beforetoggle`: closed, and its `close` after.
+        panel.dispatchEvent(new Event('cancel'))
+        panel.removeAttribute('open')
+        await Promise.resolve()
+        panel.dispatchEvent(new Event('close'))
+      })
+      expect(panel.open).toBe(true)
+      // Out of a dialog that had closed, where nothing is moved as it is, and into it again:
+      // the one element all the same, in the panel its owner kept.
+      expect(moves).toEqual([
+        { to: 'BODY', left: 'closed' },
+        { to: 'DIALOG', left: 'the page' },
+      ])
+      expect(panel).toContainElement(raised)
+      expect(screen.getAllByText(words.cleared)).toEqual([raised])
+    })
+  })
+
+  it('is marked once its arrival is over, which it keeps for as long as it is drawn', () => {
+    // The stylesheet animates a toast that is not marked, and a browser begins an animation
+    // again on an element taken out of the document and put back (e2e/primitives.spec.ts).
+    draw(<Clear undo={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }))
+    const toast = screen.getByText(words.cleared).closest('li')
+    if (toast === null) throw new Error('the toast is no item of a list')
+    expect(toast).not.toHaveAttribute('data-arrived')
+    // React listens for the end of an animation by its name where the window has an
+    // `AnimationEvent`, and by the name browsers gave it before they had one where it has
+    // none, as jsdom has none.
+    const over = 'AnimationEvent' in window ? 'animationend' : 'webkitAnimationEnd'
+    // An animation of something drawn inside it is not its arrival.
+    fireEvent(screen.getByRole('button', { name: 'Undo' }), new Event(over, { bubbles: true }))
+    expect(toast).not.toHaveAttribute('data-arrived')
+    fireEvent(toast, new Event(over, { bubbles: true }))
+    expect(toast).toHaveAttribute('data-arrived', '')
+    // Another toast beside it draws them both again, and the first is marked still.
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }))
+    expect(screen.getAllByText(words.cleared)).toHaveLength(2)
+    expect(toast).toHaveAttribute('data-arrived', '')
   })
 
   /** Presses Escape where the focus is, and says whether the key was left for the platform. */

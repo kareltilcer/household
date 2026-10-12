@@ -28,6 +28,13 @@
   box-shadow: var(--shadow-2);
   color: var(--text-inverse);
   pointer-events: auto;
+}
+
+/* A toast arrives once. One whose arrival is over is marked (Toast.tsx) and has no animation on
+   it from then on: the toasts go into a modal and out of it as one element (ui/topLayer.ts), and
+   a browser begins an animation again on an element that is taken out of the document and put
+   back, or drawn again after a dialog around it had closed. */
+.toast:not([data-arrived]) {
   animation: arrive var(--dur-base) var(--ease-entrance);
 }
 

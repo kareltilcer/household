@@ -55,12 +55,22 @@ the end of the page, stand inside the modal that is open for as long as one is
 chosen from, and an Undo raised over one can be pressed. A menu is drawn for a press, inside
 whichever modal is on top as it opens. The toasts outlast a modal's opening and its closing, so
 they are drawn once, in an element of their own, with what reads each of them out, and that
-element is moved into the modal and out of it again: in the turn the dialog says it opened or is
-closing, which is before it closes and before React takes it out of the document with the screen
-that drew it, and by the platform's `moveBefore` where it has one, which moves an element as it
-is, an arrival part run going on. A toast on the screen is one element whatever opens or closes
-under it. Where the platform has no such move the element is taken out and put in, the same
-element still, and the browser begins a toast's arrival again.
+element is moved into the modal and out of it again: in the turn the dialog is said to have
+opened or to be closing, which is before it closes and before React takes it out of the document
+with the screen that drew it, and by the platform's `moveBefore` where it has one, which moves an
+element as it is, an arrival part run going on. A dialog that goes says so for the dialogs open
+inside it as well, a panel taken away with its question: React undoes a parent's effect before
+its child's there, and the panel closes its question with itself. A dialog the platform closes
+behind its owner's back is said to be closing by the platform, whose `beforetoggle` reaches a
+dialog while it is open still; in a browser that sends a dialog none, the toasts are inside a
+closed dialog, undrawn, until its owner hears of the close. A toast on the screen is one element
+whatever opens or closes under it. Where the platform has no such move the element is taken out
+and put in, the same element still, and a browser begins an animation again on an element put in
+so, as on one drawn again after a dialog around it had closed. So a toast's arrival is its
+element's once: the toast is marked when its arrival is over (`data-arrived`), the stylesheet
+animates only one that is not, and what begins again is an arrival that was part run. A focus
+among the toasts is kept through neither: a dialog takes the focus as it opens, and the platform
+gives it to what opened the dialog as it closes, wherever it was.
 What the platform and Radix leave to the app, the components do themselves. A dialog's owner
 names what takes the focus as it opens (`initialFocus`), where that is not its first control: a
 field's `autoFocus` cannot, since React focuses such a field as it mounts, before the dialog is
@@ -272,7 +282,10 @@ waits in the page, and is sent from there when the connection is back.
 | Escape under a modal left to Radix and the platform both, or given to the toast first | The first closes the panel and takes the Undo with it. The second leaves the panel open after the key that should have closed it, and loses the Undo all the same: a toast is no layer a member opened |
 | The toasts drawn at a side panel's own foot, in its flow, where they would cover nothing | A toast would move as the panel closed, out from under a pointer that holds its dwell, and Radix would hold every dwell after it. Their place is one, and the panel makes room |
 | The toasts' region drawn by a portal into whichever modal is on top, and at the app's root while none is, as item 24 had it | Each change of the modal on top drew the region anew, and every toast in it, and what reads each out: other elements in the same place. A toast said as a confirmation leads on to another screen, a household left or a member removed, is raised inside the confirmation, which stays until that screen has come: it arrived a second time as the confirmation went, a press begun on its Undo ended on another element, and what reads it out was made again with its words in it. Found by a unit test that held the first element while the second took its place, once in CI and on demand with each task of React's scheduler in a turn of its own (`household/leave.test.tsx`). One element is moved |
-| The toasts' element moved in a render that follows the dialog's closing | By then the dialog has closed, or left the document with its screen: what is inside one that is closed is not drawn, so a toast's arrival is begun again when it is drawn on the page, and the platform moves nothing that is out of the document. The dialog says it is closing first, and the element leaves it then |
+| The toasts' element moved in a render that follows the dialog's closing | By then the dialog has closed, or left the document with its screen: what is inside one that is closed is not drawn, so a toast's arrival is begun again when it is drawn on the page, and the platform moves nothing that is out of the document. The dialog is said to be closing first, by its owner or by the platform's `beforetoggle`, and the element leaves it then |
+| Each dialog left to say for itself that it is closing, one drawn inside another too | A panel taken away with its question open, the two in one commit, is the first of them to have its effect undone, and closes both: the question said it was closing after it had closed, and the toasts left a closed dialog. In Chromium 152 an element moved by `moveBefore` out of a dialog that had closed began its animation again, and one moved while the dialog was open, in its `beforetoggle` too, did not. A dialog says it for those inside it |
+| A dialog the platform closes behind its owner's back told of by its `close` alone, as its owner is | The `close` comes a task after the dialog has closed: the toasts were inside a closed dialog until then, undrawn, an Undo with them, and left it closed. The platform's `beforetoggle` comes first, while the dialog is open still, on the Escape a page may not refuse as on any other close |
+| A toast's arrival left on the toast for as long as it is drawn, a rule of its class | An element taken out of the document and put back begins its animation again, which is every move of the toasts in a browser with no `moveBefore`: each toast on the screen arrived again as a modal opened or closed there, as it did when it was drawn anew. Marked as over on the element, the arrival is not there to begin |
 | What reads a toast out hidden from a reader as it is moved with its words in it, so that no reader says a toast twice | A region that arrives with its words in it need not be said, and a reader that says it says the toast a second time. Hidden as it is moved, it would not be: and hidden a moment after its words were put in it, before a reader had read them, the toast would not be said at all, which is the worse of the two |
 | A menu's Escape left to Radix's layers alone | A toast raised while a menu is open is the last layer: the key would close the panel the menu is drawn in, with what was typed there, or put away a toast the member did not mean |
 | Escape left to put the newest toast away on a page with nothing else open, as Radix has it | Whatever a screen gives the key to, a rename taken back or a search cleared, would put an Undo away with it, and the toasts would have to be told of each. The key is theirs only among them, where their own key takes a member |

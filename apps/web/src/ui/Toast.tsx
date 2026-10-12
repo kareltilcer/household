@@ -57,6 +57,12 @@ const hotkey = 'F8'
  */
 const toastsRoom = '--toasts-room'
 
+/**
+ * The attribute a toast whose arrival is over is marked by, for as long as its element lives:
+ * the stylesheet animates only a toast without it (Toast.module.css).
+ */
+const arrived = 'data-arrived'
+
 export function ToastProvider({ children }: { readonly children: ReactNode }) {
   const t = useTranslate()
   const [run, setRun] = useState<Run>({ number: 0, toasts: [] })
@@ -181,6 +187,16 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
             // is is decided below.
             open
             className={styles.toast}
+            onAnimationEnd={(event) => {
+              // An animation of something drawn inside it is not its arrival.
+              if (event.target !== event.currentTarget) return
+              // Its arrival is over for good. Where the platform cannot move the toasts as they
+              // are, they are taken out of a modal and put on the page, and the browser would
+              // begin the arrival of every toast on the screen again. Written on the element,
+              // as Radix writes a swipe's state on it: nothing is drawn by it but what the
+              // stylesheet draws.
+              event.currentTarget.setAttribute(arrived, '')
+            }}
             onPointerDown={() => {
               pressed.current = true
             }}
