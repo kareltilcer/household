@@ -13,7 +13,7 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { locales } from '../src/locales.ts'
 import { parseMessage, signature } from '../src/message.ts'
-import { clientParts, partOf, serverSegments } from '../src/parts.ts'
+import { clientParts, deviceSegments, partOf, serverSegments } from '../src/parts.ts'
 
 const out = new URL('../src/generated/', import.meta.url)
 const partsOut = new URL('parts/', out)
@@ -37,9 +37,10 @@ function read(locale: string): [string, string][] {
     })
 }
 
-/** Whether `key` is in a row of the table of parts: a part's, or the server's alone. */
+/** Whether `key` is in a row of the table of parts: a part's, the server's alone, or the mobile app's. */
 const placed = (key: string) =>
-  partOf(key) !== undefined || serverSegments.some((segment) => key.startsWith(`${segment}.`))
+  partOf(key) !== undefined ||
+  [...serverSegments, ...deviceSegments].some((segment) => key.startsWith(`${segment}.`))
 
 const entries = read('en').map(([key, message]) => {
   // A key in no row would be in no file a client fetches, and nothing would say so until a

@@ -14,6 +14,8 @@ export {
   type AttachmentFile,
   type AttachmentOptions,
   type PendingAttachment,
+  type StoredFile,
+  type StoredTransport,
   type UploadTransport,
 } from './attachments.ts'
 export { ChecksumWatch } from './checksums.ts'

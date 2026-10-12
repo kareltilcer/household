@@ -21,6 +21,8 @@
     "@fontsource/ibm-plex-mono": "5.3.0"
   },
   "devDependencies": {
+    "@expo-google-fonts/ibm-plex-mono": "catalog:",
+    "@expo-google-fonts/ibm-plex-sans": "catalog:",
     "@types/fontkit": "2.0.9",
     "@types/node": "catalog:",
     "eslint": "catalog:",

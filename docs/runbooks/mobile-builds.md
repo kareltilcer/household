@@ -1,0 +1,456 @@
+# Mobile builds: the three variants, EAS, and what CI builds
+
+The mobile app is an Expo app in the managed workflow (PL-5): its native projects are no files of
+the repository, and Expo writes them from `apps/mobile/app.config.ts` each time a build is made.
+A build is one of three variants, made by EAS Build from one of three profiles; CI makes a fourth
+kind of its own, for its emulator and its simulator, which no member is served. Read this before
+the first EAS build, when a build must be told a new API or a link host, when a permission is added
+or a library is, when one of CI's mobile jobs fails, and when a pin of theirs is moved.
+
+**No EAS project exists yet, and nothing of `eas.json` has been run**: plan item 30 makes the first
+staging build. What this says of EAS is how the configuration was written to be used, and each
+command's first use is where it is checked.
+
+## What is where
+
+| | |
+|---|---|
+| The app's identity | `apps/mobile/app.config.ts`: the identifier `com.kareltilcer.household`, the scheme `household`, the name, each with a variant's suffix. A placeholder until the app is published under its publisher's own: changing one is changing that file, and the `appId` of each flow, which a test holds to it |
+| The variant | `APP_VARIANT`: `development` (the default), `staging` or `production`. Each profile of `eas.json` sets it |
+| The API | `HOUSEHOLD_MOBILE_API_URL`, `https://…/api/v1`. A staging or a production build that is told none is refused as it is configured; a development build told none asks the developer's machine (`10.0.2.2:8080` from an Android emulator, `127.0.0.1:8080` from an iOS simulator). The sync service's address is never configured: it arrives with the credentials the API mints, so it is the server's `HOUSEHOLD_POWERSYNC_URL` that a device must be able to reach |
+| The link host | `HOUSEHOLD_MOBILE_LINK_HOST`: the host whose `https` links open the app. None is set, and the scheme alone opens it |
+| The EAS project | `EAS_PROJECT_ID`, which `app.config.ts` reads into `extra.eas.projectId`. None exists |
+| The store pages | `HOUSEHOLD_MOBILE_STORE_URL_IOS` and `HOUSEHOLD_MOBILE_STORE_URL_ANDROID`: the app's own page in each store, which *please update* opens on that platform. Neither is set, the app being in no store: the screen is then drawn with no control, since one that cannot act is absent. Set each in the `env` of the `staging` and `production` profiles once its page exists |
+| What a build asks of its device | `apps/mobile/build/asked.ts`, with what each permission is for, and `unusedPermissions` in `apps/mobile/app.config.ts`, which every build removes |
+| The profiles | `apps/mobile/eas.json`: `development`, `staging`, `production`, on the Node and the pnpm the workspace names |
+| The generated sources | `packages/*/src/generated/` is never committed, so it is in no upload: `apps/mobile/package.json`'s `eas-build-post-install` runs the workspace's `gen` on the builder, after its install |
+| The bundle budget | `apps/mobile/build/budget.ts`: each platform's bytecode, and what it measured when the budget was set |
+| The flows | `apps/mobile/e2e/flows`, run by `apps/mobile/e2e/run.ts` under Maestro, whose version is `apps/mobile/e2e/install-maestro.sh`'s |
+| CI | `.github/workflows/ci.yml`: `mobile-changes`, `mobile`, `mobile-android`, `mobile-ios` |
+
+## The three variants
+
+| | development | staging | production |
+|---|---|---|---|
+| Identifier | `com.kareltilcer.household.dev` | `com.kareltilcer.household.staging` | `com.kareltilcer.household` |
+| Scheme | `household-dev` | `household-staging` | `household` |
+| The dev client's own scheme | `exp+household`, by which a developer's machine opens the build | none | none |
+| Name under the icon | Household Dev | Household Staging | Household |
+| The API | the developer's machine, unless told | told, or the build is refused | told, or the build is refused |
+| Plain `http` on Android | allowed | refused | refused |
+| EAS profile | `development`: a development client, internal distribution | `staging`: internal distribution | `production`: the stores', the build number raised by EAS |
+
+The three install side by side on one device. On iOS every variant may ask an address on its own
+network over plain `http` and no other, which is the template's setting
+(`NSAllowsLocalNetworking`) and how a simulator reaches the developer's machine: read in the
+template's `Info.plist`, and run by nothing, no flow on iOS asking a server.
+
+## Before the first EAS build
+
+1. **`eas init`**, from `apps/mobile`, signed in to the Expo account that will own the project. It
+   makes the project and gives its id. The app's configuration is a program and not a JSON file, so
+   `eas init` cannot write into it: it prints what to add. What it prints is the id, and for a
+   project an organisation owns, an `owner`.
+2. **The id** reaches a build through `EAS_PROJECT_ID`. It is no secret. Set it where each build
+   reads its environment: in `eas.json`, in the `env` of the `base` profile, which the three extend;
+   and in the shell of whoever runs `pnpm start` for a development build, since a development
+   build's configuration is evaluated on the developer's machine. Without it a build is still made,
+   and the app says of notifications that they are not set up in this build.
+3. **`owner`**, where `eas init` printed one, is a line of `app.config.ts`, beside `slug`.
+4. **The two addresses in `eas.json`** are the contract's example servers and answer nothing. Staging's
+   and production's own replace them when each exists (plan items 30 and 88).
+5. **Credentials** are EAS's to keep: an Android keystore for each identifier, and for iOS a
+   distribution certificate and a provisioning profile for each identifier, each with the Push
+   Notifications capability. `eas build` asks for them the first time and makes them.
+6. **Android push** needs the Firebase project's `google-services.json` in the build and its service
+   account key at EAS. Neither is configured: until they are, an Android build registers no push
+   token.
+
+EAS's command line is no dependency of the workspace: install it as Expo's documentation says, and
+pin it in this runbook once a version has made a build. Check a profile's configuration before
+building it, which costs nothing:
+
+```bash
+cd apps/mobile
+eas config --profile staging --platform android
+```
+
+## Making a build
+
+```bash
+cd apps/mobile
+eas build --profile development --platform android   # or ios, or all
+eas build --profile staging --platform all
+eas build --profile production --platform all
+```
+
+- **A development build** holds the dev client and no JavaScript: it loads the app from Metro on the
+  developer's machine. Start that with `pnpm exec turbo run gen` and then
+  `pnpm --filter @household/mobile start`. A phone in the hand is told the machine's address on
+  its network, `HOUSEHOLD_MOBILE_API_URL=http://192.168.x.y:8080/api/v1 pnpm --filter
+  @household/mobile start`, with no new build; the API must then listen there
+  (`HOUSEHOLD_HTTP_ADDR=0.0.0.0:8080`), and so must the address it gives a replica for the sync
+  service (`HOUSEHOLD_POWERSYNC_URL`).
+- **A staging and a production build** hold their JavaScript, ask the API they were built for, and
+  carry no dev screen and nothing that stands in for the server or the replica:
+  `pnpm --filter @household/mobile run export` and `run check` hold the same bundle to that, and
+  to its budget, with no build at all.
+- **Without EAS**, on a machine with Android Studio or Xcode: `pnpm --filter @household/mobile exec
+  expo prebuild --platform android`, then `expo run:android` (or `ios`). The folders it writes,
+  `apps/mobile/android` and `apps/mobile/ios`, are ignored by git, ESLint and Prettier; delete them
+  after a change to `app.config.ts`, or pass `--clean`. Expo writes no iOS project on Windows.
+- **A build that embeds its JavaScript on a developer's machine** (`expo run:android --variant
+  release`, `eas build --local`, the commands of CI's jobs) bundles through `expo export:embed`.
+  React Native's build scripts pass it `--reset-cache`, and Expo drops that where `CI` is set
+  in the environment, as it is on a runner and may be in a shell (read in React Native's Gradle
+  task and Xcode script and in Expo's CLI; run on nothing but CI's fresh runners). Metro keeps
+  what it transformed and does not know of `EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS`, so with `CI` set
+  on a machine that has bundled before, a build holds the dev screens, or does not, as whatever
+  was bundled before it did: clear the cache by hand first (`expo start --clear` clears it as
+  it starts, and is stopped again), or unset `CI`. `run check` reads an export and nothing a
+  build embeds, so it does not catch this one.
+
+## What a build asks of its device
+
+FR-PR1: every permission the apps request is justified in a table in the release notes, and one no
+module uses is removed. On Android the list a build ends with is in no file: the manifests of
+Expo's template and of every library are merged as the build is made. Two files decide it, and CI
+holds a build to them.
+
+- **`apps/mobile/build/asked.ts`** is what a build asks for, by name, each with what it is for:
+  `INTERNET`, `ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS`, `VIBRATE`, `WAKE_LOCK` and Google's
+  messaging `RECEIVE`, and in a development build `SYSTEM_ALERT_WINDOW`, by which React Native
+  draws its errors over the app. It is the source of the table in the release notes. Beside them
+  every build holds one permission of its own making,
+  `<identifier>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, which asks its member nothing.
+  `VIBRATE` is the template's own, and no library the app links asks for it: it is kept until a
+  device has shown a notification felt without it (plan item 30), and removed then in
+  `app.config.ts`.
+- **`apps/mobile/app.config.ts`** (`unusedPermissions`) is what every build removes, whichever
+  library asks for it, each with why nothing needs it: shared storage (the template's and
+  expo-file-system's), a fingerprint or a face (androidx.biometric's, under expo-secure-store), the
+  Wi-Fi network's state (NetInfo's), the install referrer (under expo-application), being started
+  with the device (`RECEIVE_BOOT_COMPLETED`, by which expo-notifications schedules again what an
+  app had it hold to show later: the app has it hold nothing, a notification being a push), and
+  sixteen that draw a count on the icon of one launcher or another (the badge library's, under
+  expo-notifications). The first build on a runner asked for thirty-one; a development build is
+  to ask for eight, and one a member installs for seven.
+- **CI's `mobile-android` job** reads the list off the build it makes, the permissions a manifest
+  asks for from Android 6 on (`uses-permission-sdk-23`) with the rest, and fails on a permission that
+  has no reason, and on a reason for a permission the build does not ask for. So **a new library
+  that brings a permission fails that job** until somebody decides: its reason in `asked.ts`, or
+  its name in `unusedPermissions`. The build is the development variant, and the flows run on it
+  with everything unused already removed; `apps/mobile/build/permissions.test.ts` holds each
+  variant's configuration to its list. To read any build:
+
+  ```bash
+  "$ANDROID_HOME"/build-tools/<version>/aapt2 dump permissions app.apk > asked.txt
+  node apps/mobile/build/apk.ts asked.txt production
+  ```
+
+- **A count on the app's icon** is one thing here a later item may want back: it is taking the
+  sixteen launchers' names out of `unusedPermissions`, and giving each its reason. **A
+  notification the device itself shows at a time**, a reminder scheduled on it and not pushed, is
+  the other: it is `RECEIVE_BOOT_COMPLETED`'s reason, without which what was scheduled is lost
+  when the device restarts (read in expo-notifications' sources, and run on nothing).
+
+**iOS** asks through a sentence in `Info.plist`, and the configuration writes none of its own: no
+Face ID (`expo-secure-store` is told so), no camera, no photographs, no location, no contacts. The
+dev client's plugin writes one, `NSLocalNetworkUsageDescription`, with its Bonjour service, into
+every variant's `Info.plist`, for finding the developer's machine, and adds the build phase that
+takes both out of every build that is not a debug one. CI's `mobile-ios` job reads the release build
+it makes and fails if either is still there: neither was, on the first run. Read any build the same
+way:
+
+```bash
+plutil -p Household.app/Info.plist | grep -E 'UsageDescription|NSBonjourServices'
+```
+
+## What CI builds
+
+Nothing on a developer's machine need be able to launch the app, so CI is where it is seen on a
+device. The jobs run only when the app can have changed: `mobile-changes` reads the diff, and the
+three others are skipped unless it names `apps/mobile/`, `packages/`, the lockfile, the workspace's
+settings, the root `package.json` or the workflow itself. They are skipped only where that job
+said so: where it failed and said nothing, they run, so that a filter that broke is not read as
+nothing having changed. The app's unit tests are Jest's and run in the `typescript` job, whatever
+changed.
+
+| Job | Runner | What it does | The first run took |
+|---|---|---|---|
+| `mobile` | Linux | `export` and `check`: the production bundles of both platforms, under their budget, with no dev screen and no stand-in | 1 min |
+| `mobile-android` | Linux, KVM | writes the Android project, builds a release APK for `x86_64`, starts the development services and the API, makes a member, boots an emulator at API 29, runs the flows, asks the server for the member's devices and for the household's clients, and holds the build's permissions to their reasons | 13 min: the build 9, with nothing cached; the services and the API under one; the emulator's boot and three flows two |
+| `mobile-ios` | `macos-26` | writes the iOS project, installs the pods, builds a release app for a simulator of its own, runs the flows, and reads the built `Info.plist` | the pods 1 min, the build 8, Maestro's driver and the app's first start 1 |
+
+What a build downloads, Gradle's dependencies and CocoaPods', is restored at the job's start and
+kept in a step of its own as soon as the build, or the pods' installation, has passed, whatever
+the flows come to after it: the one action that does both keeps nothing of a job that failed,
+and a run of failing flows downloaded everything each time.
+
+**The build the flows walk** is the development variant, as a release build with its JavaScript in
+it, made with `EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS=1`: the dev screens are in it, which is what a
+flow opens. It is installed nowhere else. Metro keeps what it transformed and does not know of that
+variable, so on one machine an export made with it and one made without are made with the cache
+cleared between them (`expo export --clear`, which the `export` script passes); CI makes each in a
+job of its own.
+
+**The flows** (`apps/mobile/e2e/flows`) select by `testID` and never by a word.
+`apps/mobile/e2e/flows.test.ts` holds each to the app's own names, since nothing here runs them.
+
+| Flow | Reads | Runs on |
+|---|---|---|
+| `launch` | with nobody signed in, the app opens at sign-in | both |
+| `engine` | the engine screen's checks all hold on Hermes itself: the i18n vectors, the fonts, the random source, the client's name, and the built-ins as `src/dev/engine/builtins.ts` lists them, none of what it says a device lacks and all of what it says one has | both |
+| `theme` | the theme changes at a press | both |
+| `harness` | a cell of each kind of the twelve-state harness, at 200 % text, in both themes; the populated row and the row in conflict each whole in a screenshot | both |
+| `row` | a list row at 200 % text: its action under its avatar and words, at the row's own edge, and not beside them | both |
+| `primitives` | a sheet opens and closes; a menu's item opens a confirmation | both |
+| `stepper` | a drag that begins on a stepper's count takes the page with it | both |
+| `toast` | a toast with Undo at 200 % text, in a screenshot for a person | both |
+| `mark` | a sync mark that arrives after its row, at 200 % text: under the avatar and words, and not beside them | both |
+| `sheet` | a stepper in a sheet at 200 % text, its two buttons whole, in a screenshot | both |
+| `sides` | a sheet, a dialog and a toast at 200 % text with the device turned on its side, each in a screenshot for a person: no edge of any under the camera's housing or the band of Android's buttons | both |
+| `keyboard` | a select's choices opened with a field's keyboard up, in a screenshot with no keys over them | both |
+| `formats` | the app's own formatters on the device's `Intl`: a sample of each thing they write, a number as Node writes it and a date by its fields | both |
+| `hold` | hold to complete: let go early, and held | both |
+| `shell` | a tab bar's slot opens its place and says so, Add is a sheet over it; a module is hidden from its row's menu; one pane at a phone's width and two at a tablet's; *not available* leads home | both |
+| `turned` | a tablet's tab bar told the narrowest room: laid out anew as a phone's, both its ends whole on the screen | both |
+| `resolvers` | a change that was not accepted is given up: its sheet, the confirmation inside it, both gone and a toast | both |
+| `link` | a link opens the app at its address | Android |
+| `stack` | a member signs in against the real server, in their household's frame over its tab bar, and is signed in still after a restart. The job then asks the server for the account's devices (`e2e:stack devices`) | Android, with the stack |
+| `sign-out` | the bar's Today and More each open their place, and More's sign-out leads back to sign-in | Android, with the stack |
+| `held` | a link into a household, opened with nobody signed in, is held, and signing in through the dev form leads to it: the household's More | Android, with the stack |
+| `replica` | the member's replica opens and receives, with nothing in its inbox, and reports itself; with the connection taken away the device says so and the household's bar comes, and goes when it is back. The job then asks the server for the household's clients (`e2e:stack clients`, D-178) | Android, with the stack |
+
+Three tags keep a flow out of a run: `awaiting`, on a flow written ahead of its screens, which
+none is now; `stack`, on one that needs the API and a member, which only the Android job has (a
+macOS runner has no Docker); and `android`, on one that does what only Android lets a flow do:
+send a link, or take the connection away. Maestro runs the flows in an order of its own, so none
+leans on another: each starts the app with nothing kept, which on Android is a new installation
+to the server, and `stack`'s sign-in is still there for the job to find whatever `sign-out` did.
+
+**What `formats` holds, and what it lets vary** (`src/dev/engine/checks.ts`). A number, an
+amount and a size are FormatJS's on every device, so each is held to the very string Node
+writes, and one that differs is a defect of the app's. A date, and a list where an engine has
+its own, is the operating system's ICU, of that system's age: it is held to its fields in
+their order, the digits, the colon of a time, a month's name and *PM*, with every kind of
+space, a comma, a full stop and English's joining *at* folded between them. The simulator of
+iOS 26 writes *Mar 3, 2026 at 6:41 PM* and *3. 3. 2026 18:41* with narrow no-break spaces
+where Node writes *Mar 3, 2026, 6:41 PM* and plain ones (run 38152216148), which is no defect;
+the wrong hour for the zone, a day that is one off or a month in another language fails on
+any ICU. What a device wrote another way and was let is drawn under the line
+(`engine:formats:found`), and is in the flow's screenshot.
+
+**How a flow finds a thing**, each learnt from a run that failed:
+
+- **By its own `testID`, and never as inside another** (`childOf`). React Native mounts the
+  children of a view that is there only to be named beside it, in the nearest ancestor that
+  draws something or is a control: a cell of a dev screen and what stands in it are neighbours
+  in the tree Maestro reads, on both platforms. Where a name is drawn more than once the flow
+  narrows the screen first, or takes the first (`index: 0`); and where a state is to be read,
+  it is read off a name only that state draws (`hold:released`, `arrange:tasks:show`,
+  `sync:live:online:no`), or off `selected`.
+- **On a screen narrowed to one part.** The dev screens that are long, the page of primitives,
+  the shell's and sync's, carry a row of controls at their head, `<page>:only:<part>` and
+  `<page>:only:all` (`src/dev/Only.tsx`; the harness has its own, `harness:only:<body>`), and a
+  flow presses one before it looks for anything. It is not only the time saved. **On Android a
+  swipe that starts on a stepper's count scrolled nothing**: Maestro swipes from the middle of
+  the screen, and in two flows of the fourth run the page of controls stopped with a stepper's
+  count there and was there still minutes of swipes later, where iOS scrolled the same page to
+  its end. What was seen is where it stopped. Why is read in React Native's source and was not
+  tried on a device: the count is a single line with its text centred, which Android's text
+  field takes for one that scrolls sideways, and such a field keeps the touch. If that is it,
+  it is a defect of the control and not of the flows, which a member's thumb meets as well: so
+  the count is no longer centred on Android (`apps/mobile/src/ui/Stepper.tsx`), and a flow of
+  its own swipes from one since (`stepper`): a swipe that begins on the count, and the select
+  that stood above it gone by the top, which the emulator passed in CI's thirteenth run and in
+  its seventeenth.
+- **Scrolled to once it is there, and waited for where it stands.** `scrollUntilVisible` swipes
+  for as long as it has not found its element, one that has not come yet as one that is further
+  down: so it is for a thing that is drawn already. What a screen draws later, a replica opened
+  or a report answered, is waited for with `extendedWaitUntil`, after a scroll to a neighbour
+  that is there from the start. The one such thing a flow does scroll to, the device's word
+  that it is offline, which the bar that comes above it moves down the screen, is in the last
+  part of a narrowed page: a swipe made early leads no further than to it.
+- **Brought up from the foot of the screen before it is pressed.** The app draws under
+  Android's navigation bar, and what stands in that strip is on the screen as Maestro counts
+  it, while a press there is the bar's. In the seventh run a scroll stopped with its control
+  whole under the bar (`[87,2223][642,2347]` of a screen whose bar begins at 2274), the press
+  at its middle went to the bar, and the flow waited for a sheet nobody had asked for; the
+  same flow passed on the simulator. The head of the screen is the same under the status bar:
+  in the tenth run a scroll up left a control of the dev toolbar at `[16,26][139,73]` on the
+  simulator, the press at its middle was the status bar's, which on iOS scrolls the page to
+  its head, and nothing was pressed. So a scroll that the next command presses says
+  `centerElement: true`, whichever way it scrolls, which has it go on until the control's
+  middle is clear of the three tenths of the screen it came in by, and `flows.test.ts` fails
+  one that does not. Where the page ends first, the scroll gives up after five more swipes
+  and takes the control where it is, so such a scroll is given a minute.
+- **Whole on the screen is asked of a scroll, and not asserted.** `assertVisible` passes an
+  element any part of whose frame is on the screen, and on iOS a frame is the element's own,
+  whatever the room it stands in cuts off: in run 38152216148 the tablet's panes were found
+  832 pt wide on a screen of 402, and a cell still below the screen was not found until its
+  first points were on it. `scrollUntilVisible` measures the frame against the screen, asks
+  for all of it where it is told nothing, and swipes nothing where it has it. That is what
+  `turned` asks of a bar's two ends: a slot past its room's edge with ten points of its
+  frame on the screen would pass an assertion. **A percentage under a hundred asks for
+  nothing**: at Maestro 2.11.0 the same log says `visibilityPercentageNormalized: 0.0` for
+  each scroll told 90, 20 or 10, and `1.0` for one told nothing, so such a scroll ends as soon
+  as its element is found, with whatever part of it on the screen. On Android the bounds a
+  flow reads are cut to the screen already, so no percentage says anything there, and what a
+  room cuts off altogether is in no tree a flow reads *(both as Maestro's Android driver and
+  Android's `View.isVisibleToUser` are remembered: read in no source for this, and seen in
+  no run, the Android artifact not having been opened)*.
+- **One thing a flow, where the thing may fail.** A line added to the end of a flow is not
+  run where an earlier line of it fails, and one added to its middle takes what follows with
+  it: in the tenth run a wrong reading of the dev toolbar kept the stepper's drag from ever
+  running, and a row that had not wrapped kept the harness from its last five cells. What is
+  to be proven of a fix has a flow of its own (`stepper`, `toast`, `row`, `held`), at the cost
+  of the app's start.
+- **What stays a few seconds is looked for at once.** After a tap Maestro waits for the screen
+  to come to rest before the next command, which on a slow emulator is seconds of a toast's
+  five: the tap that brings one says `waitToSettleTimeoutMs: 500`.
+- **The connection is given back whatever became of the flow** (`onFlowComplete`, in
+  `replica`): a flow that failed with the emulator in aeroplane mode would fail every flow after
+  it that asks the server. So is a device that a flow turned on its side set upright again
+  (`sides`): a turn outlasts the app's own start, and every other flow is written for a
+  device held upright.
+- **A toast is raised with the device on its side already, and not turned under.** A turn
+  (`setOrientation`) and the wait for the screen to come to rest after it
+  (`waitForAnimationToEnd`), which a screenshot read for the device's insets needs, are most
+  of a toast's five seconds: `sides` turns the device with a dialog up and has the dialog's
+  answer raise the toast *(written from the lesson above and from Maestro 2.11.0's source,
+  which has both commands and counts a turned screen in its presses; CI's seventeenth run,
+  38178021709, passed it on both platforms, the toast found on a device on its side, on the
+  emulator at a second asking after the driver had gone)*.
+- **A limit is set by the slowest run seen, with room.** A wait can pass after its limit, where
+  the one look under way when the limit came returns with the screen: whichever flow a
+  simulator runs first starts the app for the first time, and its wait for sign-in took 73
+  seconds of 60 in the seventh run, so that wait has three minutes. In the same run the
+  harness's longest scroll took 53 of its 60 seconds, and now has two minutes. A limit costs
+  nothing in a run that passes. How long each command took is in the flow's `commands.json`,
+  in the artifact.
+
+**What the job asks the server after the flows** (`e2e:stack devices`, `e2e:stack clients`) is
+asked wherever the flows ran, whatever became of them: what a device left at the server is
+true or false of itself. One flow that failed for something else once took both answers with
+it. A flow that failed has failed the job already; where it is the flow that signs in, or the
+one that reports, its step fails too and prints what the server holds instead.
+
+**One check takes the server away** (`e2e/run.ts`, `--kept`, which the Android job passes with
+`--stack`): a read the device kept is kept though the server is gone when it asks again. It is
+two flows that the suite does not run (`e2e/flows/kept`), with the API stopped between them
+and started again after (`e2e/api.sh`, which is the job's own way of starting it, written a
+second time): signed in and put behind the launcher; then, with no server, brought to the
+front, given six seconds, stopped and started, and still at the member's household. It runs
+before the suite, in the emulator's first minutes, since no other device makes it; the API
+comes back as it was, its keys development's own and its sessions the database's. Taking the
+connection away would not do: offline, the app does not ask at all.
+
+**And one reads the device itself** (`--cache`, which the Android job passes with `--kept`;
+`e2e/cache.ts`): the API answers everything `Cache-Control: no-store` (D-197), and a device's
+own HTTP client keeps on disk whatever does not say so, past its member's sign-out. Where the
+check above leaves the emulator, signed in, its account and household read and nothing cleared
+since, the run asks it as root (`su`) for the files under the app's `cache/http-cache` and
+fails on one that is not the cache's own journal, printing each and the address its answer was
+of. The job's log says which it found: *holds no file but the cache's own journal*, or *is not
+there*, which after a member's reads would mean the cache is kept somewhere else and nothing
+was read of it. It is no step of the job's after the flows: the emulator goes with the step
+that ran them, and every flow of the suite starts the app with nothing kept, its cache among
+it, so what a device holds after the suite is what its last flow left *(where the folder is
+was read in React Native's source, and what OkHttp writes in it is recalled; CI's seventeenth
+run, 38178021709, showed the folder there and the emulator's `su` answering as root, its log
+saying the first of the two: no file but the cache's own journal)*.
+
+**The way to a dev screen is by presses, and not by a link.** The sign-in screen has a control that
+leads to the dev sign-in form (`sign-in:dev`), and every dev screen leads to their index
+(`dev-screen:index`): `flows/parts/dev.yaml` walks that, and each flow that reads a dev screen
+with nobody signed in runs it, where the three with the stack run `flows/parts/sign-in.yaml`,
+which takes the same control to the dev form. A member reaches
+the index from More (`more:dev`), which is how `replica` comes to the screen for sync with the
+household's own screens, and the replica they opened, still beneath it. iOS asks before it
+opens a link that came from outside the app, *Open in "Household Dev"?*, in a dialog of the
+system's own, which carries no `testID` and stays over the app until it is answered: on the first
+run it stayed over every flow after the one that sent a link. Answering it by its words is what
+Maestro's own suite does, and what its issue 2610 reports failing on a hosted runner. So a link
+is sent on Android alone, by `link`; that a link opens the app on iOS is for a person with a
+device to see.
+
+**What a run leaves** is the artifact `mobile-android-e2e` or `mobile-ios-e2e`, for seven days:
+Maestro's report (`report.xml`) and a folder a flow under `debug/`, with the screenshots the flow
+took (`takeScreenshot/`), what the device logged (`logs/`), and of a failure the screen and the
+hierarchy Maestro saw (`screenshots/`, `screen-hierarchy/`), which is where to look first: it says
+whether the app drew something else or something stood over it. Xcode's whole output is there
+where the build is what failed. It is kept of a run that passed as well: a screenshot is the one
+place the app's faces and its two themes are seen. A simulator's log is the whole simulator's,
+some hundred megabytes a flow before it is packed.
+
+**Where a failure's screenshot is the device's own home screen, the app is gone**: a release
+build has no screen to draw an error on, and an exception nothing caught ends it.
+
+- **What it was** is in the flow's folder. On Android, `logs/crash-report.txt`, which Maestro
+  cuts out of the device's log; on iOS, the lines of `logs/device-simulator.log` that say
+  `Unhandled JS Exception`. The stack names no file: each frame is a place in the bytecode,
+  `anonymous@1:725253`. The Android job keeps the map from those places to the sources where
+  something failed (`index.android.bundle.map`, beside the report), and Metro's own tool reads
+  the two together, at the version of Metro the lockfile holds:
+
+  ```bash
+  pnpm dlx metro-symbolicate@0.84.6 index.android.bundle.map < debug/resolvers/logs/crash-report.txt
+  ```
+
+  The first frame of the fifth run's was `/apps/mobile/src/sync/sync.fixtures.ts:245`. iOS's
+  bundle is another, with places of its own, and its map is not kept: what ends the app in
+  its JavaScript ends it on both, so read it on Android.
+- **Jest's engine is not a device's.** That crash was `[…].toSorted(…)`: Node has it, the
+  Hermes a build compiles for has not, and every test passed. `apps/mobile/e2e/engine.test.ts`
+  reads what a device's bundle is made of for the built-ins Hermes is known to lack. The list
+  is `apps/mobile/src/dev/engine/builtins.ts`, which says where each name was read, and it is
+  used a second time on a device: the engine screen asks the engine itself, and its line
+  fails where the engine has gained one the list says it lacks, or lacks one the list says it
+  has (`Promise.withResolvers`, which is Hermes's own at this version, and `structuredClone`,
+  `AbortSignal.timeout` and `AbortSignal.any`, which Expo's runtime installs as the app
+  starts). A new one met on a device is added there, and both React Native's move and
+  Expo's are when to read the list again.
+- **On iOS a crash takes Maestro's driver with it, some minutes later.** Xcode hands the
+  driver the crash's report when it is written, a minute and a half after the crash in the
+  fifth run and nearly three in the sixth, and the driver falls over reading it
+  (`NSInvalidArgumentException` in `xctest_runner_*.log`): the flow running by then and every
+  one after fail with `maestro.DeviceUnreachableException`, for no reason of their own, and
+  a flow that began and ended in between passes. `e2e/run.ts` reads the
+  report for them and runs them again, once, in a session of their own, whose report and
+  folders are under `again/`. The flow that crashed is not run again, and fails the job.
+- **An emulator's adb has gone twelve minutes after its start.** In the eleventh and twelfth
+  runs, the first two whose flows ran that long, adb said `device offline` 721.4 s and
+  721.6 s after the emulator was launched, at two different steps of the same flow, with no
+  crash of the app's and the emulator's own process still answering its console. The flow
+  running by then says `DeviceServerDiedException` or only `Unknown error`, and the one after
+  it `Unknown error` in milliseconds. Why is not known: `e2e/run.ts` follows the emulator's
+  log into `logcat.txt` for the next time. It reads such flows as the driver's, waits a
+  minute for adb to answer again, says in the job's log what adb lists, and runs them again
+  where it does (`again/`, `logcat-again.txt`). If the emulator does not come back, the
+  suite needs two emulators: the flows a first one lost, run on a second.
+
+### On a developer's machine
+
+With an emulator or a simulator up and the end-to-end build installed on it, on macOS or Linux:
+
+```bash
+bash apps/mobile/e2e/install-maestro.sh "$HOME/.local/share"   # once; then put its maestro/bin on PATH
+pnpm --filter @household/mobile run e2e android                # or ios
+```
+
+The build is the one the job makes, by the same commands, which are the job's steps: read them in
+the workflow. The flows that sign in want the stack and a member: `pnpm run up`, `db:setup` and
+`up:sync`, the API started as the job starts it, `pnpm --filter @household/mobile run e2e:stack
+member`, its three lines exported, and `--stack` after the platform.
+
+### Moving a pin
+
+| Pin | Where | How |
+|---|---|---|
+| Maestro | `apps/mobile/e2e/install-maestro.sh` | the version, and the digest GitHub publishes for the release's `maestro.zip` (the script says how to read it) |
+| An action | `.github/workflows/ci.yml` | the release's commit, `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`, with the version in the comment |
+| The emulator | `mobile-android`: `api-level`, `target`, `arch`, `profile` | API 29 is the oldest Android the app supports, and on the first run its image booted in a quarter of a minute and ran the flows. Raise it only if that image stops booting, and say so here |
+| Xcode and the simulator | `mobile-ios`: `runs-on`, `XCODE`, `IOS_RUNTIME`, `IOS_DEVICE` | together: an Xcode the image holds, the runtime it builds for, a device type of that runtime (`xcrun simctl list runtimes` is printed by the job). `macos-26`, Xcode 26.6, `iOS26.5` and `iPhone 17` were right on the first run |
+| The budget | `apps/mobile/build/budget.ts` | `pnpm --filter @household/mobile run export`, then `run check`, and write what it measured |
+| A permission | `apps/mobile/build/asked.ts`, or `unusedPermissions` in `apps/mobile/app.config.ts` | [above](#what-a-build-asks-of-its-device) |

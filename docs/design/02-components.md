@@ -47,7 +47,7 @@ these designed, in both themes:
 
 | Component | Notes |
 |---|---|
-| **Tab bar (mobile)** | A fixed set in a fixed order — Home · Today · **Add** · Chat · More — and **Chat is the one that can be absent**. Add holds the centre slot and opens a capture sheet rather than pushing a destination ([06-clients §2](../prd/06-clients.md)); it occupies a slot, so a bar without Chat is **four slots**, not four plus a floating button. **Four and five are both first-class layouts and both are drawn** — never a five-slot bar with a hole in it ([DD-11](08-decisions.md), [04-navigation §1](04-navigation.md)) |
+| **Tab bar (mobile)** | A fixed set in a fixed order — Home · Today · **Add** · Chat · More — of which **Chat and Add can be absent**: Chat where it is disabled or not granted, Add where its sheet would offer its member nothing ([D-183](../prd/09-decisions.md)). Add holds the centre slot and opens a capture sheet rather than pushing a destination ([06-clients §2](../prd/06-clients.md)); it occupies a slot, so a bar without Chat is **four slots**, not four plus a floating button, and a bar without either is three. **Five, four and three are each a first-class layout and each is drawn** — never a bar with a hole in it ([DD-11](08-decisions.md), [04-navigation §1](04-navigation.md)) |
 | **Sidebar (web)** | Module list, per-member ordered and filtered, plus global search |
 | **App bar / page header** | Title, module accent, contextual actions, breadcrumb for tree modules |
 | **Household switcher** | A user may be in several households, with different roles in each. Must show which household is active at all times, and must never allow a cross-household action to be ambiguous |
@@ -62,7 +62,7 @@ these designed, in both themes:
 | Component | Notes |
 |---|---|
 | **List row** | The workhorse. Must carry: title, optional secondary line, optional module chip, optional member avatar, **sync state mark**, trailing action. Swipe actions on mobile must have a non-swipe equivalent |
-| **Data table (web)** | Sortable, keyset-paginated (cursor, not page numbers), comfortable and compact densities, horizontal scroll contained. Numeric columns in the mono face, right-aligned, tabular figures |
+| **Data table (web)** | Sortable, keyset-paginated (cursor, not page numbers), comfortable and compact densities, horizontal scroll contained. Numeric columns in the mono face, right-aligned, tabular figures. A phone draws none, and shows a list where the web shows a table ([D-190](../prd/09-decisions.md)) |
 | **Key–value detail block** | The right-hand pane of every asset, document and service |
 | **Money value** | Amount + currency, optional original currency + stored FX rate, optional sign convention. Negative values distinguished by more than colour |
 | **Metric tile** | A catalog metric rendered: label, value, optional trend, optional "not enough information" state |
@@ -119,7 +119,8 @@ Conflicts must always be *asked*, but not necessarily *now*. A member who reconn
 may have several, and a reconnect that opens six modals is a reconnect people learn to avoid. So:
 
 - **A persistent badge** wherever unresolved conflicts exist, and **a conflict inbox** listing
-  them across modules.
+  them across modules. On a phone the badge is the count on the More tab, and the inbox is a row
+  of More, each drawn while something waits ([D-191](../prd/09-decisions.md)).
 - **A flag on each affected row**, in its own module, with the module's own context around it.
 - **Resolution happens one at a time, from the row** — the inbox routes to the row rather than
   resolving in place, because "which amount is right" is only answerable next to what the amount

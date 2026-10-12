@@ -10,39 +10,93 @@ packages:
 allowBuilds:
   better-sqlite3: false
 
-# react-native is in the workspace for its types alone: @household/sync's React Native build is
-# typechecked against them (plan item 18), and nothing here bundles or runs an app yet. Its CLI
-# plugin brings Metro, whose file map reaches braces <= 3.0.3 (GHSA-vfj7-8cjw-p6xm, a stack
-# exhaustion on deeply nested patterns, with no patched version), so the plugin is left out of the
-# install rather than the advisory out of the audit. Plan item 28, which builds the mobile app on
-# Metro, removes this line and settles the advisory for a tree that runs it.
-overrides:
-  'react-native>@react-native/community-cli-plugin': '-'
+# expo-router depends on react-native-drawer-layout for its Drawer navigator, which the mobile app
+# does not use. It declares react-native-reanimated and react-native-gesture-handler as peers it
+# must have, where expo-router itself declares both optional, so pnpm would install the newest of
+# each for it, and react-native-worklets under reanimated: native modules nothing here asked for,
+# at versions the Expo SDK does not pin, linked into every build of the app.
+packageExtensions:
+  react-native-drawer-layout:
+    peerDependenciesMeta:
+      react-native-gesture-handler:
+        optional: true
+      react-native-reanimated:
+        optional: true
+
+# What `pnpm audit` (audit:ts, and CI's supply-chain job) is told to pass over. An advisory is
+# here only while no release mends it and only for a package that ships in no client: it runs on
+# a developer's machine or a build's, over the project's own files. Each was looked for in the
+# source map of both of the mobile app's exported bundles, and is in neither. An entry leaves
+# with the release that mends it; one that reaches a bundle is not ignored but replaced.
+auditConfig:
+  ignoreGhsas:
+    # braces <= 3.0.3, the newest: a pattern nested deeply enough exhausts the stack. It is
+    # under micromatch in Metro's file map and in Jest (its haste map, its transformer, its
+    # messages), which match the file patterns of this repository's own configuration and no
+    # input of a member's or of the network's. Plan item 18 kept Metro out of the install for
+    # it; the mobile app is bundled by Metro (plan item 28).
+    - GHSA-vfj7-8cjw-p6xm
+    # node-forge <= 1.4.0, the newest: its RSA PKCS#1 v1.5 verification accepts a signature
+    # with extra nested DigestAlgorithm elements. It is under Expo's CLI, which reads a
+    # developer's signing certificates with it and verifies only what is the developer's own: a
+    # self-signed certificate they name beside its key, and a signature it has just made with
+    # that key (an update's manifest, signed in development). The app verifies nothing with it.
+    - GHSA-86w9-cpqp-85rv
 
 # One version of every shared tool across the workspace. A package names a tool as
 # `catalog:` instead of a range, so two packages cannot drift onto different compilers
 # or linters and disagree about what the same source means.
 catalog:
   '@eslint/js': ^10.0.1
+  # The static files of the two faces, one a weight: what the mobile app embeds
+  # (apps/mobile/app.config.ts) and what @household/tokens' test holds to PL-13 are one version.
+  '@expo-google-fonts/ibm-plex-mono': 0.4.1
+  '@expo-google-fonts/ibm-plex-sans': 0.4.1
+  # The native modules a shared package is typechecked against and the mobile app links: the
+  # replica's SQLite and its SDK (@household/sync) and the icons' renderer (@household/icons). A
+  # build holds one copy of each, so the package and the app name one version. react-native-svg's
+  # is the Expo SDK's pin.
+  '@op-engineering/op-sqlite': 18.2.5
   # One Playwright, and so one Chromium, for the web app's end-to-end suite (item 24) and the web
   # replica's smoke test (@household/sync, through @vitest/browser-playwright).
   '@playwright/test': 1.63.0
+  '@powersync/react-native': 2.3.1
   '@redocly/cli': 2.54.3
   '@types/node': ^24.0.0
+  # React's types are React's own minor.
+  '@types/react': 19.2.18
+  '@types/react-dom': 19.2.7
   eslint: ^10.11.0
   playwright: 1.63.0
   prettier: 3.9.9
-  # One React across the workspace: @household/sync's React Native build, @household/icons'
-  # components and, from items 24 and 28, both apps. react-dom is react's own version.
-  react: 19.3.0
-  react-dom: 19.3.0
-  react-native: 0.87.1
+  # One React across the workspace: both apps, @household/sync's React Native build and
+  # @household/icons' components. The three pins are the current Expo SDK's (57, in
+  # expo/bundledNativeModules.json), since an Expo app runs on the react and the react-native its
+  # SDK was built against and no other: they move when the mobile app moves to an SDK, and the
+  # web app moves with them. react-dom is react's own version.
+  react: 19.2.3
+  react-dom: 19.2.3
+  react-native: 0.86.3
+  react-native-svg: 15.15.4
   # typescript-eslint 8 supports TypeScript <6.1, so TypeScript 7 waits for it.
   typescript: ~6.0.3
   typescript-eslint: ^8.70.1
   vite: ^8.3.1
   vitest: ^5.0.2
   yaml: ^2.9.1
+
+# And one copy of it, whoever asks. A package that takes React or its types as a peer and is
+# given none by the package that depends on it gets pnpm's own choice, the newest: expo-router's
+# web-only dependencies were given react-dom 19.3 beside the catalog's react, and
+# @household/sync's react-native the newest @types/react, which made it a second copy of
+# react-native beside @household/icons', and both would be in the mobile app's bundle. These
+# hold every request for the five, a peer's included, to the catalog's version.
+overrides:
+  '@types/react': 'catalog:'
+  '@types/react-dom': 'catalog:'
+  react: 'catalog:'
+  react-dom: 'catalog:'
+  react-native: 'catalog:'
 
 peerDependencyRules:
   allowedVersions:

@@ -6,6 +6,7 @@ import { catalogs } from './catalogs.ts'
 import {
   catalogLocale,
   clientParts,
+  deviceSegments,
   isLocale,
   loadCatalog,
   locales,
@@ -86,8 +87,9 @@ describe('the entry for a client that loads one language at a time', () => {
     expect(await loadCatalog('en', 'household')).toHaveProperty(['household.invitation.none.title'])
   })
 
-  // Nothing is lost between the files: what no client fetches is what the server alone renders.
-  it('loads a language whole in its parts, but for what is the server’s alone', async () => {
+  // Nothing is lost between the files: what no client fetches is what the server alone renders,
+  // and the mobile app's own words, which are in its bundle.
+  it('loads a language whole in its parts, but for what is the server’s alone or the mobile app’s', async () => {
     for (const locale of locales) {
       const fetched = await Promise.all(clientParts.map((part) => loadCatalog(locale, part)))
       const each = fetched.flatMap((messages) => Object.entries(messages))
@@ -95,7 +97,7 @@ describe('the entry for a client that loads one language at a time', () => {
       // No key is in two files.
       expect(Object.keys(together), locale).toHaveLength(each.length)
       const servers = held(locale, (key) =>
-        serverSegments.some((segment) => key.startsWith(`${segment}.`)),
+        [...serverSegments, ...deviceSegments].some((segment) => key.startsWith(`${segment}.`)),
       )
       expect(Object.keys(servers), locale).not.toHaveLength(0)
       expect({ ...together, ...servers }, locale).toEqual(catalogs[locale])

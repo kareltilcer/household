@@ -33,7 +33,7 @@ pnpm run up:convert   # build and start the converter sidecar (LibreOffice, popp
 pnpm run up:stripe    # Stripe's own mock server, which the test of what billing sends Stripe runs against
 pnpm run dev:api      # serve the API on 127.0.0.1:8080 (/api/v1/healthz, /api/v1/readyz)
 pnpm run dev:web      # the web app on Vite's dev server, /api proxied to dev:api
-pnpm test             # Vitest through turbo, then go test against the compose Postgres
+pnpm test             # Vitest, and the mobile app's Jest, through turbo, then go test against the compose Postgres
 pnpm run lint         # ESLint, the stylesheets' check, golangci-lint, Redocly and Prettier
 pnpm typecheck        # tsc in every package
 pnpm run gen          # code generation (turbo run gen + the tokens' stylesheet and the vendored icons + go generate + the client registries, which need Postgres)
@@ -45,6 +45,10 @@ pnpm --filter @household/sync conformance:web  # @household/sync's web replica i
 pnpm --filter @household/web build      # the web build a deployment serves (dist/www)
 pnpm --filter @household/web check      # that build held to its bundle budget, the policy and its own id
 pnpm --filter @household/web e2e        # builds it again with the dev-only routes (build:e2e), then Playwright against an API and a stand-in for Stripe it starts itself: axe, the pseudo-locale pass, the policy, the critical paths (needs up, db:setup and up:sync; stop dev:api first)
+pnpm --filter @household/mobile test    # Jest and React Native Testing Library over the mobile app: no device, no service and no native build
+pnpm --filter @household/mobile export  # the production bundles of both platforms, as Metro and Hermes make them on any machine (dist), with Metro's cache cleared (run `pnpm exec turbo run gen` first)
+pnpm --filter @household/mobile check   # that export held to each platform's bytecode budget, and to holding no dev screen and no stand-in
+pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-to-end build installed on an emulator that is up (or `ios`, on a simulator; `--stack` with the API up and a member made): it builds nothing and starts no device
 ```
 
 - **`pnpm run up`, never `pnpm up`.** `pnpm up` is pnpm's own `update` command and rewrites
@@ -88,13 +92,32 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   table of their imports, from the catalogs and `src/parts.ts`). turbo writes them before every typecheck, lint and test; after a
   contract or catalog change, `pnpm run gen` refreshes them for an editor. The Go ISO 4217
   table (`internal/platform/money/iso4217_gen.go`) is committed and generated from
-  `packages/domain/src/iso4217.json`, and a test fails until it is regenerated.
+  `packages/domain/src/iso4217.json`, and a test fails until it is regenerated. The mobile app's
+  native projects (`apps/mobile/android`, `apps/mobile/ios`) are no files of the repository
+  either: Expo writes them from `apps/mobile/app.config.ts` as a build is made
+  ([runbook](docs/runbooks/mobile-builds.md)).
 - CI ([`.github/workflows/`](.github/workflows/)) runs the checks above (typecheck, lint,
   format check and test), plus openapi-spec-validator, govulncheck, pnpm audit, gitleaks
   and CodeQL, and the web app's build, its check and its end-to-end suite. Typecheck, lint and test depend on each package's `gen` in turbo, so CI
   runs every package's `gen` script too; it does not run `go generate`. It also runs the
   sync conformance suite against its own stack, with a short fuzz run; a nightly workflow
   runs a long one ([ADR 0013](docs/adr/0013-conformance-suite-stand-ins-and-the-oracle.md)).
+  `pnpm audit` passes over the two advisories `pnpm-workspace.yaml` names, each with its reason
+  (`auditConfig`): one is there only while no release mends it and it ships in no client.
+- **The mobile app is launched by CI alone**, and only where a change can have reached it: the
+  job `mobile-changes` reads the diff, and three more run where it names `apps/mobile/`,
+  `packages/`, the lockfile, the workspace's settings, the root `package.json` or the workflow.
+  `mobile` makes the export and runs `check`. `mobile-android` builds the development variant
+  as a release build with the dev screens in it (`EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS=1`), starts
+  the development services and the API, makes a member (`e2e:stack member`), runs the flows on
+  an emulator at API 29 (`e2e android --stack`), asks the server for the device that signed in
+  and the client that reported (`e2e:stack devices`, `e2e:stack clients`), and holds the built
+  APK's permissions to their reasons (`build/apk.ts`). `mobile-ios` builds the same for a
+  simulator and runs the flows that ask nothing of a server (`e2e ios`), a macOS runner having
+  no Docker. The app's Jest tests
+  run in the job that runs every package's
+  ([ADR 0029](docs/adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md),
+  [runbook](docs/runbooks/mobile-builds.md)).
 
 ## Layout
 
@@ -207,7 +230,8 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   reads the sources and fails a file the first download or a shell reaches that reads a word
   outside `app`, a screen that reads a part its route does not name, and a route that names a
   part its screen does not read; the first segments `activity`, `admin`, `email` and
-  `notification` are the server's alone, in no part. A file of the app's own whose import failed is not
+  `notification` are the server's alone, in no part, and `device` is the mobile app's alone, in
+  none either (`deviceSegments`, [D-195](docs/prd/09-decisions.md)). A file of the app's own whose import failed is not
   imported again, since a browser may answer the second import with the first one's failure: the
   page is loaded again, or the screen says to reload. The shell's module list is derived from the household's own
   answer and lists a module only where `src/modules/registry.ts` has its screens, which the
@@ -285,7 +309,19 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   come in, and the picture drawn could be another than the one kept. A control that saves as it is
   changed is no busy control: a select's later choice takes an earlier save's place (the
   language), and a switch takes another change while one is on its way, sent beside it, what
-  either is refused with kept beside the mutation (`account/Notifications.tsx`); and a page the
+  either is refused with kept beside the mutation (`account/Notifications.tsx`). Such a switch,
+  drawn from what the query client keeps, is drawn as chosen in the press itself, from its
+  screen's own state, until the query client holds the change (`pressed` there): the query
+  client tells a screen by a timer, which a browser ran only after the frame that answers the
+  press, and a switch pressed again in that frame sent the first change a second time. What
+  is drawn while changes are on their way is what the server last said it holds (`served`
+  there) with each of them made to it (`flying`), whichever was just answered or refused:
+  never what was kept as a change was made, which another's unsaved choice may be in, and
+  never an answer alone, which holds nothing of a change made since. A read on its way is
+  cancelled before a change takes anything, and after a refusal, or after two changes that
+  were on their way at once, the server is read again only once none is. The
+  account's selects of a timezone and of the first day of the week hold their own press
+  too, let go by the save's own state (`account/Account.tsx`). And a page the
   browser kept and shows again puts a provider's start back whatever became of it
   (`useShownAgain`). The page an invitation's link opens
   is begun again for a link that arrives while it is drawn, as the pages of `auth/` that read a
@@ -360,7 +396,10 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   centre (`privacy/Privacy.tsx`) is the account's and its route names no part of the
   household's words: what a household's screens and an account's share, and that reads no
   household word, is in `account/common.ts`. Its two consents (`privacy/Consents.tsx`) are
-  switches that save as they are changed: one whose change made last is refused is put back to
+  switches that save as they are changed: each is drawn as chosen in the press itself, held by
+  the screen until the query client holds it (`chosen`), since a consent pressed in the frame
+  before the screen was told sent the other as it still stood and withdrew the one just given;
+  one whose change made last is refused is put back to
   what the server last said it holds, never to a snapshot another change's unsaved choice may
   be in, and *Not saved* is said of a change the server refused or one asked while the browser
   was offline, where any other unanswered change is said only not to have reached the server.
@@ -374,6 +413,236 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   replica's state and no value a member typed ([D-181](docs/prd/09-decisions.md)). In a
   household that takes no writes the conflict panel draws no answer and the refused-change
   panel keeps *Discard* (`sync/ConflictResolver.tsx`, `sync/RejectedResolver.tsx`).
+- **The mobile app**
+  ([ADR 0029](docs/adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md);
+  paths here are under `apps/mobile`). It is built on the Expo SDK whose `react`, `react-dom`
+  and `react-native` the catalog pins for the whole workspace, each held for every requester by
+  `overrides` (`pnpm-workspace.yaml`): the three move together, when the app moves to an SDK,
+  and the web moves with them. The app scales its own type: a text is `Text` (`src/ui/Text.tsx`),
+  a step of the type scale at the reader's scale, which is the device's font scale held to
+  between one and two (`textScaleOf`, `src/display/modes.ts`,
+  [D-186](docs/prd/09-decisions.md)), with the system's own scaling off, and ESLint fails an
+  import of React Native's `Text` anywhere else in the app but the accessibility rules' own test.
+  Those rules (`src/test/a11y.ts`, `expectAccessible`) stand where axe does on the web: they read
+  what a drawn tree declares, a role, a name, a state, a target's least size, that a
+  control is not inside what is one thing to a screen reader, how a row that wraps is to
+  break and by what a part says its room, and nothing a device lays out. A row that wraps
+  and gives its words a least room is two parts that may each shrink, the words' and what
+  stands beside them (`src/ui/ListRow.tsx`): by Yoga's source the one child of a row that
+  both grows and shrinks is counted as nothing wide and breaks no line, which the rule
+  `wrap` fails. And a part says its room by a `width` with `flexGrow` and `flexShrink`,
+  never by a `flexBasis`, which the rule `room` fails wherever one is drawn: a device
+  computes what a `flexBasis` gives once, at the element's first layout, and keeps it
+  whatever its style says later (read in Yoga and in React Native's renderer, and seen in
+  CI's tenth run, where a row first laid out at a text scale of one broke no line at two).
+  What the rule cannot see is a `flex` given to an element that was first laid out without
+  one: by the same guard it keeps the basis of its earlier layout (read in Yoga, run on no
+  device). An element whose style has `flex` under a condition is keyed by the condition,
+  and so drawn anew when the condition changes, as a slot of the tab bar is between a
+  tablet's bar and a phone's (`src/shell/TabBar.tsx`); and so is a container whose
+  direction is conditional over children that have a `flex`, though their own style never
+  changes: in a column of no height of its own, a page that scrolls, such a child is
+  measured and its height kept as its basis, which the row then keeps (read in Yoga, run on
+  no device). A flow chart's two sides are drawn anew between one column and two by a key
+  on their container, which is both cases at once (`src/ui/charts/Charts.tsx`);
+  `src/shell/TabBar.test.tsx` and `src/ui/data.test.tsx` hold the two. What the room draws
+  one way or another, and that holds something, is one tree in both, as the two panes are
+  (`src/shell/Panes.tsx`): the room turns under what is drawn, a phone on its side being
+  wide enough for two panes, and an element that stands in another tree after the turn is
+  built again, with whatever it held lost, where a list was scrolled to and what was half
+  typed, which `src/shell/Panes.test.tsx` holds; a key costs its element the same, which
+  for a slot of the bar is a focus that was on it.
+  What is said aloud goes through `src/ui/announce.ts`, the one file that calls
+  `AccessibilityInfo` ([D-188](docs/prd/09-decisions.md)), and a `Banner` that announces
+  says what arrives only where its screen is the one in front (`useInFront`,
+  `src/ui/Screen.tsx`, which `HouseholdScreen` tells from the navigator): a tab's screen
+  and a household another was opened over stay mounted, and what arrives on one out of
+  sight is read in its place when its member comes back. The same sentence in another
+  language is no other sentence: the app's language follows the account's on every screen
+  that is drawn (`followAccount`, `src/i18n/I18nProvider.tsx`), and a banner and the
+  offline bar, which keep the language they were last drawn in, and a hold-to-complete,
+  which says its phase's change and never its word's, say nothing again for it
+  (`src/ui/Banner.tsx`, `src/ui/OfflineBar.tsx`, `src/ui/HoldToComplete.tsx`). What takes a
+  screen's place and opens none says itself as it arrives, once, and not again for a change
+  of language (`useSaidOnArrival`, `src/ui/Screen.tsx`): *could not be read* (`Unread`,
+  `src/session/guards.tsx`), which is said only where the screen it stands in the place of
+  is the one in front, as its guard or the household's frame tells it
+  (`src/shell/HouseholdFrame.tsx`); *please update* (`src/update/UpdateRequired.tsx`); and
+  the screen where a route failed to draw (`RouteError`, `src/app/Root.tsx`). And a guard holds
+  a visitor's address only while its own screen is in front (`Signed`,
+  `src/session/guards.tsx`): `usePathname()` is the whole app's word, and a household
+  mounted underneath another screen would hold that screen's address for its own. A route
+  is a line of
+  `src/app/paths.ts` and a file under `app/`, which `src/app/routes.test.ts` holds to each
+  other, and its address is the web's own ([D-196](docs/prd/09-decisions.md)). The file is one
+  line that re-exports its screen, or its layout, from `src/`, but for a dev screen's: a dev
+  screen is under `src/dev`, and its route's file under `app/dev/` writes the gate's condition
+  out, `__DEV__ || process.env.EXPO_PUBLIC_HOUSEHOLD_DEV_SCREENS === '1'`, and imports the
+  screen behind it by `lazy(() => import(…))`, Metro folding a condition away only where it is
+  written; the two controls that lead to the dev screens write it out too (`src/session/SignIn.tsx`,
+  `src/shell/More.tsx`). `src/dev/gate.ts` is the one place the condition is written to be read, and
+  is imported by nothing: `build/check.test.ts` reads the expression out of it and holds each of
+  those places to exactly it. Nothing else outside `src/dev`, the entry `index.ts` among it, imports
+  from it, by name, behind a call or bare (`build/check.test.ts`), and
+  `build/check.ts` fails an export that holds a dev screen, one that holds a stand-in, and one
+  whose bytecode is over a platform's budget (`build/budget.ts`,
+  [D-189](docs/prd/09-decisions.md)). A stand-in is what a test or a dev screen draws over in
+  the server's place, the replica's or a member's, written outside `src/dev`: each that
+  holds words is a line of `standIns` (`build/bundles.ts`) with words it alone holds, and
+  `build/check.test.ts` fails a file under `src` and outside `src/dev` and `src/test`
+  named `*.fixtures.ts`, `standIn.ts` or `testing.ts` that is not listed there; the two
+  providers a test alone draws in, `src/session/fixture.tsx` and `src/shell/fixture.tsx`,
+  hold none and are listed nowhere. A device's sign-in is a token pair
+  kept in SecureStore under its member (`src/session/tokens.ts`, over `src/session/vault.ts`,
+  the one file that imports expo-secure-store). From elsewhere, only a renewal the server
+  answers `401 refresh_token_invalid` ends it (`src/session/renewal.ts`); a request refused
+  `401 unauthenticated` is renewed once and sent again (`src/api/transport.ts`), and ends
+  nothing. A request is answered by its own sign-in alone: one refused on a token that was
+  another member's is given none of the one now in use (`src/session/tokens.ts`), one sent
+  again for want of an answer leaves as it was signed, the resend standing under the signing
+  (`createMobileClient`, `src/api/client.ts`), and the credential a replica is handed throws
+  once its own member's sign-in has gone, whoever is signed in by then
+  (`src/sync/open.ts`). What a device keeps of a member is named for them
+  and removed when their sign-in ends, however it ends ([D-187](docs/prd/09-decisions.md)):
+  whatever keeps something of theirs registers its removal with `onForget`
+  (`src/session/forget.ts`), as the session's kept reads, the push token's note, which
+  household was on screen, the toasts on screen and the replicas do, and whatever keeps it
+  under its member's name says there whom it keeps something of, as the kept reads, the
+  push token's note and the replicas' notes do. By that the session removes, as the app
+  starts and before anything is read back, what is kept of anybody the vault holds no
+  sign-in of (`forgetOthers`): a removal the app was closed in the middle of, a keystore
+  that lost a pair, a restore from a backup. The device's own HTTP cache is no keeper of the
+  app's: it is kept empty of the API's answers by the API's own header
+  ([D-197](docs/prd/09-decisions.md)), which `src/api/transport.ts` says, and a member's
+  picture, once a screen draws one (`Portrait`, `src/ui/Chip.tsx`), is in the platform's
+  image cache, which nothing empties: item 29 decides it.
+  The note of a push registration goes with a
+  removal the server took, or with the sign-in (`forgetPush`, `src/push/registration.ts`):
+  removed where the server was not told, a turning-off after a sign-out that failed asked
+  the server nothing. Nor are notifications turned off where the device would not say
+  whether it holds a registration (`unsubscribePush`): the note is read from the device
+  itself there, as the choice is where a device is registered again (`renewPush`). A vault
+  that will not say what it holds rejects
+  (`src/session/vault.ts`): who is signed in is then *could not be read*, in the device's
+  own words and with *Try again*, which reads the vault again (`Unreachable`,
+  `src/session/guards.tsx`), and on its silence nothing is removed and nothing written,
+  neither a sign-in nor an installation's id (`src/session/tokens.ts`). The same holds of
+  the replicas' notes: a read of them that failed is never taken for no notes
+  (`src/sync/databases.ts`). Every request the
+  app sends the API names it, `Household-Client: mobile/<version>` (`clientName`,
+  `src/api/client.ts`), and every `fetch` of the app's says `credentials: 'omit'` (`platform`,
+  `src/api/transport.ts`): what the replica asks the API leaves by `namedFetch`, and an upload,
+  which leaves by expo-file-system's `File.upload` and by no `fetch`, names the app itself
+  (`src/sync/files.ts`). The sync SDK's own requests to the sync service, the stream and a
+  write checkpoint's `GET`, are not the app's: they leave by the SDK's own `expo/fetch`, with
+  the device's cookies allowed and a header of the SDK's own (ADR 0029, *Consequences*).
+  What the query client read is kept on the device under its member
+  (`src/api/keep.ts`), for one shape (`keptShape`) and not for one build, as the last answer
+  each read was given: a re-read that got no answer, or that the server failed, takes
+  nothing off the device, only the API's own `404` does (`isKept`, `src/api/query.ts`), and
+  the cache lets go of no read for its age (`gcTime: Infinity`). The `404` stands from then
+  on: the query client lets go of what such a read held, and removes what is filed under its
+  key (`letGo`, beside it), so a re-read that then fails another way puts nothing back, on the
+  screen or on the device; and `useHousehold` holds the household *not available* until an
+  answer that is no `404` (`src/household/data.ts`). A store that would not be read back as
+  the app started is not written over for the rest of that run (`src/api/keep.ts`). Every
+  read is kept so, and held for as long as its member's sign-in, unless it says
+  `meta: { persist: false }`, and then it names a `gcTime` of its own (`QueryNotes`,
+  `src/api/query.ts`), as the read of a device's own push state does
+  (`src/push/usePush.ts`): a read keyed by what a member types, or by a page, says so, each
+  key being an entry of its own. A rule of
+  the web's that counts on a connection, or on a page being loaded again, is not copied to the
+  device. A write through the query client spreads `askedNow`
+  (`src/api/query.ts`): `src/api/askedNow.test.ts` reads the sources of the session, push, a
+  household's own answer, the links, *please update* and the dev sign-in, and fails a
+  `useMutation` there that does not begin with it. `src/api/query.ts` is also the one source
+  file that imports NetInfo, which a test of the sources holds (`src/api/api.test.tsx`): it believes the
+  device only where it says it has no connection (`watchConnection`) and tells the query
+  client, and a screen reads the query client's word (`useOnline`), so the offline bar and a
+  read that waits for a connection never disagree. And it turns the library's own check of
+  whether the internet can be reached off before it listens (`reachabilityShouldRun`): left
+  as it comes, NetInfo asks a host of Google's as soon as anything listens, and each minute
+  after while it is answered, on iOS, whose native half does not say, whether or not
+  anything reads its answer (read in 12.0.1; `src/api/netinfo.test.ts` runs the library's
+  own JavaScript, with and without). A library that asks a host of its own by itself is
+  configured not to where the app starts to use it; the one left is expo-notifications,
+  which keeps the device's token with Expo's service once a token was asked for, and which
+  item 30 decides with the first project (ADR 0029, *Consequences*). And Firebase Messaging,
+  which expo-notifications links on Android, registers with Google at the app's first start,
+  by Firebase's documented default, once a build holds a `google-services.json`: item 30
+  turns that off with the file (`firebase_messaging_auto_init_enabled`). What else the app
+  links was read for the same in the fifth review round, and asks nobody (ADR 0029,
+  *Consequences*). `src/sync/open.ts` is
+  the one source file
+  that imports `@household/sync`'s values, which `src/sync/open.test.ts` holds, and the one
+  that opens a replica: once on the device however many hold it, in a file named for its member
+  and its household (`src/sync/databases.ts`), whose removal is noted as far as it came, once
+  both of its steps were tried, and taken up again at the next start. `ReplicaProvider`
+  (`src/sync/ReplicaProvider.tsx`) asks it for one
+  only for a member, of a household read as theirs. A household's screens stand in a tab
+  navigator with the guard, the replica's provider and the frame inside its `layout`
+  (`src/shell/HouseholdLayout.tsx`), and a household is a route of a stack of its own
+  (`app/households/_layout.tsx`): a guard around a navigator loses the rest of the address, and
+  an address that names another household opens it on top of the one that was open. The screen
+  of a route under a household draws in `HouseholdScreen` (`src/shell/HouseholdScreen.tsx`),
+  whose title, in the app bar, is the screen's first header ([D-188](docs/prd/09-decisions.md)),
+  a section within a screen being a header too, as arranging's lists and More's groups are; and
+  never in `Screen` alone, which `src/app/routes.test.ts` holds by reading the sources; what the
+  frame draws in a screen's place, a wait, *could not be read* and *not available*, is a plain
+  `Screen`. *Not available* leads on by a replace (`src/app/NotAvailable.tsx`): outside a
+  household that takes the address away, and inside one it is a jump between the tabs, so
+  going back from Home returns to the address that opened nothing, once, which
+  `src/shell/layout.test.tsx` holds as it is. A household's own answer is read by
+  `useHousehold` (`src/household/data.ts`), only
+  for a member and of an id that can be one, by the frame and the replica's provider in one
+  commit, and by the sync dev screen beside the provider it draws: whatever else needs it is
+  handed it, as the bar above the screens is, a reader that mounts after the answer asking the
+  server again (`src/sync/bars.test.tsx` holds the household to being asked for once). The tab
+  bar is derived by `tabsOf` (`src/shell/tabs.ts`) from the
+  household's own answer and `src/modules/registry.ts`, and never authored
+  ([D-183](docs/prd/09-decisions.md), [D-184](docs/prd/09-decisions.md)): a module's mobile item
+  adds its line to the registry, its routes to `paths.ts`, and the place they stand under to
+  `tabs.ts`. `src/ui/Dialog.tsx` is the one file that draws React Native's `Modal`: a dialog
+  over a sheet is drawn inside the sheet's children, and a menu's item acts once its sheet has
+  gone (`src/ui/Menu.tsx`), as a select tells its owner of a choice (`src/ui/Select.tsx`), since by
+  React Native's source iOS presents no modal while another of the same controller's is leaving. A
+  modal that is to give the accessibility focus back names what opened it (`opener`): by the same
+  source iOS's host gives it back by itself and Android's restores none. What is drawn over the
+  whole window keeps clear of the device's sides as of its foot, by the device's own insets: a
+  sheet's stage, a dialog's and the toasts' region are padded by them (`src/ui/Dialog.tsx`,
+  `src/ui/Toast.tsx`), as `Screen`, the app bar, the frame and the tab bar are. A phone on its
+  side has them, and at the larger text sizes a sheet and a toast are as wide as its screen.
+  A select's and a menu's
+  opening press put the keyboard away (`Keyboard.dismiss()`), their sheet taking the screen from
+  whatever field was being typed in, and so does the press that sends the dev sign-in form and
+  leads to another screen, while its field is still mounted (`src/dev/signin/index.tsx`): on
+  Android a keyboard whose field leaves with its screen stays or goes by a race (CI's tenth
+  run), and stands over the next screen until something puts it away. `Screen` makes no room
+  for the keyboard under a field of its own, on either platform, and no screen of item 28
+  holds a field, the dev pages apart: item 29's first form makes it, and a
+  `KeyboardAvoidingView` counts from its place in its parent, so it is right only where it
+  stands at the top of its window, as a modal's and the toasts' do (ADR 0029, *Alternatives
+  rejected* and *Consequences*). A press on a control
+  takes no focus from a field on a device (`keyboardShouldPersistTaps="handled"`,
+  `src/ui/Screen.tsx`, `src/ui/Dialog.tsx`), so a control that shows what is typed apart
+  from its value gives its owner at each key what leaving the field would settle to, as
+  the stepper does (`src/ui/Stepper.tsx`), and never only as the field is left: a form
+  reads its values at the press. It gives nothing again as the field is left: another
+  control of its form may have set the number since, by a press that left no field. And a
+  key gives its number where it is another than the one its owner shows or than the one
+  the typing last came to. A word only the mobile app
+  draws is a key under `device.`, which is in no part (`packages/i18n/src/parts.ts`), and the app
+  imports `@household/i18n`'s own entry, all five catalogs ([D-195](docs/prd/09-decisions.md)). A
+  permission a build asks for is a line of `build/asked.ts` with its reason, and one every build
+  removes a line of `unusedPermissions` in `app.config.ts`: CI's Android job holds the APK it
+  built to the first (`build/apk.ts`), and `build/permissions.test.ts` each variant's
+  configuration to both (FR-PR1). A Maestro flow (`e2e/flows`) selects by `testID` and never by
+  a word, which `e2e/flows.test.ts` holds, with each name held to the sources: the test
+  excuses a flow tagged `awaiting`, one written ahead of its screens, and no flow is tagged so
+  now. A flow finds a thing by its own `testID` and never as inside another, React Native
+  mounting the children of a view that is there only to be named beside it (seen in the
+  hierarchies CI's runs kept), and on a long dev screen narrowed to one part first
+  (`src/dev/Only.tsx`).
 - **Computed on both sides, tested from one file**: a rule the clients preview and the server
   saves (money, tariffs, allocation) has a vector file in `packages/test-vectors/vectors/`, run
   by the Vitest and the Go runner alike (D-37).
@@ -516,6 +785,20 @@ pnpm --filter @household/web e2e        # builds it again with the dev-only rout
   (`etag.Set`, `etag.IfMatch`; `problem.Conflict` is the `409` with the current
   representation); unsafe methods accept `Idempotency-Key`, which the platform's middleware
   answers for every module route.
+- **No cache keeps what the API answers.** The root middleware `httpx.NoStore` says
+  `Cache-Control: no-store` of every answer, a problem document and a panic's among them
+  (`Recover`), and a handler with a reason of its own says otherwise of its own answer: the
+  keys PowerSync asks for are `no-cache`. A device's HTTP client keeps a cache on disk by
+  itself (OkHttp's under React Native on Android, the shared `URLCache` on iOS) and a browser
+  keeps its own, which no client can empty when its member signs out: a route served outside
+  the root router, or a handler that sets the header, is kept on a device past its member's
+  sign-out ([D-197](docs/prd/09-decisions.md),
+  [ADR 0029](docs/adr/0029-the-mobile-foundation-one-react-a-devices-sign-in-and-replica-the-shell-in-the-navigator-and-a-device-in-ci.md)).
+  CI's Android job reads the emulator's HTTP cache after a member's reads
+  (`apps/mobile/e2e/run.ts --cache`, `apps/mobile/e2e/cache.ts`), so a handler that sets its
+  own header on a route those reads ask fails there, and iOS's `URLCache` is read by no run.
+  What the object store answers is not the API's: an object is `private` and its reader's to
+  keep ([ADR 0015](docs/adr/0015-files-object-storage-the-meter-and-pictures.md)).
 - **Migrations** are goose, one numbered block per module, forward-only and
   expand/contract: an old app in the field must keep working against the new schema.
 - **Tests hit real PostgreSQL.** No database mocks: RLS, `SET LOCAL` and the change feed

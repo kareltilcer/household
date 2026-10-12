@@ -3,7 +3,8 @@
 // alone (app/guards.tsx). The shell around them is another's to test: here a screen is drawn in
 // the page's one landmark and nothing more. Imported by tests alone.
 import type { components } from '@household/api'
-import { render } from '@testing-library/react'
+import { defaultScheduler, notifyManager } from '@tanstack/react-query'
+import { act, render } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Outlet, RouterProvider, createMemoryRouter, type RouteObject } from 'react-router'
 import { createWebClient } from '../api/client.ts'
@@ -73,6 +74,27 @@ export function invalid(field: string, code = 'invalid'): Response {
 }
 
 export const noContent = (): Response => new Response(null, { status: 204 })
+
+/**
+ * Keeps the query client from telling its screens of anything until what this returns is
+ * called. It tells them of a change by a timer, and Chromium runs no timer a press set until
+ * it has drawn the frame that answers the press: held back here, that frame lasts for as long
+ * as a test needs it to, and a test that reads a switch in it reads what a member is drawn.
+ * A test that calls this puts the scheduler back after itself (`defaultScheduler`), whether or
+ * not it came to call what was returned.
+ */
+export function untold(): () => void {
+  const waiting: (() => void)[] = []
+  notifyManager.setScheduler((tell) => {
+    waiting.push(tell)
+  })
+  return () => {
+    notifyManager.setScheduler(defaultScheduler)
+    act(() => {
+      for (const tell of waiting.splice(0)) tell()
+    })
+  }
+}
 
 type Answer = (request: Request) => Response | Promise<Response>
 

@@ -196,6 +196,29 @@ func TestAMobileSignInIssuesATokenPairForItsDevice(t *testing.T) {
 	}
 }
 
+// What a device is answered is no cache's to keep. Its HTTP client keeps one on disk by itself,
+// which nothing of the app's empties as its member signs out: the account's and the households'
+// last answers outlived their sign-in there, beside everything the app removes (httpx.NoStore).
+// A refusal says so too, since it names what was asked for.
+func TestADeviceIsAnsweredNothingACacheMayKeep(t *testing.T) {
+	s := newSite(t, apptest.Options{})
+	s.browser().register(s.a("jana@tilcerovi.cz"), "correct horse battery")
+	p := s.phone("Jana's iPhone")
+	expect(t, p.login(s.a("jana@tilcerovi.cz"), "correct horse battery"), http.StatusOK, "")
+	for path, status := range map[string]int{
+		"/me": http.StatusOK, "/households": http.StatusOK, "/me/devices": http.StatusOK,
+		"/households/" + idgen.New().String(): http.StatusNotFound,
+	} {
+		rec := p.send(http.MethodGet, path, "", nil)
+		if rec.Code != status {
+			t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+			t.Errorf("GET %s: Cache-Control %q, which a device's cache may keep", path, got)
+		}
+	}
+}
+
 // Done when (plan item 9): reuse detection. A refresh token is exchanged once; presented again
 // once its minute of grace is over, it revokes the family, whose access tokens then open nothing,
 // and the account's owner is told.

@@ -1,0 +1,66 @@
+# A stepper where it has the least room (src/ui/Stepper.tsx): in a sheet, on a phone, at twice
+# the text. Its row wraps there and cuts nothing, and its two buttons are each whole: kept as
+# a screenshot for a person, with both on the screen.
+#
+# The sheet is the page of primitives' own editor (`controls:light:sheet`), which holds a
+# stepper for this. The dev toolbar holds the scale, set before anything is scrolled
+# (toast.yaml says why).
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devPrimitives'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'dev-index:devPrimitives'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:primitives'
+    timeout: 30000
+- tapOn:
+    id: 'dev-toolbar:scale'
+- assertVisible:
+    id: 'dev-toolbar:scale'
+    text: '.*100'
+- tapOn:
+    id: 'dev-toolbar:scale'
+- assertVisible:
+    id: 'dev-toolbar:scale'
+    text: '.*200'
+- scrollUntilVisible:
+    element:
+      id: 'primitives:only:overlays'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- tapOn:
+    id: 'primitives:only:overlays'
+- scrollUntilVisible:
+    element:
+      id: 'controls:light:sheet:open'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- tapOn:
+    id: 'controls:light:sheet:open'
+- extendedWaitUntil:
+    visible:
+      id: 'controls:light:sheet:surface'
+    timeout: 15000
+# The stepper is the last thing in the sheet: its second button brought onto the screen
+# whole, with its first above it.
+- scrollUntilVisible:
+    element:
+      id: 'controls:light:sheet:members:increase'
+    direction: DOWN
+    timeout: 60000
+- assertVisible:
+    id: 'controls:light:sheet:members:decrease'
+- assertVisible:
+    id: 'controls:light:sheet:members'
+- takeScreenshot: sheet-stepper-200

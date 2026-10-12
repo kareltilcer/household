@@ -166,12 +166,14 @@ uploaded through the module's route once the replica holds the row at a version,
 a run that was asked for again while it was under way followed by another, since it listed the files
 before a file added meanwhile; a refusal of the file itself is kept with its code, the bytes dropped,
 and the server marks the row; a refusal for the household's state (`entitlement_*`) is not one, nor is
-one that carries no problem of the API's, sent by a proxy or a host that never judged the file, and the
-file waits. After such a refusal the queue sends no file for fifteen minutes, or until the app's
-`resume()`, and after a `429` none until its `Retry-After`, a day at most: a household in grace writes
-and does not upload for days, a run starts at every checkpoint and every upload, and each try sends the
-whole file. The wait is kept in memory, so a replica opened again tries once more. A refused create the
-member discards takes its waiting file with it, its row being one the server will never hold. A file
+one that carries no problem of the API's, sent by a proxy or a host that never judged the file, nor one
+of the build that sent it (`update_required`, which the API answers every request of a build older than
+it serves with, and which judges no file, so that the app its member updates to sends it), and the file
+waits, its bytes and its row. After such a refusal the queue sends no file for fifteen minutes, or
+until the app's `resume()`, and after a `429` none until its `Retry-After`, a day at most: a household
+in grace writes and does not upload for days, a run starts at every checkpoint and every upload, and
+each try sends the whole file. The wait is kept in memory, so a replica opened again tries once more.
+A refused create the member discards takes its waiting file with it, its row being one the server will never hold. A file
 whose bytes the device no longer holds, lost with its storage or in a run that ended between deleting
 them and forgetting the row, is kept as refused too (`bytes_lost`), and one it cannot read is passed
 over until the next run: left at the head of the queue, either would fail every run before any file

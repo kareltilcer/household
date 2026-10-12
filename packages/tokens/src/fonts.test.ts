@@ -1,6 +1,6 @@
-// PL-13, held to the files the web clients serve: self-hosted, with the Latin Extended letters
-// the launch languages and the next ones write, and figures of one width. The files a native app
-// registers under fonts.ts's names are plan item 28's, which bundles them.
+// PL-13, held to the files the web clients serve and to the static files the mobile app embeds
+// (plan item 28): self-hosted, with the Latin Extended letters the launch languages and the next
+// ones write, and figures of one width.
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
@@ -82,6 +82,32 @@ const used = Object.entries(fonts).flatMap(([name, face]) =>
   face.weights.map((weight) => [name, face.family, weight] as const),
 )
 
+/** What PL-13 asks a face to draw and `points` does not hold: a code point in hex, or the letter. */
+function undrawn(points: ReadonlySet<number>): string[] {
+  const missing: string[] = []
+  // Latin Extended-A, whole: Czech, Slovak, Polish and German are written in it (N8).
+  for (let point = 0x0100; point <= 0x017f; point++) {
+    if (!points.has(point)) missing.push(point.toString(16))
+  }
+  // Latin Extended-B, as far as a European language is written in it: Romanian's
+  // comma-below letters, Ș ș Ț ț. The block's other letters are not Europe's.
+  for (const letter of 'ȘșȚț') {
+    const point = letter.codePointAt(0) ?? 0
+    if (!points.has(point)) missing.push(point.toString(16))
+  }
+  // And every letter the five launch languages add to the basic alphabet.
+  for (const letter of 'ÁÄČĎÉĚÍĹĽŇÓÔŔŘŠŤÚŮÝŽáäčďéěíĺľňóôŕřšťúůýžĄĆĘŁŃŚŹŻąćęłńśźżÖÜẞöüß') {
+    const point = letter.codePointAt(0) ?? 0
+    if (!points.has(point)) missing.push(letter)
+  }
+  return missing
+}
+
+/** The advance of each of the ten digits in `font`. */
+function figureWidths(font: Font): number[] {
+  return Array.from({ length: 10 }, (_, digit) => font.glyphForCodePoint(0x30 + digit).advanceWidth)
+}
+
 describe('fonts.css', () => {
   it('declares both faces from files in this workspace, and fetches none', () => {
     expect(faces.length).toBeGreaterThan(0)
@@ -107,24 +133,7 @@ describe('fonts.css', () => {
   it.each(used)(
     '%s (%s) at %i draws all of Latin Extended-A and the Latin Extended-B of Romanian',
     (_, family, weight) => {
-      const points = drawn(family, weight)
-      const missing: string[] = []
-      // Latin Extended-A, whole: Czech, Slovak, Polish and German are written in it (N8).
-      for (let point = 0x0100; point <= 0x017f; point++) {
-        if (!points.has(point)) missing.push(point.toString(16))
-      }
-      // Latin Extended-B, as far as a European language is written in it: Romanian's
-      // comma-below letters, Ș ș Ț ț. The block's other letters are not Europe's.
-      for (const letter of 'ȘșȚț') {
-        const point = letter.codePointAt(0) ?? 0
-        if (!points.has(point)) missing.push(point.toString(16))
-      }
-      // And every letter the five launch languages add to the basic alphabet.
-      for (const letter of 'ÁÄČĎÉĚÍĹĽŇÓÔŔŘŠŤÚŮÝŽáäčďéěíĺľňóôŕřšťúůýžĄĆĘŁŃŚŹŻąćęłńśźżÖÜẞöüß') {
-        const point = letter.codePointAt(0) ?? 0
-        if (!points.has(point)) missing.push(letter)
-      }
-      expect(missing).toEqual([])
+      expect(undrawn(drawn(family, weight))).toEqual([])
     },
   )
 
@@ -147,11 +156,7 @@ describe('fonts.css', () => {
   it.each(digitFiles.map((file) => [file.slice(dirname(file).length + 1), file] as const))(
     '%s has figures of one width',
     (_, file) => {
-      const font = open(file)
-      const widths = Array.from(
-        { length: 10 },
-        (__, digit) => font.glyphForCodePoint(0x30 + digit).advanceWidth,
-      )
+      const widths = figureWidths(open(file))
       expect(new Set(widths).size, widths.join(' ')).toBe(1)
     },
   )
@@ -182,4 +187,42 @@ describe('fonts.css', () => {
     expect(urls.filter((url) => /^["']?(https?:)?\/\//.test(url))).toEqual([])
     expect(css).not.toMatch(/@import/)
   }, 120_000)
+})
+
+// A native app has one static file for each weight of each face, embedded in its binary. iOS
+// finds a file by the PostScript name it carries and Android by the name the app registers it
+// under, so the family a type step names (native.ts) has to be both.
+describe('the static files a native app embeds', () => {
+  const files = Object.values(fonts).flatMap((face) => {
+    const families: Readonly<Record<number, string>> = face.native
+    const paths: Readonly<Record<number, string>> = face.files
+    return face.weights.map(
+      (weight) => [families[weight] ?? '', weight, paths[weight] ?? ''] as const,
+    )
+  })
+
+  it('are one for each weight the type scale sets, and no other', () => {
+    for (const face of Object.values(fonts)) {
+      expect(Object.keys(face.native).map(Number)).toEqual(face.weights)
+      expect(Object.keys(face.files).map(Number)).toEqual(face.weights)
+    }
+  })
+
+  it.each(files)('%s is the file of its family and its weight (%i)', (family, weight, file) => {
+    const font = open(require.resolve(file))
+    expect(font.postscriptName).toBe(family)
+    expect(font['OS/2'].usWeightClass).toBe(weight)
+  })
+
+  it.each(files)(
+    '%s draws all of Latin Extended-A and the Latin Extended-B of Romanian',
+    (_, __, file) => {
+      expect(undrawn(new Set(open(require.resolve(file)).characterSet))).toEqual([])
+    },
+  )
+
+  it.each(files)('%s has figures of one width', (_, __, file) => {
+    const widths = figureWidths(open(require.resolve(file)))
+    expect(new Set(widths).size, widths.join(' ')).toBe(1)
+  })
 })

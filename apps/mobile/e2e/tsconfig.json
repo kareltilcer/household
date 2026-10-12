@@ -1,0 +1,9 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    // What runs on Node beside the flows: the script that runs Maestro over them, the one that
+    // makes a member on the stack, and the test that holds the flows to the app's own names.
+    "types": ["node"]
+  },
+  "include": ["."]
+}

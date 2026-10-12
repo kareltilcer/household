@@ -4,7 +4,7 @@
 
 | | Mobile | Web |
 |---|---|---|
-| **Stack** | React Native / Expo, iOS 16+, Android 10+ | React 19 + Vite, evergreen browsers |
+| **Stack** | React Native / Expo, iOS 16.4+ ([D-185](../prd/09-decisions.md)), Android 10+ | React 19 + Vite, evergreen browsers |
 | **Primary role** | Daily use, capture, notifications, **everything offline** | Setup, configuration, planning, long-form reading, admin, billing |
 | **Offline** | Full local replica, queued writes | Reads from cache, queued writes — **a browser is not the offline-first surface** ([06-clients](../prd/06-clients.md)). What this means per screen is [03-patterns §1](03-patterns.md) |
 | **Default view** | Agenda / list | Table / calendar / editor |

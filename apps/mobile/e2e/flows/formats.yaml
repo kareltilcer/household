@@ -1,0 +1,40 @@
+# The app's own formatters on a device's `Intl` (src/i18n/format.ts; src/dev/engine/checks.ts):
+# a sample of each thing they write, money, a day, an instant in a named zone, a size and a
+# list, in two languages. Jest holds the samples to Node, to the string. On a device a
+# number, an amount and a size are FormatJS's, and are held to that string still: one that
+# differs is a defect of the app's. A date is the device's own ICU, of its system's age, and
+# is held to its fields in their order, the hour of the named zone among them, with the
+# spaces, the commas, the full stops and English's joining word between them folded: an
+# iPhone writes *Mar 3, 2026 at 6:41 PM* where Node writes a comma (run 38152216148).
+#
+# Where a sample does not hold, the line fails and names it with what the device wrote; where
+# a date holds by its fields and is not Node's string, the line passes and names it under
+# itself all the same (`engine:formats:found`), which the screenshot keeps.
+#
+# A flow of its own, and a line apart from the engine screen's one verdict (engine.yaml):
+# what it finds is a formatter's, and is not the engine failing.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devEngine'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'dev-index:devEngine'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:engine'
+    timeout: 30000
+# Where it did not hold this is `engine:formats:failed`, and the failure's screenshot and
+# hierarchy have each sample that differs with what was written for it.
+- scrollUntilVisible:
+    element:
+      id: 'engine:formats:passed'
+    direction: DOWN
+    timeout: 60000
+- takeScreenshot: formats

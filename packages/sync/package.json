@@ -26,7 +26,7 @@
   },
   "peerDependencies": {
     "@powersync/node": "1.1.1",
-    "@powersync/react-native": "2.3.1",
+    "@powersync/react-native": "catalog:",
     "@powersync/web": "2.4.2"
   },
   "peerDependenciesMeta": {
@@ -42,9 +42,9 @@
   },
   "devDependencies": {
     "@household/test-vectors": "workspace:*",
-    "@op-engineering/op-sqlite": "18.2.5",
+    "@op-engineering/op-sqlite": "catalog:",
     "@powersync/node": "1.1.1",
-    "@powersync/react-native": "2.3.1",
+    "@powersync/react-native": "catalog:",
     "@powersync/web": "2.4.2",
     "@types/node": "catalog:",
     "@types/pg": "8.23.1",

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { catalogs, locales } from './catalogs.ts'
 import { loaders } from './generated/loaders.ts'
-import { clientParts, partOf, parts, serverSegments } from './parts.ts'
+import { clientParts, deviceSegments, partOf, parts, serverSegments } from './parts.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -12,10 +12,11 @@ const here = dirname(fileURLToPath(import.meta.url))
 const segmentOf = (key: string) => key.split('.', 1)[0] ?? ''
 
 describe('the parts of a catalog', () => {
-  /** The table's rows: each part's first segments, and the server's alone. */
+  /** The table's rows: each part's first segments, the server's alone, and the mobile app's. */
   const rows: readonly (readonly string[])[] = [
     ...clientParts.map((part) => parts[part]),
     serverSegments,
+    deviceSegments,
   ]
 
   // A key in no row is in no file a client fetches and is not said to be the server's either:
@@ -30,16 +31,19 @@ describe('the parts of a catalog', () => {
     expect(segments.filter((segment, at) => segments.indexOf(segment) !== at)).toEqual([])
   })
 
-  it('give a key its part, and none to one of the server’s alone', () => {
+  it('give a key its part, and none to one of the server’s alone or of the mobile app’s', () => {
     expect(clientParts[0]).toBe('app')
     expect(partOf('app.name')).toBe('app')
     expect(partOf('module.shopping.name')).toBe('app')
     expect(partOf('household.invitation.none.title')).toBe('household')
     expect(partOf('clients.title')).toBe('health')
+    const unfetched: readonly string[] = [...serverSegments, ...deviceSegments]
     for (const key of Object.keys(catalogs.en)) {
-      const servers = serverSegments.some((segment) => segment === segmentOf(key))
-      expect(partOf(key) === undefined, key).toBe(servers)
+      expect(partOf(key) === undefined, key).toBe(unfetched.includes(segmentOf(key)))
     }
+    // A word of the mobile app's is in no file the web fetches.
+    expect(partOf('device.app.error.title')).toBeUndefined()
+    expect(Object.keys(catalogs.en).some((key) => segmentOf(key) === 'device')).toBe(true)
     // The two messages of an invoice's lines, which the server alone renders, ride with theirs.
     expect(partOf('billing.storage_line')).toBe('billing')
   })

@@ -28,7 +28,7 @@
 //   working while a subscription is paused.
 import type { components } from '@household/api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useApi } from '../api/ApiProvider.tsx'
 import { unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
@@ -64,6 +64,16 @@ const timeOfDay = /^\d{2}:\d{2}$/
 /** The preferences of the account (`null`) or of one household, by key. */
 function preferencesKey(household: string | null) {
   return ['me', 'notification-preferences', household ?? 'account'] as const
+}
+
+/** `held` with `change` made to it, as the contract merges one: a member of the merge at a time. */
+function changed(held: Preferences, change: Change): Preferences {
+  return {
+    ...held,
+    ...(change.enabled === undefined ? {} : { enabled: change.enabled }),
+    categories: { ...held.categories, ...change.categories },
+    ...(change.quiet_hours === undefined ? {} : { quiet_hours: change.quiet_hours }),
+  }
 }
 
 function ThisBrowser() {
@@ -231,40 +241,93 @@ function Settings({
   // have not been: the time fields are drawn afresh after each, holding what the server holds.
   const [refusal, setRefusal] = useState<string | null>(null)
   const [refusals, setRefusals] = useState(0)
+  // The change a press has just made, held by the screen itself until the query client holds
+  // it. What is kept is written once a read on its way is cancelled, after the press's event
+  // has ended, and the query client tells a screen of what it keeps later still, by a timer,
+  // which a browser runs only after the frame that answers the press; React puts a switch
+  // back, as its press ends, to what was last drawn. Drawn from what is kept alone, a pressed
+  // switch stood as it was for that frame, and a second press on it in that frame sent the
+  // first one's change again.
+  const [pressed, setPressed] = useState<Change | null>(null)
+  // The changes on their way, in the order they were made: a switch takes another while one
+  // is, sent beside it.
+  const flying = useRef<readonly Change[]>([])
+  // What the server last said it holds, while a change is on its way: what was kept as the
+  // first of them was made, and then the answer to each of them it took.
+  const served = useRef<Preferences | undefined>(undefined)
+  // Whether the server is to be read once no change is on its way: one was refused, or two
+  // were on their way at once.
+  const unread = useRef(false)
+  /**
+   * Keeps what the server last said it holds with every change still on its way made to it.
+   * The answer to one change, and what a refused one is put back to, hold nothing of a change
+   * made since: drawn as they came, that one's switch went back under its member until its own
+   * answer.
+   */
+  const draw = () => {
+    const held = served.current
+    if (held !== undefined) {
+      queries.setQueryData<Preferences>(key, flying.current.reduce(changed, held))
+    }
+  }
   const save = useMutation({
     ...askedNow,
     mutationFn: async (change: Change) =>
       unwrap(await api.PATCH('/me/notification-preferences', { params: { query }, body: change })),
-    onMutate: (change: Change) => {
+    onMutate: async (change: Change) => {
       setRefusal(null)
-      const before = queries.getQueryData<Preferences>(key)
+      // Sent beside another: their answers come in whichever order, and the one that comes
+      // last may be the earlier one's, so the server is read once both are answered.
+      if (flying.current.length > 0) unread.current = true
+      flying.current = [...flying.current, change]
+      // A read on its way was asked before this change: its answer would be drawn over it, and
+      // would stay drawn where it came after the change's own.
+      await queries.cancelQueries({ queryKey: key, exact: true })
+      // What is kept is what the server holds, until the first of these changes is drawn.
+      served.current ??= queries.getQueryData<Preferences>(key)
       // Shown as chosen while it is asked: a switch that waited for the answer would feel stuck.
-      queries.setQueryData<Preferences>(key, (was) =>
-        was === undefined
-          ? was
-          : {
-              ...was,
-              ...(change.enabled === undefined ? {} : { enabled: change.enabled }),
-              categories: { ...was.categories, ...change.categories },
-              ...(change.quiet_hours === undefined ? {} : { quiet_hours: change.quiet_hours }),
-            },
-      )
-      return { before }
+      draw()
+      // Kept now, and read there by the draw this asks for: the screen's own hold is put away,
+      // unless a later press has taken its place.
+      setPressed((held) => (held === change ? null : held))
     },
-    onSuccess: (saved) => {
-      queries.setQueryData(key, saved)
+    onSuccess: (saved, change) => {
+      served.current = saved
+      flying.current = flying.current.filter((each) => each !== change)
+      draw()
     },
-    onError: (error, _change, context) => {
-      // Put back: what the screen shows is what the server holds. It is asked again too, since
-      // two changes made a moment apart are each put back to what was there before them.
-      if (context?.before !== undefined) queries.setQueryData(key, context.before)
-      void queries.invalidateQueries({ queryKey: key })
+    onError: (error, change) => {
+      // Put back: what the screen shows is what the server last said it holds, and never what
+      // was kept as this change was made, which holds whatever a change still on its way had
+      // only chosen: two refused one after the other left the first one's choice drawn as saved.
+      flying.current = flying.current.filter((each) => each !== change)
+      draw()
+      unread.current = true
       setRefusal(isRefusedAsSent(error) ? t('account.refused') : say(error))
       setRefusals((count) => count + 1)
     },
+    onSettled: () => {
+      if (flying.current.length > 0) return
+      // None is on its way: what is kept is the server's own again, whatever reads it next.
+      served.current = undefined
+      // A change that got no answer may have been taken all the same, and of two sent side by
+      // side the server took one last, whichever was answered last: so the server is read
+      // again, once none is on its way, and not before, since a read asked while one still is
+      // would be answered as that one lands, and drawn over it.
+      if (!unread.current) return
+      unread.current = false
+      void queries.invalidateQueries({ queryKey: key })
+    },
   })
 
-  const preferences = read.data
+  /** Makes a change: drawn in the press that made it, and asked of the server at once. */
+  const change = (next: Change) => {
+    setPressed(next)
+    save.mutate(next)
+  }
+
+  const preferences =
+    read.data === undefined || pressed === null ? read.data : changed(read.data, pressed)
   const quiet = preferences?.quiet_hours ?? null
   const state = save.isPending
     ? 'syncing'
@@ -338,7 +401,7 @@ function Settings({
                 checked={preferences.enabled}
                 aria-describedby={`${ids}-master`}
                 onChange={(event) => {
-                  save.mutate({ enabled: event.currentTarget.checked })
+                  change({ enabled: event.currentTarget.checked })
                 }}
               />
               <p id={`${ids}-master`} className={styles.note}>
@@ -356,7 +419,7 @@ function Settings({
                   checked={preferences.categories[category]}
                   aria-describedby={`${ids}-${category}`}
                   onChange={(event) => {
-                    save.mutate({ categories: { [category]: event.currentTarget.checked } })
+                    change({ categories: { [category]: event.currentTarget.checked } })
                   }}
                 />
                 <p id={`${ids}-${category}`} className={styles.note}>
@@ -372,7 +435,7 @@ function Settings({
                 checked={quiet !== null}
                 aria-describedby={`${ids}-quiet`}
                 onChange={(event) => {
-                  save.mutate({ quiet_hours: event.currentTarget.checked ? night : null })
+                  change({ quiet_hours: event.currentTarget.checked ? night : null })
                 }}
               />
               <p id={`${ids}-quiet`} className={styles.note}>
@@ -384,7 +447,7 @@ function Settings({
                 key={refusals}
                 held={quiet}
                 onChange={(next) => {
-                  save.mutate({ quiet_hours: next })
+                  change({ quiet_hours: next })
                 }}
               />
             )}

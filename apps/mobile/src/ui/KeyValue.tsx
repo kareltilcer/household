@@ -1,0 +1,88 @@
+// The key–value detail block (02-components §3): the pane beside every asset, document and
+// service. Labels at the start, values at the end, mono for anything numeric. A value that does
+// not exist is a dash with a word, never an empty cell: an empty cell reads as a fault.
+import type { ReactNode } from 'react'
+import { View } from 'react-native'
+import { useTheme } from '../display/DisplayProvider.tsx'
+import { useTranslate } from '../i18n/I18nProvider.tsx'
+import { drawsNothing } from './nothing.ts'
+import { Text } from './Text.tsx'
+
+export interface Pair {
+  readonly key: string
+  /**
+   * Left out, or anything that would be drawn as nothing, null, an empty string or `false`:
+   * nothing is recorded, which the block says in a word. A string or a number is set as the
+   * block sets a value; anything else is drawn as it is given, and is words or figures, a
+   * money value or a mark. No control goes here: a pair is one thing to a screen reader, and a
+   * control inside it is out of its reach on iOS (the rules fail one, src/test/a11y.ts).
+   */
+  readonly value?: ReactNode
+  readonly numeric?: boolean
+}
+
+export function KeyValue({ pairs }: { readonly pairs: readonly Pair[] }) {
+  const t = useTranslate()
+  const theme = useTheme()
+  const none = t('ui.kv.none')
+  return (
+    <View>
+      {pairs.map((pair, index) => {
+        const { value } = pair
+        return (
+          // A pair is its place in the block: two may carry one label, two phones or two owners.
+          <View
+            key={index}
+            // A label and its value are one thing to a screen reader, read in one go.
+            accessible
+            // Side by side while both fit, and one above the other when they do not: at 200 %
+            // text a label and its value each take the line they need.
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              columnGap: theme.space['space-2'],
+              rowGap: theme.space['space-05'],
+              paddingVertical: theme.density['dens-pad-y'],
+              ...(index === 0
+                ? {}
+                : { borderTopWidth: 1, borderTopColor: theme.density['dens-rule'] }),
+            }}
+          >
+            <Text step="caption" color="text-muted" style={{ flexShrink: 1 }}>
+              {pair.key}
+            </Text>
+            {drawsNothing(value) ? (
+              // The empty cell the block never shows (ui/nothing.ts says what is one). The dash
+              // is the cell's face; the word is what it says, and all a screen reader reads.
+              <Text color="text-muted" accessibilityLabel={none} style={{ flexShrink: 1 }}>
+                {`— ${none}`}
+              </Text>
+            ) : typeof value === 'string' || typeof value === 'number' ? (
+              // A value can be copied: a kept version's banner tells its member to copy what
+              // they still need (`sync.kept.hint`), and a registration or a policy number is
+              // what a member takes elsewhere. Read in React Native's source: on iOS a long
+              // press on a selectable text offers Copy, of the whole of it, from a recogniser of
+              // the text's own view (RCTParagraphComponentView.mm, `enableContextMenu`), which
+              // the pair's being one thing to a screen reader does not stand in the way of;
+              // on Android the text is told it is selectable (ReactTextViewManager.kt,
+              // `setSelectable`). Not known, and heard by nobody: what a screen reader makes of
+              // it, how Copy is reached with VoiceOver on, and whether TalkBack then stops on a
+              // value apart from its label, a selectable text being one a touch can focus.
+              <Text
+                selectable
+                step={pair.numeric === true ? 'num' : 'body'}
+                style={{ flexShrink: 1 }}
+              >
+                {value}
+              </Text>
+            ) : (
+              value
+            )}
+          </View>
+        )
+      })}
+    </View>
+  )
+}

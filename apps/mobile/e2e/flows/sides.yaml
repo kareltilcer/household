@@ -1,0 +1,126 @@
+# A sheet, a dialog and a toast with the device on its side, at twice the text, each kept as a
+# screenshot for a person to read (src/ui/Dialog.tsx, src/ui/Toast.tsx; ADR 0029). A phone on
+# its side has the housing of its camera at one side and, on Android with three buttons, their
+# band at the other, and at this size a sheet and a toast are as wide as the screen: what is
+# drawn over the whole window keeps clear of both by the device's own insets, which nothing
+# but a device has. What the screenshots are read for is the sides: no edge of the sheet, of
+# the dialog or of the toast under the camera's housing or the buttons' band.
+#
+# The sheet and the dialog are turned as they stand, which is also a modal turning with its
+# device. The toast is raised with the device on its side already, by the dialog's own answer,
+# and looked for at once: it stays five seconds, and a turn made under it, with the screen
+# left to come to rest, is most of them (toast.yaml). It is the page's toast and no modal's,
+# the dialog having gone, and nothing is scrolled on a page that was turned.
+#
+# The dev toolbar holds the text's scale, set before anything is scrolled (toast.yaml says
+# why). After a turn the screen is left to come to rest before it is read or pressed: the
+# insets arrive with the turn, and what is drawn by them a moment after.
+appId: com.kareltilcer.household.dev
+# Whatever became of the flow, the device is upright for the flows after it: a turn outlasts
+# the app's own start.
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devPrimitives'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'dev-index:devPrimitives'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:primitives'
+    timeout: 30000
+- assertVisible:
+    id: 'dev-toolbar:scale'
+    text: '.*device'
+- tapOn:
+    id: 'dev-toolbar:scale'
+- assertVisible:
+    id: 'dev-toolbar:scale'
+    text: '.*100'
+- tapOn:
+    id: 'dev-toolbar:scale'
+- assertVisible:
+    id: 'dev-toolbar:scale'
+    text: '.*200'
+- scrollUntilVisible:
+    element:
+      id: 'primitives:only:overlays'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- tapOn:
+    id: 'primitives:only:overlays'
+# The sheet, opened upright as sheet.yaml opens it, and turned where it stands.
+- scrollUntilVisible:
+    element:
+      id: 'controls:light:sheet:open'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- tapOn:
+    id: 'controls:light:sheet:open'
+- extendedWaitUntil:
+    visible:
+      id: 'controls:light:sheet:surface'
+    timeout: 15000
+- setOrientation: LANDSCAPE_LEFT
+- waitForAnimationToEnd:
+    timeout: 5000
+- extendedWaitUntil:
+    visible:
+      id: 'controls:light:sheet:surface'
+    timeout: 30000
+- takeScreenshot: sheet-on-its-side
+- setOrientation: PORTRAIT
+- waitForAnimationToEnd:
+    timeout: 5000
+# Upright again, the sheet is put away by its own control, which stands at its head.
+- extendedWaitUntil:
+    visible:
+      id: 'controls:light:sheet:close'
+    timeout: 30000
+- tapOn:
+    id: 'controls:light:sheet:close'
+- extendedWaitUntil:
+    notVisible:
+      id: 'controls:light:sheet:surface'
+    timeout: 15000
+# The dialog's control is the first of the part, at the sheet's or above it: on the screen
+# still, or below it where the turns took the page up.
+- scrollUntilVisible:
+    element:
+      id: 'controls:light:dialog:open'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- tapOn:
+    id: 'controls:light:dialog:open'
+- extendedWaitUntil:
+    visible:
+      id: 'controls:light:dialog:surface'
+    timeout: 15000
+- setOrientation: LANDSCAPE_LEFT
+- waitForAnimationToEnd:
+    timeout: 5000
+- extendedWaitUntil:
+    visible:
+      id: 'controls:light:dialog:delete'
+    timeout: 30000
+- takeScreenshot: dialog-on-its-side
+# Its answer raises the toast, on the page once the dialog has gone. Looked for at once.
+- tapOn:
+    id: 'controls:light:dialog:delete'
+    waitToSettleTimeoutMs: 500
+- extendedWaitUntil:
+    visible:
+      id: 'toast'
+    timeout: 15000
+- takeScreenshot: toast-on-its-side
+- setOrientation: PORTRAIT

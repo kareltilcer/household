@@ -1,0 +1,67 @@
+# A toast with Undo at twice the text, kept as a screenshot for a person to read
+# (02-components §1; src/ui/Toast.tsx): its sentence whole, and Undo and the control that puts
+# it away each a control's size, neither on top of the other. That it is there for its dwell
+# and what its controls do are its own Jest tests; how it is laid out at 200 % on a phone is a
+# device's to show.
+#
+# The dev toolbar holds the text's scale, one press a value: from the device's own to 100 %,
+# and from there to 200 %. A flow of its own, which ends at twice the text: nothing follows
+# the toast that would have to be read at another size, and the next flow starts the app
+# anew. The scale is set before anything is scrolled, with the toolbar where the page draws
+# it: scrolled a little, it can stand under the status bar, whole on the screen as Maestro
+# counts it, and a press there is the system's, which on iOS scrolls the page to its head
+# and presses nothing.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devPrimitives'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'dev-index:devPrimitives'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:primitives'
+    timeout: 30000
+- assertVisible:
+    id: 'dev-toolbar:scale'
+    text: '.*device'
+- tapOn:
+    id: 'dev-toolbar:scale'
+- assertVisible:
+    id: 'dev-toolbar:scale'
+    text: '.*100'
+- tapOn:
+    id: 'dev-toolbar:scale'
+- assertVisible:
+    id: 'dev-toolbar:scale'
+    text: '.*200'
+# At twice the text the page's head is two screens of controls: on to its overlays.
+- scrollUntilVisible:
+    element:
+      id: 'primitives:only:overlays'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- tapOn:
+    id: 'primitives:only:overlays'
+- scrollUntilVisible:
+    element:
+      id: 'controls:light:toast:undo'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+# Looked for at once: it stays five seconds.
+- tapOn:
+    id: 'controls:light:toast:undo'
+    waitToSettleTimeoutMs: 500
+- extendedWaitUntil:
+    visible:
+      id: 'toast'
+    timeout: 15000
+- takeScreenshot: toast-undo-200

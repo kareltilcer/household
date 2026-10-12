@@ -1,0 +1,60 @@
+# A drag that begins on a stepper's count takes the page with it (02-components; src/ui/Stepper.tsx).
+# On Android it once did not: the count was a centred field of one line, which keeps a touch,
+# and in two flows of the fourth run a scroll stopped under it for good. The count is no
+# longer centred there, and this is the line that says whether that mended it: a finger on a
+# device, which no Jest test is.
+#
+# A flow of its own, so that it fails for this alone. The page of primitives is narrowed to
+# its fields (`primitives:only:controls`), and the names are the light half's.
+appId: com.kareltilcer.household.dev
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: parts/dev.yaml
+- scrollUntilVisible:
+    element:
+      id: 'dev-index:devPrimitives'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'dev-index:devPrimitives'
+- extendedWaitUntil:
+    visible:
+      id: 'household-dev-screen:primitives'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: 'primitives:only:controls'
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: 'primitives:only:controls'
+# The fields' first select is brought up from the foot of the screen, which leaves the
+# stepper under it on the screen too, clear of Android's navigation bar: the count stands
+# some five hundred pixels below the select on the emulator.
+- scrollUntilVisible:
+    element:
+      id: 'controls:light:select'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- assertVisible:
+    id: 'controls:light:select'
+- assertVisible:
+    id: 'controls:light:stepper'
+- takeScreenshot: stepper-before
+# Maestro swipes from the middle of the count to a tenth of the way down the screen. Where
+# the page goes with the finger, the select, which stands well above the count, has left by
+# the top. Where the count keeps the touch, nothing has moved, and the select is where it
+# was. That is all that is held: how far the page goes on by itself once the finger is off
+# is the platform's, and on a simulator it went past the whole of the fields' light half.
+- swipe:
+    from:
+      id: 'controls:light:stepper'
+    direction: UP
+- extendedWaitUntil:
+    notVisible:
+      id: 'controls:light:select'
+    timeout: 15000
+- takeScreenshot: stepper-dragged

@@ -1,4 +1,13 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"]
+  "compilerOptions": {
+    // The app runs on React Native: its own globals, from react-native's types, and neither the
+    // DOM's nor Node's. Beside them, what Metro gives every module it bundles, `process.env`
+    // among it, which is also all that app.config.ts reads of the machine it is evaluated on.
+    "types": ["react-native", "expo/types/metro-require"],
+    "jsx": "react-jsx"
+  },
+  // The routes (app/), everything they draw (src/), and the two files at the root: the entry and
+  // Expo's configuration.
+  "include": ["*.ts", "app", "src"]
 }
