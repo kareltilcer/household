@@ -1308,9 +1308,15 @@ platform.
   the scheme alone opening it today, and the store's pages. Its first upload route must not
   take the part's file name for the file's, which is the row's id on a device, and an upload
   it refuses `update_required`, or answers `404` for a row that is no tombstone, keeps its
-  file; the way in still takes bytes, so a camera's file would be read whole once. Two things
-  of an upload are read and left to it. A file sent from
-  its place that its transport cannot read ends every run of the queue at itself:
+  file; the way in still takes bytes, so a camera's file would be read whole once. What the
+  route answers `404` for is the queue's to act on (ADR 0019), and the route's to mind: a file
+  answered so for a row the replica holds as a tombstone is dropped, so a module whose deleted
+  rows come back, by its Undo, decides whether its route takes a file for one meanwhile; a
+  `404` for a row the replica goes on holding as it did, for a reason no checkpoint tells it,
+  ends every run at that file, with the files behind it unsent; and a file whose row has left
+  the replica for good waits, listed, until the app removes it (`Attachments.remove`) or the
+  replica goes. Two things of an upload are read and left to it. A file sent from its place
+  that its transport cannot read ends every run of the queue at itself:
   `File.upload` rejects for it as for a request that got no answer, the same exception on
   both platforms, so the queue, which passes over a file it reads itself and cannot, cannot
   tell this one from a network that is down; the first route decides whether the transport
