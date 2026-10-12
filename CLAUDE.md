@@ -197,10 +197,14 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   a place for what is loading and a boundary, both below `Root` (`bounded` for a screen,
   `sheltered` for a shell, `app/routes.tsx`), which the table's own test holds each to, since
   with no place the router draws nothing at all, the watch for a newer build neither, and with
-  no boundary it names the failure in `Root`'s place. A guard stands above the place of the
-  files under it, `Signed` over the shells' and `VisitorOnly` over a visitor's screens', which
-  the same test holds: it is drawn while they load, and sends on whoever they are not drawn for
-  without waiting for them. A route's failure is said as it arrives (`RouteError`)
+  no boundary it names the failure in `Root`'s place. A shell's screens stand under the shell's
+  place and no other, so a shell and its first screen are drawn together. A guard stands above
+  the place of the files under it, `Signed` over the shells' and `VisitorOnly` over a visitor's
+  screens', which the same test holds: it is drawn while they load, and sends on whoever they
+  are not drawn for without waiting for them. What sends somebody on to an address whose files
+  may not have come, a guard or where the app opens, draws the shape of a page until that
+  address is drawn (`Waiting` with `to`, `app/guards.tsx`), and never `Navigate` alone. A
+  route's failure is said as it arrives (`RouteError`), Root's own among them
   ([ADR 0025](docs/adr/0025-the-web-foundation-policy-harness-budget-and-build-id.md)).
   A request goes through `useApi()` inside TanStack Query and
   its answer through `unwrap`, which is how the session hears of the three answers that are about
