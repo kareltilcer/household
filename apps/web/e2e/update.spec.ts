@@ -3,7 +3,7 @@
 // index.html itself carries, and it never reloads on its own.
 import type { Page } from '@playwright/test'
 import { paths } from '../src/app/paths.ts'
-import { expect, frames, open, test } from './fixtures.ts'
+import { expect, frames, open, takenAway, test } from './fixtures.ts'
 
 /** The page is looked at again: what makes it ask which build is live. */
 function lookAgain(page: Page): Promise<void> {
@@ -70,14 +70,7 @@ test('a page opened at a route whose file a newer build took away says a newer b
   page,
   faults,
 }) => {
-  await page.route('**/build.json', (route) => route.fulfill({ json: { id: 'a-newer-build' } }))
-  await page.route('**/assets/Primitives-*.js', async (route) => {
-    // No file is refused sooner than a page can draw: the answer is given once what every
-    // route is drawn in is on the page, as it is long before any network has answered.
-    await expect(page.getByRole('main')).toBeAttached()
-    await frames(page)
-    await route.fulfill({ status: 404, body: 'gone' })
-  })
+  await takenAway(page, '**/assets/Primitives-*.js')
   await page.goto(paths.primitives.example, { waitUntil: 'commit' })
   await expect(
     page.getByRole('heading', { level: 1, name: 'This page could not be shown' }),

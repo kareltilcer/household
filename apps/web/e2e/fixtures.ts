@@ -61,6 +61,21 @@ export function frames(page: Page, count = 3): Promise<void> {
 }
 
 /**
+ * A newer build is live, and took `file` away: build.json names another build than the page's,
+ * and the file is answered as one that is gone. No file is refused sooner than a page can draw:
+ * the answer is given once what every route is drawn in is on the page, as it is long before
+ * any network has answered. Set before the page is opened.
+ */
+export async function takenAway(page: Page, file: string): Promise<void> {
+  await page.route('**/build.json', (route) => route.fulfill({ json: { id: 'a-newer-build' } }))
+  await page.route(file, async (route) => {
+    await expect(page.getByRole('main')).toBeAttached()
+    await frames(page)
+    await route.fulfill({ status: 404, body: 'gone' })
+  })
+}
+
+/**
  * The reads this browser keeps, by their keys: the app's persisted cache as it wrote it, one
  * clone under one key of one store (src/api/query.ts). Read once the app has drawn, which is
  * after it opened the store.

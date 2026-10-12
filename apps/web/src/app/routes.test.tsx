@@ -10,13 +10,15 @@ import {
   type LazyRouteFunction,
   type RouteObject,
 } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createWebClient } from '../api/client.ts'
 import { csrfCookie } from '../api/names.ts'
 import { dropCatalogs, holdCatalog } from '../i18n/catalogs.ts'
-import { heldDestination, holdDestination } from '../session/destination.ts'
+import { heldDestination, holdDestination, takeDestination } from '../session/destination.ts'
+import { loaded } from '../test/render.tsx'
 import { buildMeta } from '../update/build.ts'
 import { Providers } from './App.tsx'
+import { Signed, VisitorOnly } from './guards.tsx'
 import { fill, inHousehold, isOwnPath, paths, routeIds } from './paths.ts'
 import { inRoot, routes, served } from './routes.tsx'
 
@@ -81,7 +83,7 @@ const memberClient = createWebClient({
 /** The app at `address`, as a visitor opens it, or as a member does where `member` says so. */
 function open(address: string, table: RouteObject[] = routes, member = false) {
   const router = createMemoryRouter(table, { initialEntries: [address] })
-  render(
+  const { unmount } = render(
     <Providers
       persist={false}
       client={member ? memberClient : client}
@@ -90,7 +92,7 @@ function open(address: string, table: RouteObject[] = routes, member = false) {
       <RouterProvider router={router} />
     </Providers>,
   )
-  return router
+  return { router, unmount }
 }
 
 /** `table` with `route` replaced by `by`, wherever it stands in it. */
@@ -108,26 +110,22 @@ function replaced(
 }
 
 /**
- * The app's own table with one of the two files a member's `address` names, its shell's or its
- * screen's, loaded as `load` says: every route stands where the app puts it, under the layouts
- * and the boundaries the app gives it. Both files are loaded here first, as they are, so that a
- * test that lets one arrive waits for what is drawn, and never for a first import.
+ * The app's own table with one of the files `address` names loaded as `load` says: its screen's,
+ * or the shell's around it where the address is a member's. Every route stands where the app
+ * puts it, under the layouts, the guards and the boundaries the app gives it.
  */
-async function withFile(
+function withFile(
   address: string,
   part: 'shell' | 'screen',
   load: (own: LazyRouteFunction<RouteObject>) => ReturnType<LazyRouteFunction<RouteObject>>,
-): Promise<RouteObject[]> {
+): RouteObject[] {
   const files = (matchRoutes(routes, address) ?? []).flatMap(({ route }) =>
     typeof route.lazy === 'function' ? [{ route, own: route.lazy }] : [],
   )
-  const [shell, page] = files
-  if (shell === undefined || page === undefined || files.length !== 2) {
-    throw new Error(`routes: ${address} is not a shell's file and a screen's`)
-  }
-  await Promise.all(files.map(({ own }) => own()))
-  const { route, own } = part === 'shell' ? shell : page
-  return replaced(routes, route, { ...route, lazy: () => load(own) })
+  // A screen's file is the last an address names, and a shell's the one before it.
+  const file = part === 'screen' ? files.at(-1) : files.length === 2 ? files[0] : undefined
+  if (file === undefined) throw new Error(`routes: ${address} names no ${part} that is a file`)
+  return replaced(routes, file.route, { ...file.route, lazy: () => load(file.own) })
 }
 
 /** What a page meets when a newer build has taken a file of its own away. */
@@ -195,21 +193,30 @@ describe('the routes', () => {
   // The router draws down to the place named last at or above the first route whose file is
   // still loading, and nothing at all where none is named, Root neither; and it names a failure
   // at the nearest boundary at or above the route that failed, which with none nearer is Root's
-  // own, in Root's place. A place on Root itself stands in Root's place too, so neither counts.
-  it('give every route that is a file a place for what is loading and a boundary, under what every route is drawn in', () => {
+  // own, in Root's place. A place on Root itself stands in Root's place too, so neither counts,
+  // and a route that is a file beside Root has neither. Nor does a place at or above a guard
+  // count for a file under it: the router would draw down to that place and not to the guard,
+  // which would then send nobody on until the file had come.
+  it('give every route that is a file a place for what is loading and a boundary, under what every route is drawn in and under its guard', () => {
+    const guards: readonly unknown[] = [Signed, VisitorOnly]
     // Each such file without one of the two, named by the first screen it is fetched for.
     const bare: string[] = []
-    const walk = (table: readonly RouteObject[], placed: boolean, bounded: boolean) => {
+    const walk = (
+      table: readonly RouteObject[],
+      placed: boolean,
+      bounded: boolean,
+      top = false,
+    ) => {
       for (const route of table) {
-        const place = placed || (route.HydrateFallback ?? null) !== null
-        const boundary = bounded || (route.ErrorBoundary ?? null) !== null
+        const place = !top && (placed || (route.HydrateFallback ?? null) !== null)
+        const boundary = !top && (bounded || (route.ErrorBoundary ?? null) !== null)
         if (route.lazy !== undefined && !(place && boundary)) {
-          bare.push(...screens([route]).slice(0, 1))
+          bare.push(screens([route])[0] ?? route.path ?? 'a file that draws no screen')
         }
-        walk(route.children ?? [], place, boundary)
+        walk(route.children ?? [], place && !guards.includes(route.Component), boundary)
       }
     }
-    for (const root of routes) walk(root.children ?? [], false, false)
+    walk(routes, false, false, true)
     expect(bare).toEqual([])
   })
 
@@ -258,17 +265,28 @@ describe('the routes', () => {
 })
 
 describe('the app', () => {
+  // A file imported for the first time is transformed as it is asked for, with whatever it
+  // imports that nothing imported before, which for a shell is much of the app: on a machine
+  // with other work that can take longer than the five seconds a test is given. The files the
+  // tests here hold back or let fail are loaded first, in time of their own, so that each test
+  // waits for what is drawn and never for a first import.
+  beforeAll(async () => {
+    await Promise.all(
+      [paths.signIn.path, paths.account.path, inHousehold.home(home)].map((address) =>
+        loaded(routes, address),
+      ),
+    )
+  }, 30_000)
+
   afterEach(() => {
     document.head.querySelector(`meta[name="${buildMeta}"]`)?.remove()
   })
 
+  /** What an address that opens nothing says, which is all its page draws and needs no file. */
+  const nothing = 'This link doesn’t open anything here.'
+
   it('opens a visitor at the way in, inside the page’s one main landmark', async () => {
-    const router = createMemoryRouter(routes, { initialEntries: [paths.home.example] })
-    render(
-      <Providers persist={false} client={client}>
-        <RouterProvider router={router} />
-      </Providers>,
-    )
+    const { router } = open(paths.home.example)
     await screen.findByRole('heading', { level: 1 })
     expect(router.state.location.pathname).toBe(paths.signIn.path)
     expect(screen.getAllByRole('main')).toHaveLength(1)
@@ -277,12 +295,7 @@ describe('the app', () => {
   // A tab, a history entry and a screen reader's list of windows name a page by its title: one
   // title for every screen would tell none of them apart (WCAG 2.1, 2.4.2; D-165).
   it('names the page for the screen it shows, and for the app alone once that screen has gone', async () => {
-    const router = createMemoryRouter(routes, { initialEntries: [paths.signIn.path] })
-    const { unmount } = render(
-      <Providers persist={false} client={client}>
-        <RouterProvider router={router} />
-      </Providers>,
-    )
+    const { router, unmount } = open(paths.signIn.path)
     await screen.findByRole('heading', { level: 1, name: 'Sign in' })
     // The page is named in an effect, which React may run a task after the commit that drew the
     // heading: the heading found, its title is waited for.
@@ -290,7 +303,6 @@ describe('the app', () => {
       expect(document.title).toBe('Sign in · Household')
     })
     await act(() => router.navigate(paths.notFound.example))
-    const nothing = 'This link doesn’t open anything here.'
     await screen.findByRole('heading', { level: 1, name: nothing })
     await waitFor(() => {
       expect(document.title).toBe(`${nothing} · Household`)
@@ -302,24 +314,14 @@ describe('the app', () => {
 
   it('says an address opens nothing without saying why, and leads back', async () => {
     open(paths.notFound.example)
-    expect(
-      await screen.findByRole('heading', {
-        level: 1,
-        name: 'This link doesn’t open anything here.',
-      }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: nothing })).toBeInTheDocument()
     expect(screen.getAllByRole('main')).toHaveLength(1)
     expect(screen.getByRole('link', { name: 'Go to Home' })).toHaveAttribute('href', '/')
   })
 
   it('sends a visitor who opens a member’s address to sign in, and holds the address', async () => {
     const address = '/account/devices?x=1'
-    const router = createMemoryRouter(routes, { initialEntries: [address] })
-    render(
-      <Providers persist={false} client={client}>
-        <RouterProvider router={router} />
-      </Providers>,
-    )
+    const { router } = open(address)
     await screen.findByRole('heading', { level: 1 })
     expect(router.state.location.pathname).toBe(paths.signIn.path)
     expect(heldDestination()).toBe(address)
@@ -343,8 +345,7 @@ describe('the app', () => {
 
   it('names a route that could not be loaded as one that could not be drawn', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    // What a page meets when a newer build has taken a file of its own away.
-    const lazy = () => Promise.reject(new TypeError('Failed to fetch dynamically imported module'))
+    const lazy = () => Promise.reject(gone)
     open('/gone', inRoot([{ path: '/gone', lazy }]))
     expect(
       await screen.findByRole('heading', { level: 1, name: 'This page could not be shown' }),
@@ -375,9 +376,7 @@ describe('the app', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     // What a page meets when a newer build has taken a file of its own away, the words' this
     // time: the screen's script came, and is not drawn without them.
-    const load = vi
-      .spyOn(lazy, 'loadCatalog')
-      .mockRejectedValue(new TypeError('Failed to fetch dynamically imported module'))
+    const load = vi.spyOn(lazy, 'loadCatalog').mockRejectedValue(gone)
     dropCatalogs()
     holdCatalog('en', ownWords, ['app'])
     open(paths.invitation.example)
@@ -395,11 +394,7 @@ describe('the app', () => {
 
   it('still says a newer build is live over a route that failed, which is when it most often is', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const meta = document.createElement('meta')
-    meta.name = buildMeta
-    meta.content = 'own'
-    document.head.append(meta)
-    vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ id: 'next' })))
+    aNewerBuildIsLive()
     open('/broken', inRoot([{ path: '/broken', Component: Broken }]))
     await screen.findByRole('heading', { level: 1, name: 'This page could not be shown' })
     // The page could not load a file of its own build, and asks which build is live: Root, and
@@ -432,11 +427,7 @@ describe('the app', () => {
 
   it('is watching for a newer build before the route it opened at has loaded, or failed to', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const meta = document.createElement('meta')
-    meta.name = buildMeta
-    meta.content = 'own'
-    document.head.append(meta)
-    vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ id: 'next' })))
+    aNewerBuildIsLive()
     let fail: (reason: Error) => void = () => undefined
     const lazy = () =>
       new Promise<never>((_, reject) => {
@@ -449,7 +440,7 @@ describe('the app', () => {
       window.dispatchEvent(new Event('vite:preloadError'))
     })
     await act(async () => {
-      fail(new TypeError('Failed to fetch dynamically imported module'))
+      fail(gone)
       await Promise.resolve()
     })
     expect(
@@ -475,10 +466,9 @@ describe('the app', () => {
     'draws what every route is drawn in, and the shape of a page in the page’s landmark, while the shell of $of is still loading',
     async ({ address, navigation }) => {
       const file = held()
-      const table = await withFile(address, 'shell', file.load)
       // An address held from before a sign-in: the guard lets go of it once it knows its member.
       holdDestination(address)
-      open(address, table, true)
+      open(address, withFile(address, 'shell', file.load), true)
       // Who is signed in is not known yet, and the page has its landmark: the guard's.
       expect(screen.getAllByRole('main')).toHaveLength(1)
       await waitFor(() => {
@@ -496,18 +486,25 @@ describe('the app', () => {
     },
   )
 
+  // The router draws the address it opened at once, down to the shell's place, and once more
+  // when every file the address names has come: a shell whose file has come is not drawn until
+  // its screen's has, and the shape of a page stands in the page's landmark until then.
   it.each(membersOwn)(
-    'keeps the page’s one landmark while the screen of $of is still loading, its shell’s file come',
+    'draws the shape of a page, and nothing of the shell, until the screen of $of has come too, its shell’s file come',
     async ({ address, navigation }) => {
       const file = held()
-      const table = await withFile(address, 'screen', file.load)
       holdDestination(address)
-      open(address, table, true)
+      open(address, withFile(address, 'screen', file.load), true)
       expect(screen.getAllByRole('main')).toHaveLength(1)
       await waitFor(() => {
         expect(heldDestination()).toBeNull()
       })
+      // The member is known and their shell's file has come: nothing of the shell is drawn yet.
       expect(screen.getAllByRole('main')).toHaveLength(1)
+      expect(screen.getByRole('main')).toContainElement(
+        screen.getByRole('status', { name: 'Loading' }),
+      )
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
       await file.arrive()
       expect(await screen.findByRole('navigation', { name: navigation })).toBeInTheDocument()
       expect(screen.getAllByRole('main')).toHaveLength(1)
@@ -520,7 +517,7 @@ describe('the app', () => {
       vi.spyOn(console, 'error').mockImplementation(() => undefined)
       aNewerBuildIsLive()
       const file = held()
-      open(address, await withFile(address, part, file.load), true)
+      open(address, withFile(address, part, file.load), true)
       // Vite says it could not load the file, and then the import of it fails: the watch is
       // Root's, which is drawn already, and hears the first.
       act(() => {
@@ -536,6 +533,8 @@ describe('the app', () => {
       expect(screen.queryAllByRole('navigation', { name: navigation })).toHaveLength(
         part === 'screen' ? 1 : 0,
       )
+      // It took the place of a shape that said it was loading, and is said as it arrives.
+      expect(failure.closest('[role="alert"]')).not.toBeNull()
     },
   )
 
@@ -544,7 +543,7 @@ describe('the app', () => {
     async ({ address }) => {
       vi.spyOn(console, 'error').mockImplementation(() => undefined)
       aNewerBuildIsLive()
-      const table = await withFile(address, 'shell', () => Promise.resolve({ Component: Broken }))
+      const table = withFile(address, 'shell', () => Promise.resolve({ Component: Broken }))
       open(address, table, true)
       const failure = await screen.findByRole('heading', { level: 1, name: failed })
       expect(screen.getAllByRole('main')).toHaveLength(1)
@@ -565,11 +564,8 @@ describe('the app', () => {
       vi.spyOn(console, 'error').mockImplementation(() => undefined)
       aNewerBuildIsLive()
       const file = held()
-      const router = open(paths.notFound.example, await withFile(address, 'shell', file.load), true)
-      await screen.findByRole('heading', {
-        level: 1,
-        name: 'This link doesn’t open anything here.',
-      })
+      const { router } = open(paths.notFound.example, withFile(address, 'shell', file.load), true)
+      await screen.findByRole('heading', { level: 1, name: nothing })
       let led: Promise<void> = Promise.resolve()
       act(() => {
         led = router.navigate(address)
@@ -581,6 +577,8 @@ describe('the app', () => {
       expect(await screen.findByText(newer)).toBeVisible()
       expect(screen.getAllByRole('main')).toHaveLength(1)
       expect(screen.getByRole('main')).toContainElement(failure)
+      // It took the place of the screen its member pressed their way from, and is said so.
+      expect(failure.closest('[role="alert"]')).not.toBeNull()
     },
   )
 
@@ -588,7 +586,7 @@ describe('the app', () => {
     'sends a visitor who opens the address of $of to sign in before its shell has come, whatever becomes of the file',
     async ({ address }) => {
       const file = held()
-      const router = open(address, await withFile(address, 'shell', file.load))
+      const { router } = open(address, withFile(address, 'shell', file.load))
       await screen.findByRole('heading', { level: 1, name: 'Sign in' })
       expect(router.state.location.pathname).toBe(paths.signIn.path)
       expect(heldDestination()).toBe(address)
@@ -599,6 +597,45 @@ describe('the app', () => {
       expect(router.state.errors).toBeNull()
     },
   )
+
+  // The way in is a file as a shell is, and a visitor's page is on its way to it from the first
+  // drawing: the guard that sends them there is what is drawn until the file has come.
+  it('keeps the page’s landmark, and the shape of a page in it, while a visitor at a member’s address is sent to sign in and the file of the way in is still loading', async () => {
+    const file = held()
+    const { router } = open(paths.account.path, withFile(paths.signIn.path, 'screen', file.load))
+    await waitFor(() => {
+      expect(router.state.navigation.location?.pathname).toBe(paths.signIn.path)
+    })
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('main')).toContainElement(
+      screen.getByRole('status', { name: 'Loading' }),
+    )
+    await file.arrive()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(paths.signIn.path)
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+  })
+
+  // The other guard, and the same rule: the way in is none of a member's, and its file is
+  // not waited for before they are sent on.
+  it('sends a member who opens the way in on before its file has come, whatever becomes of the file', async () => {
+    const file = held()
+    // The address held for them: one that opens nothing, and has no file of its own to wait for.
+    holdDestination(paths.notFound.example)
+    const { router } = open(
+      paths.signIn.path,
+      withFile(paths.signIn.path, 'screen', file.load),
+      true,
+    )
+    await screen.findByRole('heading', { level: 1, name: nothing })
+    expect(router.state.location.pathname).toBe(paths.notFound.example)
+    takeDestination()
+    // The file the member was sent on from fails: it is no file of the page they are on.
+    await file.fail()
+    expect(screen.getByRole('heading', { level: 1, name: nothing })).toBeInTheDocument()
+    expect(router.state.errors).toBeNull()
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+  })
 
   it('names a failure of what every route is drawn in for the whole page, with its own landmark', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)

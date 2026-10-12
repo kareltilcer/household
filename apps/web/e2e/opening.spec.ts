@@ -4,8 +4,9 @@
 // files are the build's own, fetched as a deployment serves them, and each test here holds one
 // back or takes it away where the network answers.
 import type { Page } from '@playwright/test'
+import { apiPath } from '../src/api/names.ts'
 import { inHousehold, paths } from '../src/app/paths.ts'
-import { expect, expectAccessible, frames, test } from './fixtures.ts'
+import { expect, expectAccessible, frames, takenAway, test } from './fixtures.ts'
 
 /** The file of each shell, as the build names it: the shell's own name, before its content's hash. */
 const files = {
@@ -41,13 +42,19 @@ test('a member’s page has its landmark, and says it is loading, while its shel
 }) => {
   const household = await enter()
   const shell = await hold(page, files.household)
+  const known = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === `${apiPath}/me`,
+  )
   await page.goto(inHousehold.home(household), { waitUntil: 'commit' })
-  // Who is signed in is asked and answered, and the shell's file has not come: one landmark from
-  // the first drawing on, with the shape of a page in it, and nothing of a shell. The shape is
-  // held to being there and said, and not to being seen: `Waiting` draws it no wider than
-  // nothing, here as wherever it stands, which is its own to mend.
+  // Who is signed in is asked, answered and drawn before the page is looked at. The guard draws
+  // the same shape while it does not know its member, and a look taken then would pass whatever
+  // the shell's own place gave way to once it did.
+  await (await known).finished()
+  await frames(page, 6)
+  // The member is known and the shell's file has not come: one landmark, with the shape of a
+  // page in it where it can be seen, and nothing of a shell.
   const landmark = page.getByRole('main')
-  await expect(landmark.getByRole('status', { name: 'Loading' })).toBeAttached()
+  await expect(landmark.getByRole('status', { name: 'Loading' })).toBeVisible()
   await expect(landmark).toHaveCount(1)
   await expect(page.getByRole('navigation')).toHaveCount(0)
   await expectAccessible(page)
@@ -68,14 +75,7 @@ for (const [of, file, address] of [
     faults,
   }) => {
     const opened = address(await enter())
-    await page.route('**/build.json', (route) => route.fulfill({ json: { id: 'a-newer-build' } }))
-    await page.route(file, async (route) => {
-      // No file is refused sooner than a page can draw: the answer is given once what every
-      // route is drawn in is on the page, as it is long before any network has answered.
-      await expect(page.getByRole('main')).toBeAttached()
-      await frames(page)
-      await route.fulfill({ status: 404, body: 'gone' })
-    })
+    await takenAway(page, file)
     await page.goto(opened, { waitUntil: 'commit' })
     const failure = page.getByRole('heading', { level: 1, name: 'This page could not be shown' })
     await expect(failure).toBeVisible()

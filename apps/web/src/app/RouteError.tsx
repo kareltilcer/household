@@ -6,9 +6,14 @@
 // shell is a file as a screen is, and one that failed is named in its own place too, under Root
 // and its prompt. Only where Root failed itself does the failure stand for the whole page. None
 // of the three asks for anything a broken route could have taken down with it but the language.
+//
+// A route's failure is said as it arrives, as what could not be read is (guards.tsx): it arrives
+// in the place of what was loading, a shape that said so under a shell, or of the screen a member
+// pressed their way from, and nothing moves the focus to it.
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Button } from '../ui/Button.tsx'
 import styles from './Root.module.css'
+import { Landmark } from './Root.tsx'
 import { usePageTitle } from './title.ts'
 
 function Failure() {
@@ -30,10 +35,10 @@ function Failure() {
   )
 }
 
-/** In the place of a route that failed, inside its layout's landmark. */
+/** In the place of a route that failed, inside its layout's landmark, and said as it arrives. */
 export function RouteError() {
   return (
-    <div className={styles.page}>
+    <div className={styles.page} role="alert">
       <Failure />
     </div>
   )
@@ -45,9 +50,9 @@ export function RouteError() {
  */
 export function ShellError() {
   return (
-    <main className={styles.main}>
+    <Landmark>
       <RouteError />
-    </main>
+    </Landmark>
   )
 }
 

@@ -6,7 +6,9 @@
 // file too, fetched with the first of its screens. What every route is drawn in is drawn before
 // any of them has come, and stays where one fails (ADR 0025): a route that is a file stands
 // under a place for what is loading and a boundary, `bounded`'s for a screen and `sheltered`'s
-// for a shell.
+// for a shell. And a guard, which says whom its routes are drawn for, stands above the place of
+// the files under it, so it is drawn while they load and sends on whoever they are not drawn
+// for without waiting for them.
 //
 // The dev-only pages are named only where a build is told to have them: the development server,
 // and the build the end-to-end suite runs against (`vite build --mode e2e`). Both conditions are
@@ -219,6 +221,8 @@ function pageOf(id: RouteId): Page | undefined {
  * What stands in a screen's place while its file loads, on the visit that opens the app at it:
  * nothing. It is there for what it leaves the router free to draw around it. With no such place
  * named, the router draws nothing at all until the file has loaded or failed to, Root neither.
+ * Under a shell it is not what such a visit draws: the shell is a file above it, and the router
+ * draws down to the shell's own place (`sheltered`) until both files have come.
  */
 function Loading() {
   return null
@@ -245,6 +249,12 @@ function bounded(screens: RouteObject[]): RouteObject {
  * in before the shell's file has come, the file being none of theirs, and a member is drawn the
  * shape of a page (WaitingPage) or the failure (ShellError), each in a landmark of its own,
  * since the shell is what gives a member's page its landmark.
+ *
+ * The router draws the address it opened at once, down to this place, and once more when every
+ * file the address names has come or failed: the shape of a page stands until the screen's file
+ * has come too, and a shell and its first screen are drawn together. And it asks for every file
+ * of that address as it is made, before anything is drawn: a visitor is not kept waiting for
+ * the shell and its screen, and their browser fetches both all the same.
  */
 function sheltered(shells: RouteObject[]): RouteObject {
   return { ErrorBoundary: ShellError, HydrateFallback: WaitingPage, children: shells }
@@ -302,10 +312,10 @@ export const routes: RouteObject[] = [
       {
         Component: Public,
         children: [
-          bounded([
-            ...of('public', false),
-            { Component: VisitorOnly, children: of('public', true) },
-          ]),
+          bounded(of('public', false)),
+          // The guard above its screens' place, as `Signed` is above a shell's: it is drawn
+          // while a visitor's screen loads, and a member is sent on before the file has come.
+          { Component: VisitorOnly, children: [bounded(of('public', true))] },
         ],
       },
       {

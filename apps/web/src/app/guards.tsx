@@ -11,15 +11,17 @@ import { Button } from '../ui/Button.tsx'
 import { Skeleton } from '../ui/Skeleton.tsx'
 import { paths } from './paths.ts'
 import styles from './Root.module.css'
+import { Landmark } from './Root.tsx'
 import { usePageTitle } from './title.ts'
 
 /**
- * In a screen's place while it is not yet known who is signed in: the shape of a page. It is
- * drawn inside a landmark, as the next one is: its layout's, or the one `Signed` gives it.
+ * In a screen's place while it is not yet known who is signed in: the shape of a page, as wide
+ * as the page, which its bars are shares of. It is drawn inside a landmark, as what could not
+ * be read is (`Unread`): its layout's, or the one `WaitingPage` gives it.
  */
 export function Waiting() {
   return (
-    <div className={styles.page}>
+    <div className={styles.waiting}>
       <Skeleton
         bars={[
           [40, 2],
@@ -33,16 +35,20 @@ export function Waiting() {
 
 /**
  * In a shell's place where there is none to draw yet: the shape of a page, in a landmark of its
- * own, since the shell is what gives a member's page its landmark. It stands while it is not
- * yet known who is signed in (`Signed`), and then while the shell's file is still loading, on
- * the visit that opens the app at one of its addresses (routes.tsx): one shape from the first
- * drawing until the shell, whichever of the two comes last.
+ * own, since the shell is what gives a member's page its landmark. `Signed` draws it while it
+ * is not yet known who is signed in, and while a visitor is on their way to sign in. The route
+ * above the shells draws it after that, on the visit that opens the app at one of their
+ * addresses, until the shell's file and its screen's have both come (routes.tsx): the router
+ * draws an address it opened at once more, when every file it names has come or failed, so a
+ * shell and its first screen are drawn together. The guard's and the route's are two places in
+ * the page: the shape is taken down in one and built in the other as the member becomes known,
+ * the same to look at.
  */
 export function WaitingPage() {
   return (
-    <main className={styles.main}>
+    <Landmark>
       <Waiting />
-    </main>
+    </Landmark>
   )
 }
 
@@ -118,22 +124,31 @@ export function Signed() {
       return <WaitingPage />
     case 'unreachable':
       return (
-        <main className={styles.main}>
+        <Landmark>
           <Unreachable retry={retry} />
-        </main>
+        </Landmark>
       )
     case 'visitor':
       // The address is held for whoever was on their way to it: someone who opened it signed
       // out, or whose session ended under them. A member who signed out themselves was on their
       // way out, and the next person to sign in here is not sent to where they were.
       if (!signedOut) holdDestination(`${location.pathname}${location.search}${location.hash}`)
-      return <Navigate to={paths.signIn.path} replace />
+      // The way in is a file too, and this route is drawn until it has come: the shape of a
+      // page stays in its landmark meanwhile, where the one drawn while nobody was known stood.
+      return (
+        <>
+          <WaitingPage />
+          <Navigate to={paths.signIn.path} replace />
+        </>
+      )
   }
 }
 
 /**
  * The routes under it are a visitor's: a member who opens one is signed in already, and is sent
- * on to the address held for them, or to where the app opens.
+ * on to the address held for them, or to where the app opens. It is drawn before the screens
+ * under it, as `Signed` is before a shell: a member is sent on without waiting for the file of
+ * a screen that is not drawn for them (routes.tsx).
  */
 export function VisitorOnly() {
   const { state } = useSession()

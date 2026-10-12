@@ -6,6 +6,7 @@
 // the server serves no longer is the one thing drawn in every route's place
 // (session/UpdateRequired.tsx). The page's title is its screen's to say (title.ts): one set
 // here would be set after a screen's own, and stand over it.
+import type { ReactNode } from 'react'
 import { Outlet } from 'react-router'
 import { Push } from '../push/Push.tsx'
 import { useSession } from '../session/SessionProvider.tsx'
@@ -25,11 +26,20 @@ export function Root() {
   )
 }
 
+/**
+ * The page's one landmark, where no frame of a layout's own gives it: the plain layout's, and
+ * the one around what stands in a shell's place, the shell being what gives a member's page its
+ * landmark (guards.tsx, RouteError.tsx).
+ */
+export function Landmark({ children }: { readonly children: ReactNode }) {
+  return <main className={styles.main}>{children}</main>
+}
+
 /** The plain layout: the page's one landmark, and whatever route is drawn in it. */
 export function Plain() {
   return (
-    <main className={styles.main}>
+    <Landmark>
       <Outlet />
-    </main>
+    </Landmark>
   )
 }
