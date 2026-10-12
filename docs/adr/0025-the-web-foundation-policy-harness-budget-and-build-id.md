@@ -190,21 +190,25 @@ given a place for what is loading, an empty one, without which it draws nothing 
 file has come or failed to, and the watch would begin after the failure it listens for. The
 router draws down to the place named last at or above the first route whose file is loading, and
 names a failure at the nearest boundary at or above the route that failed, so every route that is
-a file has a place and a boundary of its own under what every route is drawn in, and a test of
-the table fails one that has not. It draws an address it opened at once, down to that place, and
-once more when every file the address names has come or failed. The shell around a member's
-screens (ADR 0026) is such a file, above its screens' place and their boundary, and has both of
-its own, under the guard that says whom the page is drawn for: until a shell's file and its
-screen's have both come a member is drawn the shape of a page, in a landmark of its own since the
-shell is what gives their page one, a visitor is sent to sign in without waiting for either, and
-a shell that failed to load or to draw is named there, in a landmark of its own, under the
-prompt. A guard stands above the place of the files under it, the one over the screens a visitor
-alone is drawn as the one over the shells, and the same test fails a file whose only place stands
-at its guard or above it: a member who opens the way in is sent on without waiting for its file.
-And a route's failure is said as it arrives, to whoever cannot see it: it arrives in the place of
-what was loading, a shape that said so under a shell, or of the screen a member pressed their way
-from. The persisted query cache is kept under the same id, so a newer build drops what an older
-one kept.
+a file has a place and a boundary under what every route is drawn in, and a test of the table
+fails one that has not. It draws the address it opened at down to that place until every file the
+address names has come or failed, or until another address it was led to meanwhile is drawn. The
+shell around a member's screens (ADR 0026) is such a file, above its screens' boundary, and has a
+boundary and a place of its own, under the guard that says whom the page is drawn for; its
+screens have no place but the shell's. So until a shell's file and its screen's have both come a
+member is drawn the shape of a page, in a landmark of its own since the shell is what gives their
+page one, a visitor is sent to sign in without waiting for either, and a shell that failed to
+load or to draw is named there, in a landmark of its own, under the prompt. A guard stands above
+the place of the files under it, the one over the screens a visitor alone is drawn as the one
+over the shells, and the same test fails a file whose only place stands at or above a route the
+table draws before it, a guard or a layout: a member who opens the way in is sent on without
+waiting for its file. Whatever sends somebody on, either guard or where the app opens, draws the
+shape of a page until the address they are sent to is drawn: it may name a shell and a screen
+that have not come, and the route that sent them is drawn until they have. And a failure is said
+as it arrives, to whoever cannot see it (D-166), a route's and that of what every route is drawn
+in alike: it arrives in the place of what was loading, a shape that said so under a shell, of the
+screen a member pressed their way from, or of the whole page they were on. The persisted query
+cache is kept under the same id, so a newer build drops what an older one kept.
 
 **Hold-to-complete is two controls.** The ring a pointer holds is hidden from assistive
 technology. Beside it is a plain button, drawn nowhere and named for what it completes, which
@@ -279,6 +283,8 @@ waits in the page, and is sent from there when the connection is back.
 | The shell's place and its boundary left to its screens', as item 25 had them | They stand below the shell, and the shell is the first file an address under it names: on the visit that opened the app there nothing was drawn until the shell's file and the screen's had both come, the watch neither, and a shell that failed was named in `Root`'s place, the prompt gone with it. Found in a unit test's warning of the router's, and held in a browser since |
 | The shell's place above the guard, or on the guard's own route | The guard would not be drawn until both files had come: a visitor would be sent to sign in only once a shell that is none of theirs had come, as they were, and that nobody could be asked who is signed in would be said only then. Where the place stands changes what a visitor waits for and not what their browser fetches: the router asks for every file of an address as it is made |
 | An empty place for a shell that is loading, as a screen's is | A screen's place is empty inside a layout that gives the page its landmark. The shell is that layout: an empty place leaves a member's page with no landmark, and the shape of a page the guard drew while it did not know its member would give way to nothing before the shell came |
+| A place of their own for a shell's screens, below the shell, as the screens of the other layouts have | The shell's own stands above it, so it is what the router draws down to in one case alone: the shell's file come, its screen's not, and the address drawn again, as it is when a member goes back or forward while it is still loading. The shell was then drawn around nothing, its household read and its replica opened, for an address being left. With the one place the shape of a page stands until the address they were led to is drawn |
+| Somebody sent on with nothing drawn, by a guard or by where the app opens | The address they are sent to may name a shell and a screen that have not come, and the route that sent them is what is drawn until they have: its landmark stood empty for as long, after a shape that had said the page was loading, on the way every member takes who opens the app at its root or signs in |
 | `build.json` asked for under Vite's `base` | The router and the API's paths are from the root too. A base the app cannot be served under is refused, not half supported |
 | Hold-to-complete told by a prop what is complete | A control with two sources of what is so, designed before the first screen that has a completion to undo. Its owner's `key` gives a fresh one, and that screen says whether it is enough |
 | A service worker to learn of a new build | PL-4 names none, and a worker caches the very files a new build replaces |
@@ -307,18 +313,26 @@ waits in the page, and is sent from there when the connection is back.
   fails to load or to draw is named in its place, and the shell around it stays. A shell is a
   child of the boundary `sheltered` puts under the guard: one that fails is named in its place,
   and `Root` stays. A route that is a file anywhere else in the table is given both where it is
-  added, below the guard over it where there is one, which the table's own test holds it to.
+  added, below every guard and layout over it, which the table's own test holds it to: the test
+  tells a guard by nothing but that the table draws it, so the next one is held as these are.
 - A visitor who opens a member's address is sent to sign in while the files of that address are
   still on their way: the router gives up the load it began with, and a file of it that fails
-  afterwards is named on no page. The watch hears of it all the same, and asks which build is
-  live. Their browser fetches the shell and its screen all the same: the router asked for each as
-  it was made, before anything was drawn, and an import is not taken back. Until the file of the
-  way in has come their page keeps its landmark, with the shape of a page in it. A member who
-  opens a visitor's screen is sent on the same way, its file still on its way.
+  afterwards is named by nothing on the page they are on. The watch hears of it as it fails, and
+  asks which build is live. The router keeps the failure and asks for that file no more, as a
+  browser answers a second import of a file with the first one's failure: signed in and led to
+  the address held for them, they are told there that the page could not be shown, and to
+  reload. Their browser fetches the shell and its screen all the same: the router asked for each
+  as it was made, before anything was drawn, and an import is not taken back. Until the file of
+  the way in has come their page keeps its landmark, with the shape of a page in it. A member
+  who opens a visitor's screen is sent on the same way, its file still on its way, and so is
+  whoever opens the app at its root: each is drawn the shape of a page until the address they
+  were sent to is.
 - On the visit that opens the app at a member's address the shell is not drawn before its
-  screen's file has come: the shape of a page stands until then, and the two are drawn together.
-  The shape is built twice, by the guard while it does not know its member and by the shells'
-  own place once it does, which are two places in the page: the same to look at.
+  screen's file has come: the shape of a page stands until then, and the two are drawn together,
+  whatever leads the page elsewhere meanwhile. The shape is built twice, by the guard while it
+  does not know its member and by the shells' own place once it does, which are two places in
+  the page: the same shape, its breath begun again. Where one route draws it before it sends
+  somebody on, it is one element, built once.
 - A screen spends the twelve states through `StateFrame`, and its own sentences through its texts:
   the two that stand in a body's place, an error's and a withdrawn row's, are required of it, so a
   failed load is never a blank screen.

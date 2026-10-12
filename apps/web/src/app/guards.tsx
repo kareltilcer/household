@@ -14,22 +14,39 @@ import styles from './Root.module.css'
 import { Landmark } from './Root.tsx'
 import { usePageTitle } from './title.ts'
 
+export interface WaitingProps {
+  /**
+   * Where whoever is drawn this is sent on to, in the place of the address they are at. Left
+   * out, they are sent nowhere: what they wait for is drawn here.
+   */
+  readonly to?: string
+}
+
 /**
- * In a screen's place while it is not yet known who is signed in: the shape of a page, as wide
- * as the page, which its bars are shares of. It is drawn inside a landmark, as what could not
- * be read is (`Unread`): its layout's, or the one `WaitingPage` gives it.
+ * In a screen's place while there is nothing of it to draw yet: the shape of a page, as wide as
+ * the page, which its bars are shares of. It stands while it is not yet known who is signed in
+ * and while a household, or the list of them, is read; and, with `to`, while whoever is drawn
+ * it is sent on. The address they are sent to may name files that have not come, a shell's and
+ * its screen's, and the route that sent them is drawn until they have: sent on with nothing
+ * drawn, their page was an empty landmark for as long, after a shape that had said it was
+ * loading. A route that draws it before it sends on draws one element through both, which is
+ * built once. It is drawn inside a landmark, as what could not be read is (`Unread`): its
+ * layout's, or the one `WaitingPage` gives it.
  */
-export function Waiting() {
+export function Waiting({ to }: WaitingProps) {
   return (
-    <div className={styles.waiting}>
-      <Skeleton
-        bars={[
-          [40, 2],
-          [90, 1],
-          [70, 1],
-        ]}
-      />
-    </div>
+    <>
+      <div className={styles.waiting}>
+        <Skeleton
+          bars={[
+            [40, 2],
+            [90, 1],
+            [70, 1],
+          ]}
+        />
+      </div>
+      {to === undefined ? null : <Navigate to={to} replace />}
+    </>
   )
 }
 
@@ -38,16 +55,15 @@ export function Waiting() {
  * own, since the shell is what gives a member's page its landmark. `Signed` draws it while it
  * is not yet known who is signed in, and while a visitor is on their way to sign in. The route
  * above the shells draws it after that, on the visit that opens the app at one of their
- * addresses, until the shell's file and its screen's have both come (routes.tsx): the router
- * draws an address it opened at once more, when every file it names has come or failed, so a
- * shell and its first screen are drawn together. The guard's and the route's are two places in
- * the page: the shape is taken down in one and built in the other as the member becomes known,
- * the same to look at.
+ * addresses, until the shell's file and its screen's have both come (routes.tsx): a shell and
+ * its first screen are drawn together. The guard's and the route's are two places in the page:
+ * as the member becomes known the shape is taken down in one and built in the other, the same
+ * shape with its breath begun again.
  */
-export function WaitingPage() {
+export function WaitingPage(props: WaitingProps) {
   return (
     <Landmark>
-      <Waiting />
+      <Waiting {...props} />
     </Landmark>
   )
 }
@@ -134,13 +150,8 @@ export function Signed() {
       // way out, and the next person to sign in here is not sent to where they were.
       if (!signedOut) holdDestination(`${location.pathname}${location.search}${location.hash}`)
       // The way in is a file too, and this route is drawn until it has come: the shape of a
-      // page stays in its landmark meanwhile, where the one drawn while nobody was known stood.
-      return (
-        <>
-          <WaitingPage />
-          <Navigate to={paths.signIn.path} replace />
-        </>
-      )
+      // page stays in its landmark meanwhile, the one that was drawn while nobody was known.
+      return <WaitingPage to={paths.signIn.path} />
   }
 }
 
@@ -148,12 +159,12 @@ export function Signed() {
  * The routes under it are a visitor's: a member who opens one is signed in already, and is sent
  * on to the address held for them, or to where the app opens. It is drawn before the screens
  * under it, as `Signed` is before a shell: a member is sent on without waiting for the file of
- * a screen that is not drawn for them (routes.tsx).
+ * a screen that is not drawn for them (routes.tsx). The address held for them may name a shell
+ * and a screen that have not come: the shape of a page stands in the frame's landmark until
+ * they have.
  */
 export function VisitorOnly() {
   const { state } = useSession()
-  if (state.status === 'member') {
-    return <Navigate to={heldDestination() ?? paths.home.path} replace />
-  }
+  if (state.status === 'member') return <Waiting to={heldDestination() ?? paths.home.path} />
   return <Outlet />
 }

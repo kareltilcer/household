@@ -4,13 +4,13 @@ import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createWebClient } from '../api/client.ts'
-import { csrfCookie } from '../api/names.ts'
 import { Providers } from '../app/App.tsx'
 import { inHousehold, paths } from '../app/paths.ts'
 import { routes } from '../app/routes.tsx'
 import { HouseholdContext } from '../household/HouseholdContext.tsx'
 import { lastHousehold, rememberHousehold, type Household } from '../household/households.ts'
 import { SyncFixture, type Sync } from '../sync/ReplicaProvider.tsx'
+import { home, household, me, notFound, signedIn } from '../test/member.ts'
 import { draw, loaded } from '../test/render.tsx'
 import { HouseholdBars } from './HouseholdBars.tsx'
 
@@ -22,40 +22,11 @@ afterEach(() => {
   focusManager.setFocused(undefined)
   onlineManager.setOnline(true)
 })
-const me = {
-  id: '01900000-0000-7000-8000-00000000d0e5',
-  email: 'jana@example.test',
-  email_verified: true,
-  display_name: 'Jana',
-  locale: 'en',
-}
-const home = '01900000-0000-7000-8000-0000000000a1'
 const cottage = '01900000-0000-7000-8000-0000000000a2'
-
-function household(id: string, name: string): Household {
-  return {
-    id,
-    name,
-    country: 'CZ',
-    timezone: 'Europe/Prague',
-    base_currency: 'CZK',
-    locale: 'cs',
-    my_role: 'owner',
-    my_grants: { dashboard: 'view', admin: 'manage', shopping: 'contribute' },
-    entitlement: { state: 'trialing', can_write: true },
-  }
-}
 
 const known: Readonly<Record<string, Household>> = {
   [home]: household(home, 'Tilcerovi'),
   [cottage]: household(cottage, 'Chata'),
-}
-
-function notFound(): Response {
-  return Response.json(
-    { type: 'about:blank', title: 'not found', status: 404, code: 'not_found' },
-    { status: 404, headers: { 'Content-Type': 'application/problem+json' } },
-  )
 }
 
 interface Server {
@@ -100,7 +71,7 @@ function open(
   const asked: string[] = []
   const client = createWebClient({
     origin,
-    cookies: () => `${csrfCookie}=t`,
+    cookies: signedIn,
     retry: { delays: [], sleep: () => Promise.resolve() },
     fetch: (request) => {
       const path = new URL(request.url).pathname.replace('/api/v1', '')
@@ -138,7 +109,7 @@ function open(
   })
   const router = createMemoryRouter(routes, { initialEntries: [address] })
   render(
-    <Providers persist={false} client={client} cookies={() => `${csrfCookie}=t`}>
+    <Providers persist={false} client={client} cookies={signedIn}>
       <RouterProvider router={router} />
     </Providers>,
   )

@@ -7,9 +7,10 @@
 // and its prompt. Only where Root failed itself does the failure stand for the whole page. None
 // of the three asks for anything a broken route could have taken down with it but the language.
 //
-// A route's failure is said as it arrives, as what could not be read is (guards.tsx): it arrives
-// in the place of what was loading, a shape that said so under a shell, or of the screen a member
-// pressed their way from, and nothing moves the focus to it.
+// Each of the three is said as it arrives, as a screen that says what it is drawn from could not
+// be read is (D-166; `Unread`, guards.tsx): it arrives in the place of what was loading, a shape
+// that said so under a shell, of the screen a member pressed their way from, or, where Root
+// failed, of the whole page they were on, and nothing moves the focus to it.
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Button } from '../ui/Button.tsx'
 import styles from './Root.module.css'
@@ -56,11 +57,10 @@ export function ShellError() {
   )
 }
 
-/** In the place of the whole page, where Root itself failed: the landmark is its own. */
+/**
+ * In the place of the whole page, where Root itself failed: drawn as a shell's failure is, in a
+ * landmark of its own, and said as it arrives, the page a member was on having gone with Root.
+ */
 export function RootError() {
-  return (
-    <main className={styles.page}>
-      <Failure />
-    </main>
-  )
+  return <ShellError />
 }

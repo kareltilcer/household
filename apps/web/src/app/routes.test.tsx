@@ -12,13 +12,12 @@ import {
 } from 'react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createWebClient } from '../api/client.ts'
-import { csrfCookie } from '../api/names.ts'
 import { dropCatalogs, holdCatalog } from '../i18n/catalogs.ts'
 import { heldDestination, holdDestination, takeDestination } from '../session/destination.ts'
+import { home, household, me, notFound, signedIn } from '../test/member.ts'
 import { loaded } from '../test/render.tsx'
 import { buildMeta } from '../update/build.ts'
 import { Providers } from './App.tsx'
-import { Signed, VisitorOnly } from './guards.tsx'
 import { fill, inHousehold, isOwnPath, paths, routeIds } from './paths.ts'
 import { inRoot, routes, served } from './routes.tsx'
 
@@ -32,62 +31,57 @@ const client = createWebClient({
   fetch: () => Promise.resolve(Response.json({ providers: [] })),
 })
 
-const home = '01900000-0000-7000-8000-0000000000a1'
+/** The household the member is in, as its own address answers it. */
+const ours = household(home, 'Tilcerovi')
 
-/** The cookies of a browser that holds a session: the readable one is all a page reads of it. */
-const signedIn = () => `${csrfCookie}=t`
+/** The list of the member's households, as the server answers it: the one they are in. */
+function theirs(): Promise<Response> {
+  return Promise.resolve(
+    Response.json({
+      items: [
+        { id: ours.id, name: ours.name, my_role: ours.my_role, entitlement: ours.entitlement },
+      ],
+    }),
+  )
+}
 
-// A member's pages ask who is signed in and for the household its address names, and are
-// answered here too. Anything else a screen asks is not found, which no test here reads.
-const memberClient = createWebClient({
-  origin,
-  cookies: signedIn,
-  retry: { delays: [], sleep: () => Promise.resolve() },
-  fetch: (request) => {
-    const path = new URL(request.url).pathname.replace('/api/v1', '')
-    if (path === '/me') {
-      return Promise.resolve(
-        Response.json({
-          id: '01900000-0000-7000-8000-00000000d0e5',
-          email: 'jana@example.test',
-          email_verified: true,
-          display_name: 'Jana',
-          locale: 'en',
-        }),
-      )
-    }
-    if (path === `/households/${home}`) {
-      return Promise.resolve(
-        Response.json({
-          id: home,
-          name: 'Tilcerovi',
-          country: 'CZ',
-          timezone: 'Europe/Prague',
-          base_currency: 'CZK',
-          locale: 'cs',
-          my_role: 'owner',
-          my_grants: { dashboard: 'view', admin: 'manage' },
-          entitlement: { state: 'trialing', can_write: true },
-        }),
-      )
-    }
-    return Promise.resolve(
-      Response.json(
-        { type: 'about:blank', title: 'not found', status: 404, code: 'not_found' },
-        { status: 404, headers: { 'Content-Type': 'application/problem+json' } },
-      ),
-    )
-  },
-})
+/**
+ * A member's pages ask who is signed in, for their households and for the one an address names,
+ * and are answered here too: the list by `households`, which a test may hold back. Anything else
+ * a screen asks is not found, which no test here reads.
+ */
+function serving(households: () => Promise<Response> = theirs) {
+  return createWebClient({
+    origin,
+    cookies: signedIn,
+    retry: { delays: [], sleep: () => Promise.resolve() },
+    fetch: (request) => {
+      const path = new URL(request.url).pathname.replace('/api/v1', '')
+      if (path === '/me') return Promise.resolve(Response.json(me))
+      if (path === '/households') return households()
+      if (path === `/households/${home}`) return Promise.resolve(Response.json(ours))
+      return Promise.resolve(notFound())
+    },
+  })
+}
 
-/** The app at `address`, as a visitor opens it, or as a member does where `member` says so. */
-function open(address: string, table: RouteObject[] = routes, member = false) {
+const memberClient = serving()
+
+/**
+ * The app at `address`, as a visitor opens it, or as a member does where `member` says so, over
+ * the server it names where it names one.
+ */
+function open(
+  address: string,
+  table: RouteObject[] = routes,
+  member: boolean | ReturnType<typeof serving> = false,
+) {
   const router = createMemoryRouter(table, { initialEntries: [address] })
   const { unmount } = render(
     <Providers
       persist={false}
-      client={member ? memberClient : client}
-      {...(member ? { cookies: signedIn } : {})}
+      client={member === false ? client : member === true ? memberClient : member}
+      {...(member === false ? {} : { cookies: signedIn })}
     >
       <RouterProvider router={router} />
     </Providers>,
@@ -112,20 +106,22 @@ function replaced(
 /**
  * The app's own table with one of the files `address` names loaded as `load` says: its screen's,
  * or the shell's around it where the address is a member's. Every route stands where the app
- * puts it, under the layouts, the guards and the boundaries the app gives it.
+ * puts it, under the layouts, the guards and the boundaries the app gives it. `table` is what it
+ * is made from: the app's own, or one a test already holds a file of another address in.
  */
 function withFile(
   address: string,
   part: 'shell' | 'screen',
   load: (own: LazyRouteFunction<RouteObject>) => ReturnType<LazyRouteFunction<RouteObject>>,
+  table: RouteObject[] = routes,
 ): RouteObject[] {
-  const files = (matchRoutes(routes, address) ?? []).flatMap(({ route }) =>
+  const files = (matchRoutes(table, address) ?? []).flatMap(({ route }) =>
     typeof route.lazy === 'function' ? [{ route, own: route.lazy }] : [],
   )
   // A screen's file is the last an address names, and a shell's the one before it.
   const file = part === 'screen' ? files.at(-1) : files.length === 2 ? files[0] : undefined
   if (file === undefined) throw new Error(`routes: ${address} names no ${part} that is a file`)
-  return replaced(routes, file.route, { ...file.route, lazy: () => load(file.own) })
+  return replaced(table, file.route, { ...file.route, lazy: () => load(file.own) })
 }
 
 /** What a page meets when a newer build has taken a file of its own away. */
@@ -182,6 +178,36 @@ function screens(table: readonly RouteObject[], under = ''): string[] {
   })
 }
 
+/**
+ * The routes of `table` that are files and stand without a place for what is loading or without
+ * a boundary, each named by the first screen it is fetched for.
+ *
+ * The router draws down to the place named last at or above the first route whose file is still
+ * loading, and nothing at all where none is named, Root neither; and it names a failure at the
+ * nearest boundary at or above the route that failed, which with none nearer is Root's own, in
+ * Root's place. A place on Root itself stands in Root's place too, so neither counts, and a
+ * route that is a file beside Root has neither. Nor does a place count for a file that stands
+ * at or above a route between them that the table draws itself, a guard or a layout: the router
+ * would draw down to the place and not to that route, and a guard would then send nobody on
+ * until the file had come. A guard is told by nothing but that, so the next one is held too.
+ */
+function bare(table: readonly RouteObject[]): string[] {
+  const found: string[] = []
+  const walk = (under: readonly RouteObject[], placed: boolean, bounded: boolean, top = false) => {
+    for (const route of under) {
+      const place = !top && (placed || (route.HydrateFallback ?? null) !== null)
+      const boundary = !top && (bounded || (route.ErrorBoundary ?? null) !== null)
+      if (route.lazy !== undefined && !(place && boundary)) {
+        found.push(screens([route])[0] ?? route.path ?? 'a file that draws no screen')
+      }
+      const drawn = (route.Component ?? route.element ?? null) !== null
+      walk(route.children ?? [], place && !drawn, boundary)
+    }
+  }
+  walk(table, false, false, true)
+  return found
+}
+
 describe('the routes', () => {
   // The end-to-end suite walks paths.ts with axe in both themes (06-clients §8): a route the
   // router had and that list had not would be a route nothing checks.
@@ -190,34 +216,37 @@ describe('the routes', () => {
     expect(served).toEqual(routeIds)
   })
 
-  // The router draws down to the place named last at or above the first route whose file is
-  // still loading, and nothing at all where none is named, Root neither; and it names a failure
-  // at the nearest boundary at or above the route that failed, which with none nearer is Root's
-  // own, in Root's place. A place on Root itself stands in Root's place too, so neither counts,
-  // and a route that is a file beside Root has neither. Nor does a place at or above a guard
-  // count for a file under it: the router would draw down to that place and not to the guard,
-  // which would then send nobody on until the file had come.
-  it('give every route that is a file a place for what is loading and a boundary, under what every route is drawn in and under its guard', () => {
-    const guards: readonly unknown[] = [Signed, VisitorOnly]
-    // Each such file without one of the two, named by the first screen it is fetched for.
-    const bare: string[] = []
-    const walk = (
-      table: readonly RouteObject[],
-      placed: boolean,
-      bounded: boolean,
-      top = false,
-    ) => {
-      for (const route of table) {
-        const place = !top && (placed || (route.HydrateFallback ?? null) !== null)
-        const boundary = !top && (bounded || (route.ErrorBoundary ?? null) !== null)
-        if (route.lazy !== undefined && !(place && boundary)) {
-          bare.push(screens([route])[0] ?? route.path ?? 'a file that draws no screen')
-        }
-        walk(route.children ?? [], place && !guards.includes(route.Component), boundary)
-      }
-    }
-    walk(routes, false, false, true)
-    expect(bare).toEqual([])
+  it('give every route that is a file a place for what is loading and a boundary, under what every route is drawn in and under every guard and layout above it', () => {
+    expect(bare(routes)).toEqual([])
+  })
+
+  // The rule above on tables made to break it, each in one way: what it says of the app's own
+  // table is worth what it says of these.
+  it('are failed for a file with no place or no boundary of its own, and for one whose place stands at or above a route drawn before it', () => {
+    const Drawn = () => null
+    const lazy = () => Promise.resolve({ Component: Drawn })
+    const file: RouteObject = { path: '/file', lazy }
+    const both = { HydrateFallback: Drawn, ErrorBoundary: Drawn }
+    /** `children` under a stand-in for what every route is drawn in. */
+    const under = (children: RouteObject[]): RouteObject[] => [
+      { Component: Drawn, ErrorBoundary: Drawn, children },
+    ]
+    // Held: a file under both, and a file with a file under it, as a shell and its screen are.
+    expect(bare(under([{ ...both, children: [file] }]))).toEqual([])
+    expect(bare(under([{ ...both, children: [{ lazy, children: [file] }] }]))).toEqual([])
+    // Beside Root, and under Root's own place and boundary alone.
+    expect(bare([file])).toEqual(['/file'])
+    expect(bare([{ Component: Drawn, ...both, children: [file] }])).toEqual(['/file'])
+    // Without one of the two below Root.
+    expect(bare(under([{ HydrateFallback: Drawn, children: [file] }]))).toEqual(['/file'])
+    expect(bare(under([{ ErrorBoundary: Drawn, children: [file] }]))).toEqual(['/file'])
+    // Its place above a guard or a layout, or on that route itself.
+    expect(bare(under([{ ...both, children: [{ Component: Drawn, children: [file] }] }]))).toEqual([
+      '/file',
+    ])
+    expect(bare(under([{ Component: Drawn, ...both, children: [file] }]))).toEqual(['/file'])
+    // A file with no screen under it has no screen to be named by.
+    expect(bare(under([{ lazy, children: [] }]))).toEqual(['a file that draws no screen'])
   })
 
   it('give every path a layout, and the shell to a member’s routes alone', () => {
@@ -511,6 +540,53 @@ describe('the app', () => {
     },
   )
 
+  // A member who goes back or forward while the address the app opened at is still loading has
+  // the router draw that address again, on their way to another. The shells' place is the one
+  // place under the guard, so it is what is drawn then too: with one below the shell, the router
+  // drew down to that once the shell's file had come, the shell around nothing.
+  it.each(membersOwn)(
+    'draws the shape of a page, and nothing of the shell of $of, while a member is led elsewhere before its screen has come',
+    async ({ address }) => {
+      const [elsewhere, there] =
+        address === paths.account.path
+          ? ([inHousehold.home(home), 'Household'] as const)
+          : ([paths.account.path, 'Account'] as const)
+      const file = held()
+      const other = held()
+      const table = withFile(
+        elsewhere,
+        'screen',
+        other.load,
+        withFile(address, 'screen', file.load),
+      )
+      holdDestination(address)
+      const { router } = open(address, table, true)
+      // The member is known, and of the two files the address names the screen's alone is still
+      // on its way.
+      await waitFor(() => {
+        expect(heldDestination()).toBeNull()
+        expect(router.state.matches.filter(({ route }) => route.lazy !== undefined)).toHaveLength(1)
+      })
+      let led: Promise<void> = Promise.resolve()
+      act(() => {
+        led = router.navigate(elsewhere)
+      })
+      await waitFor(() => {
+        expect(router.state.navigation.location?.pathname).toBe(elsewhere)
+      })
+      expect(screen.getAllByRole('main')).toHaveLength(1)
+      expect(screen.getByRole('main')).toContainElement(
+        screen.getByRole('status', { name: 'Loading' }),
+      )
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+      await other.arrive()
+      await act(() => led)
+      expect(await screen.findByRole('navigation', { name: there })).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe(elsewhere)
+      expect(screen.getAllByRole('main')).toHaveLength(1)
+    },
+  )
+
   it.each(underShell)(
     'is watching for a newer build before the $part of $of has loaded, or failed to, and names the failure under the prompt',
     async ({ address, navigation, part }) => {
@@ -582,6 +658,38 @@ describe('the app', () => {
     },
   )
 
+  // The router keeps a file's failure and asks for the file no more, as a browser answers a
+  // second import of a file with the first one's failure. So a shell that failed while nobody
+  // was waiting for it, its page led elsewhere meanwhile, is named where its address is opened
+  // next: what a visitor sent to sign in meets at the address held for them.
+  it.each(membersOwn)(
+    'names the shell of $of that failed after its page was led elsewhere once its address is opened again, and asks for the file once',
+    async ({ address }) => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      const file = held()
+      let asked = 0
+      const table = withFile(address, 'shell', (own) => {
+        asked += 1
+        return file.load(own)
+      })
+      const { router } = open(paths.notFound.example, table, true)
+      await screen.findByRole('heading', { level: 1, name: nothing })
+      // Led to the address, and away again before its shell has come: that load is given up.
+      act(() => {
+        void router.navigate(address)
+      })
+      await act(() => router.navigate(paths.notFound.example))
+      await file.fail()
+      expect(screen.getByRole('heading', { level: 1, name: nothing })).toBeInTheDocument()
+      expect(router.state.errors).toBeNull()
+      await act(() => router.navigate(address))
+      const failure = await screen.findByRole('heading', { level: 1, name: failed })
+      expect(screen.getAllByRole('main')).toHaveLength(1)
+      expect(screen.getByRole('main')).toContainElement(failure)
+      expect(asked).toBe(1)
+    },
+  )
+
   it.each(membersOwn)(
     'sends a visitor who opens the address of $of to sign in before its shell has come, whatever becomes of the file',
     async ({ address }) => {
@@ -616,6 +724,61 @@ describe('the app', () => {
     expect(screen.getAllByRole('main')).toHaveLength(1)
   })
 
+  // Where the app opens sends a member on to their household, whose shell and screen are files
+  // on their way from then on: the route that sent them is what is drawn until both have come.
+  // It drew the shape of a page while it read their households, and that shape stays, the one
+  // element: sent on with nothing drawn, the page was an empty landmark for as long.
+  it('keeps the one shape of a page in the page’s landmark from the reading of a member’s households until the shell they are sent on to has come', async () => {
+    const file = held()
+    const address = inHousehold.home(home)
+    let asked = false
+    let answer: () => void = () => undefined
+    const read = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const server = serving(async () => {
+      asked = true
+      await read
+      return theirs()
+    })
+    const { router } = open(paths.home.path, withFile(address, 'shell', file.load), server)
+    // The member is known, and their households are asked for: the shape is that reading's.
+    await waitFor(() => {
+      expect(asked).toBe(true)
+    })
+    const shape = screen.getByRole('status', { name: 'Loading' })
+    expect(screen.getByRole('main')).toContainElement(shape)
+    await act(async () => {
+      answer()
+      await read
+    })
+    await waitFor(() => {
+      expect(router.state.navigation.location?.pathname).toBe(address)
+    })
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('main')).toContainElement(shape)
+    expect(screen.getByRole('status', { name: 'Loading' })).toBe(shape)
+    await file.arrive()
+    expect(await screen.findByRole('navigation', { name: 'Household' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(address)
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+  })
+
+  it('keeps the shape of a page in the page’s landmark while a visitor is sent on from where the app opens and the file of the way in is still loading', async () => {
+    const file = held()
+    const { router } = open(paths.home.path, withFile(paths.signIn.path, 'screen', file.load))
+    await waitFor(() => {
+      expect(router.state.navigation.location?.pathname).toBe(paths.signIn.path)
+    })
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('main')).toContainElement(
+      screen.getByRole('status', { name: 'Loading' }),
+    )
+    await file.arrive()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+  })
+
   // The other guard, and the same rule: the way in is none of a member's, and its file is
   // not waited for before they are sent on.
   it('sends a member who opens the way in on before its file has come, whatever becomes of the file', async () => {
@@ -637,17 +800,42 @@ describe('the app', () => {
     expect(screen.getAllByRole('main')).toHaveLength(1)
   })
 
-  it('names a failure of what every route is drawn in for the whole page, with its own landmark', async () => {
+  // The address held for them may be a household's, whose shell and screen are files: the guard
+  // that sent them on is what is drawn until both have come, in the frame of the way in.
+  it('keeps the shape of a page in the frame’s landmark while a member who opens the way in is sent on to an address whose shell is still loading', async () => {
+    const file = held()
+    const address = inHousehold.home(home)
+    holdDestination(address)
+    const { router } = open(paths.signIn.path, withFile(address, 'shell', file.load), true)
+    await waitFor(() => {
+      expect(router.state.navigation.location?.pathname).toBe(address)
+    })
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('main')).toContainElement(
+      screen.getByRole('status', { name: 'Loading' }),
+    )
+    await file.arrive()
+    expect(await screen.findByRole('navigation', { name: 'Household' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(address)
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    // The address was held to be opened once, and has been.
+    await waitFor(() => {
+      expect(heldDestination()).toBeNull()
+    })
+  })
+
+  it('names a failure of what every route is drawn in for the whole page, with its own landmark, and says it as it arrives', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const table = inRoot([{ path: '/', Component: () => null }])
     open(
       '/',
       table.map((root) => ({ ...root, Component: Broken })),
     )
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'This page could not be shown' }),
-    ).toBeInTheDocument()
+    const failure = await screen.findByRole('heading', { level: 1, name: failed })
     expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('main')).toContainElement(failure)
+    // It took the place of the whole page a member was on, and nothing moved the focus to it.
+    expect(failure.closest('[role="alert"]')).not.toBeNull()
   })
 
   it('loads a dev-only page when its address is opened', async () => {

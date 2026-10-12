@@ -6,9 +6,9 @@
 // file too, fetched with the first of its screens. What every route is drawn in is drawn before
 // any of them has come, and stays where one fails (ADR 0025): a route that is a file stands
 // under a place for what is loading and a boundary, `bounded`'s for a screen and `sheltered`'s
-// for a shell. And a guard, which says whom its routes are drawn for, stands above the place of
-// the files under it, so it is drawn while they load and sends on whoever they are not drawn
-// for without waiting for them.
+// for a shell, whose place is its screens' too. And a guard, which says whom its routes are
+// drawn for, stands above the place of the files under it, so it is drawn while they load and
+// sends on whoever they are not drawn for without waiting for them.
 //
 // The dev-only pages are named only where a build is told to have them: the development server,
 // and the build the end-to-end suite runs against (`vite build --mode e2e`). Both conditions are
@@ -221,8 +221,8 @@ function pageOf(id: RouteId): Page | undefined {
  * What stands in a screen's place while its file loads, on the visit that opens the app at it:
  * nothing. It is there for what it leaves the router free to draw around it. With no such place
  * named, the router draws nothing at all until the file has loaded or failed to, Root neither.
- * Under a shell it is not what such a visit draws: the shell is a file above it, and the router
- * draws down to the shell's own place (`sheltered`) until both files have come.
+ * A shell's screens are given none: the shell is a file above them with a place of its own
+ * (`sheltered`), which is what such a visit draws.
  */
 function Loading() {
   return null
@@ -231,30 +231,40 @@ function Loading() {
 /**
  * `screens` under the boundary a screen that fails stops at: one that fails to load or to draw
  * is named in its own place (RouteError), inside its layout, which stays, and Root with it, the
- * prompt of a newer build among it.
+ * prompt of a newer build among it. And under the place for one that is loading, but for a
+ * shell's screens, which stand under the shell's (`placed` false).
  */
-function bounded(screens: RouteObject[]): RouteObject {
-  return { ErrorBoundary: RouteError, HydrateFallback: Loading, children: screens }
+function bounded(screens: RouteObject[], placed = true): RouteObject {
+  return {
+    ErrorBoundary: RouteError,
+    ...(placed ? { HydrateFallback: Loading } : {}),
+    children: screens,
+  }
 }
 
 /**
  * A member's `shells`, each a file as a screen is, under a boundary and a loading place of their
- * own. `bounded`'s two stand below a shell and are no use to the shell's own file: the router
- * draws down to the place named last at or above the first route whose file is still loading,
- * and names a failure at the nearest boundary at or above the route that failed. With neither
- * here, nothing at all was drawn until both files had come, Root neither, and a shell that
- * failed was named in Root's place, the prompt of a newer build gone with it.
+ * own. A boundary and a place below a shell are no use to the shell's own file: the router draws
+ * down to the place named last at or above the first route whose file is still loading, and
+ * names a failure at the nearest boundary at or above the route that failed. With neither here,
+ * nothing at all was drawn until both files had come, Root neither, and a shell that failed was
+ * named in Root's place, the prompt of a newer build gone with it.
  *
  * Both stand under `Signed`, which is so drawn while the shell loads: a visitor is sent to sign
  * in before the shell's file has come, the file being none of theirs, and a member is drawn the
  * shape of a page (WaitingPage) or the failure (ShellError), each in a landmark of its own,
  * since the shell is what gives a member's page its landmark.
  *
- * The router draws the address it opened at once, down to this place, and once more when every
- * file the address names has come or failed: the shape of a page stands until the screen's file
- * has come too, and a shell and its first screen are drawn together. And it asks for every file
- * of that address as it is made, before anything is drawn: a visitor is not kept waiting for
- * the shell and its screen, and their browser fetches both all the same.
+ * This is the one place for what is loading under it, a shell's screens having none: on the
+ * visit that opens the app at one of their addresses the router draws down to it until every
+ * file the address names has come or failed, so the shape of a page stands until the screen's
+ * file has come too, and a shell and its first screen are drawn together. A place below the
+ * shell would be the one the router drew down to once the shell's file had come, wherever it
+ * drew that address again before the screen's had: a member who went back or forward while the
+ * first address was still loading was drawn its shell around nothing on their way to another,
+ * a household read and its replica opened for an address being left. And the router asks for
+ * every file of the address it opened at as it is made, before anything is drawn: a visitor is
+ * not kept waiting for the shell and its screen, and their browser fetches both all the same.
  */
 function sheltered(shells: RouteObject[]): RouteObject {
   return { ErrorBoundary: ShellError, HydrateFallback: WaitingPage, children: shells }
@@ -326,14 +336,14 @@ export const routes: RouteObject[] = [
               lazy: async () => ({
                 Component: (await import('../shell/AccountShell.tsx')).AccountShell,
               }),
-              children: [bounded(of('account'))],
+              children: [bounded(of('account'), false)],
             },
             {
               path: paths.household.path,
               lazy: async () => ({
                 Component: (await import('../shell/HouseholdShell.tsx')).HouseholdShell,
               }),
-              children: [bounded(underHousehold())],
+              children: [bounded(underHousehold(), false)],
             },
           ]),
         ],

@@ -1,8 +1,9 @@
 // The visit that opens the app at a member's address (ADR 0025): the shell around an account or
 // a household is a file as its screen is, so two files are on their way, and what every route is
-// drawn in is on the page before either has come. A browser alone can say so of a build: the
-// files are the build's own, fetched as a deployment serves them, and each test here holds one
-// back or takes it away where the network answers.
+// drawn in is on the page before either has come. And the visit that opens it at its root, which
+// sends a member on to such an address. A browser alone can say so of a build: the files are the
+// build's own, fetched as a deployment serves them, and each test here holds one back or takes
+// it away where the network answers.
 import type { Page } from '@playwright/test'
 import { apiPath } from '../src/api/names.ts'
 import { inHousehold, paths } from '../src/app/paths.ts'
@@ -53,6 +54,31 @@ test('a member’s page has its landmark, and says it is loading, while its shel
   await frames(page, 6)
   // The member is known and the shell's file has not come: one landmark, with the shape of a
   // page in it where it can be seen, and nothing of a shell.
+  const landmark = page.getByRole('main')
+  await expect(landmark.getByRole('status', { name: 'Loading' })).toBeVisible()
+  await expect(landmark).toHaveCount(1)
+  await expect(page.getByRole('navigation')).toHaveCount(0)
+  await expectAccessible(page)
+
+  await shell.release()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Household' })).toBeVisible()
+  await expect(landmark).toHaveCount(1)
+})
+
+test('a member who opens the app at its root is drawn the shape of a page until the shell they are sent on to has come', async ({
+  page,
+  enter,
+}) => {
+  await enter()
+  const shell = await hold(page, files.household)
+  // The shell is asked for as the member is sent on to their household: who is signed in and
+  // which households are theirs have been read by then, and the route that sent them on is what
+  // is drawn until the shell has come.
+  const sentOn = page.waitForRequest(files.household)
+  await page.goto(paths.home.path, { waitUntil: 'commit' })
+  await sentOn
+  await frames(page, 6)
   const landmark = page.getByRole('main')
   await expect(landmark.getByRole('status', { name: 'Loading' })).toBeVisible()
   await expect(landmark).toHaveCount(1)
