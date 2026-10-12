@@ -2,7 +2,11 @@
 // the plain one, the frame of the screens before sign-in, or the shell around an account or a
 // household, which are a member's alone. Every screen is a file of its own, fetched when its
 // address is opened: a first visit downloads the app and the one screen it opened at (D-153),
-// and with a screen's file the parts of the catalog its path says it reads (D-159).
+// and with a screen's file the parts of the catalog its path says it reads (D-159). A shell is a
+// file too, fetched with the first of its screens. What every route is drawn in is drawn before
+// any of them has come, and stays where one fails (ADR 0025): a route that is a file stands
+// under a place for what is loading and a boundary, `bounded`'s for a screen and `sheltered`'s
+// for a shell.
 //
 // The dev-only pages are named only where a build is told to have them: the development server,
 // and the build the end-to-end suite runs against (`vite build --mode e2e`). Both conditions are
@@ -11,13 +15,13 @@
 // (build/check.ts holds the build a deployment serves to that).
 import type { RouteObject } from 'react-router'
 import { needWords } from '../i18n/catalogs.ts'
-import { Signed, VisitorOnly } from './guards.tsx'
+import { Signed, VisitorOnly, WaitingPage } from './guards.tsx'
 import { Home } from './Home.tsx'
 import { NotAvailable } from './NotAvailable.tsx'
 import { paths, routeIds, type Layout, type RouteId, type RoutePath } from './paths.ts'
 import { Public } from './Public.tsx'
 import { Plain, Root } from './Root.tsx'
-import { RootError, RouteError } from './RouteError.tsx'
+import { RootError, RouteError, ShellError } from './RouteError.tsx'
 
 type Page = Omit<RouteObject, 'path' | 'children' | 'index'>
 
@@ -230,6 +234,23 @@ function bounded(screens: RouteObject[]): RouteObject {
 }
 
 /**
+ * A member's `shells`, each a file as a screen is, under a boundary and a loading place of their
+ * own. `bounded`'s two stand below a shell and are no use to the shell's own file: the router
+ * draws down to the place named last at or above the first route whose file is still loading,
+ * and names a failure at the nearest boundary at or above the route that failed. With neither
+ * here, nothing at all was drawn until both files had come, Root neither, and a shell that
+ * failed was named in Root's place, the prompt of a newer build gone with it.
+ *
+ * Both stand under `Signed`, which is so drawn while the shell loads: a visitor is sent to sign
+ * in before the shell's file has come, the file being none of theirs, and a member is drawn the
+ * shape of a page (WaitingPage) or the failure (ShellError), each in a landmark of its own,
+ * since the shell is what gives a member's page its landmark.
+ */
+function sheltered(shells: RouteObject[]): RouteObject {
+  return { ErrorBoundary: ShellError, HydrateFallback: WaitingPage, children: shells }
+}
+
+/**
  * The router's table for `screens` in the plain layout: each drawn inside Root and the page's
  * landmark. Root is drawn before a screen that is still loading, too, its watch listening by the
  * time the screen's file fails. The second boundary is for Root's own failure, which leaves
@@ -290,19 +311,21 @@ export const routes: RouteObject[] = [
       {
         Component: Signed,
         children: [
-          {
-            lazy: async () => ({
-              Component: (await import('../shell/AccountShell.tsx')).AccountShell,
-            }),
-            children: [bounded(of('account'))],
-          },
-          {
-            path: paths.household.path,
-            lazy: async () => ({
-              Component: (await import('../shell/HouseholdShell.tsx')).HouseholdShell,
-            }),
-            children: [bounded(underHousehold())],
-          },
+          sheltered([
+            {
+              lazy: async () => ({
+                Component: (await import('../shell/AccountShell.tsx')).AccountShell,
+              }),
+              children: [bounded(of('account'))],
+            },
+            {
+              path: paths.household.path,
+              lazy: async () => ({
+                Component: (await import('../shell/HouseholdShell.tsx')).HouseholdShell,
+              }),
+              children: [bounded(underHousehold())],
+            },
+          ]),
         ],
       },
     ],

@@ -2,9 +2,10 @@
 // never a blank page (07-delivery §3). A route that could not be loaded or drawn is named where it
 // would have stood, inside what every route is drawn in (Root), which stays: its landmark, its
 // watch for a newer build, and the shell that takes its place (item 25). A newer build that took
-// a file away is what such a failure most often is, and the prompt that says so is Root's. Only
-// where Root failed itself does the failure stand for the whole page. Neither asks for anything
-// a broken route could have taken down with it but the language.
+// a file away is what such a failure most often is, and the prompt that says so is Root's. A
+// shell is a file as a screen is, and one that failed is named in its own place too, under Root
+// and its prompt. Only where Root failed itself does the failure stand for the whole page. None
+// of the three asks for anything a broken route could have taken down with it but the language.
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { Button } from '../ui/Button.tsx'
 import styles from './Root.module.css'
@@ -29,12 +30,24 @@ function Failure() {
   )
 }
 
-/** In the place of a route that failed, inside Root's landmark. */
+/** In the place of a route that failed, inside its layout's landmark. */
 export function RouteError() {
   return (
     <div className={styles.page}>
       <Failure />
     </div>
+  )
+}
+
+/**
+ * In the place of a shell that failed to load or to draw, inside Root: the shell is what gives
+ * a member's page its landmark, so the failure brings its own.
+ */
+export function ShellError() {
+  return (
+    <main className={styles.main}>
+      <RouteError />
+    </main>
   )
 }
 

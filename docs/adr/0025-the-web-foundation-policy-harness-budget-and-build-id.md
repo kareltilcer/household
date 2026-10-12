@@ -188,6 +188,15 @@ over the very failure a newer build most often causes. And what every route is d
 before a route whose file is still loading, on the visit that opens the app at it: the router is
 given a place for what is loading, an empty one, without which it draws nothing at all until the
 file has come or failed to, and the watch would begin after the failure it listens for. The
+router draws down to the place named last at or above the first route whose file is loading, and
+names a failure at the nearest boundary at or above the route that failed, so every route that is
+a file has a place and a boundary of its own under what every route is drawn in, and a test of
+the table fails one that has not. The shell around a member's screens (ADR 0026) is such a file,
+above its screens' place and their boundary, and has both of its own, under the guard that says
+whom the page is drawn for: while a shell's file is loading a member is drawn the shape of a
+page, in a landmark of its own since the shell is what gives their page one, a visitor is sent to
+sign in without waiting for it, and a shell that failed to load or to draw is named there, in a
+landmark of its own, under the prompt. The
 persisted query cache is kept under the same id, so a newer build drops what an older one kept.
 
 **Hold-to-complete is two controls.** The ring a pointer holds is hidden from assistive
@@ -260,6 +269,9 @@ waits in the page, and is sent from there when the connection is back.
 | A prompt only for a later build, or one a member can put away | A digest has no order, and what has one is the commit or the clock (above). A page that reads another build's id while a deployment serves two at once, in the middle of a rollout or from a cache it should not have, is told what is so: the prompt stands in the page's flow and covers nothing, and a reload gives whichever build the deployment gives, until it has settled. Whether a member may put the prompt away is the product's to say, and 06-clients §7 says it prompts |
 | Radix's swipe kept on a toast, and drawn | A press that drifts would still be a swipe called off, its click kept from closing the toast and not from its Undo, so the toast would have to close itself beside Radix's own close: two paths to one end, and the focus Radix hands on let go by whichever came first. A toast has a control that puts it away, and nothing in the design asks the web for a gesture |
 | The reload prompt drawn outside the router, where no failed route can take it down | The shell item 25 puts in `Root`'s place would still go with any screen that failed. A boundary under `Root` keeps both |
+| The shell's place and its boundary left to its screens', as item 25 had them | They stand below the shell, and the shell is the first file an address under it names: on the visit that opened the app there nothing was drawn until the shell's file and the screen's had both come, the watch neither, and a shell that failed was named in `Root`'s place, the prompt gone with it. Found in a unit test's warning of the router's, and held in a browser since |
+| The shell's place above the guard, or on the guard's own route | The guard would not be drawn until both files had come: a visitor would be sent to sign in only after downloading a shell that is none of theirs, as they were, and that nobody could be asked who is signed in would be said only then |
+| An empty place for a shell that is loading, as a screen's is | A screen's place is empty inside a layout that gives the page its landmark. The shell is that layout: an empty place leaves a member's page with no landmark, and the shape of a page the guard drew while it did not know its member would give way to nothing before the shell came |
 | `build.json` asked for under Vite's `base` | The router and the API's paths are from the root too. A base the app cannot be served under is refused, not half supported |
 | Hold-to-complete told by a prop what is complete | A control with two sources of what is so, designed before the first screen that has a completion to undo. Its owner's `key` gives a fresh one, and that screen says whether it is enough |
 | A service worker to learn of a new build | PL-4 names none, and a worker caches the very files a new build replaces |
@@ -285,7 +297,14 @@ waits in the page, and is sent from there when the connection is back.
   arrives, is on no route as it opens: `e2e/overlays.spec.ts` opens each from the page of
   primitives and holds it to the same two gates. A new one is opened there.
 - A screen is a child of the boundary `inRoot` puts under `Root` (`src/app/routes.tsx`): one that
-  fails to load or to draw is named in its place, and the shell around it stays.
+  fails to load or to draw is named in its place, and the shell around it stays. A shell is a
+  child of the boundary `sheltered` puts under the guard: one that fails is named in its place,
+  and `Root` stays. A route that is a file anywhere else in the table is given both where it is
+  added, which the table's own test holds it to.
+- A visitor who opens a member's address is sent to sign in while the files of that address are
+  still on their way: the router gives up the load it began with, and a file of it that fails
+  afterwards is named on no page. The watch hears of it all the same, and asks which build is
+  live.
 - A screen spends the twelve states through `StateFrame`, and its own sentences through its texts:
   the two that stand in a body's place, an error's and a withdrawn row's, are required of it, so a
   failed load is never a blank screen.

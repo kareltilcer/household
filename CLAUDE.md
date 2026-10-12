@@ -192,7 +192,15 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   ([ADR 0026](docs/adr/0026-the-web-shell-the-session-the-replica-in-a-browser-and-one-language-at-a-time.md)).
   A route names its layout in `paths.ts`: plain, the frame of the screens before sign-in, or the
   shell around an account or a household, which is a member's alone, and each screen is a file
-  fetched when its address is opened. A request goes through `useApi()` inside TanStack Query and
+  fetched when its address is opened. A shell is a file too, and what every route is drawn in is
+  drawn before any file has come and stays where one fails: a route that is a file stands under
+  a place for what is loading and a boundary, both below `Root` (`bounded` for a screen,
+  `sheltered` for a shell, `app/routes.tsx`), which the table's own test holds each to, since
+  with no place the router draws nothing at all, the watch for a newer build neither, and with
+  no boundary it names the failure in `Root`'s place. The guard is drawn while a shell loads, so
+  a visitor is sent to sign in before the shell's file has come
+  ([ADR 0025](docs/adr/0025-the-web-foundation-policy-harness-budget-and-build-id.md)).
+  A request goes through `useApi()` inside TanStack Query and
   its answer through `unwrap`, which is how the session hears of the three answers that are about
   it: a `401` ends it and removes what the browser kept, the persisted cache and every replica, a
   `403 csrf_failed` signs in again and removes nothing, and a `400 update_required` draws *please

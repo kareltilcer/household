@@ -147,11 +147,12 @@ function open(
 
 /**
  * Loads the files of the routes `address` names, the shell's and its screen's, as the router
- * does when the address is opened. The router draws nothing of an address until every file it
- * names has come, the shell's own *not available* neither, and a file imported for the first
- * time is transformed as it is asked for, as is whatever it imports that nothing imported
- * before: on a machine with other work that takes longer than the second a find waits by
- * itself. The first test's wait is long enough for the shell's own files. A test that is the
+ * does when the address is opened. The router draws nothing of a shell until every file its
+ * address names has come, the shell's own *not available* neither: the shape of a page stands
+ * in its place meanwhile (app/routes.tsx). And a file imported for the first time is
+ * transformed as it is asked for, as is whatever it imports that nothing imported before: on a
+ * machine with other work that takes longer than the second a find waits by itself. The first
+ * test's wait is long enough for the shell's own files. A test that is the
  * first here to open another screen with as many files behind it, the inbox or a page of the
  * settings, loads them before it opens it, and waits for what is drawn and no more.
  */

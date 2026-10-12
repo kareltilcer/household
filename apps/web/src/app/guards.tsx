@@ -31,6 +31,21 @@ export function Waiting() {
   )
 }
 
+/**
+ * In a shell's place where there is none to draw yet: the shape of a page, in a landmark of its
+ * own, since the shell is what gives a member's page its landmark. It stands while it is not
+ * yet known who is signed in (`Signed`), and then while the shell's file is still loading, on
+ * the visit that opens the app at one of its addresses (routes.tsx): one shape from the first
+ * drawing until the shell, whichever of the two comes last.
+ */
+export function WaitingPage() {
+  return (
+    <main className={styles.main}>
+      <Waiting />
+    </main>
+  )
+}
+
 export interface UnreadProps {
   /** What could not be read: the page's one title. */
   readonly title: string
@@ -80,7 +95,12 @@ export function Unreachable({ retry }: { readonly retry: () => void }) {
   )
 }
 
-/** The routes under it are drawn for a member, and for nobody else. */
+/**
+ * The routes under it are drawn for a member, and for nobody else. It is drawn before the shell
+ * under it, whose file may still be loading on the visit that opens the app at one of its
+ * addresses (routes.tsx): a visitor is sent to sign in without waiting for a file that is not
+ * drawn for them, and that nobody could be asked who is signed in is said at once.
+ */
 export function Signed() {
   const { state, signedOut, retry } = useSession()
   const location = useLocation()
@@ -95,11 +115,7 @@ export function Signed() {
       return <Outlet />
     // The shell is not drawn yet, and the page has its landmark all the same.
     case 'unknown':
-      return (
-        <main className={styles.main}>
-          <Waiting />
-        </main>
-      )
+      return <WaitingPage />
     case 'unreachable':
       return (
         <main className={styles.main}>

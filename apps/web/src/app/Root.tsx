@@ -1,7 +1,8 @@
 // What every route is drawn inside: the prompt that a newer build is live. The page's landmark
 // is its layout's, one of four (paths.ts): the plain one below, the frame of the screens before
 // sign-in (Public.tsx), and the shell around an account or a household (shell/). A route that
-// fails is named inside its layout (RouteError), so this stays, and the layout with it. A build
+// fails is named inside its layout (RouteError), so this stays, and the layout with it; a shell
+// is a file as a screen is, and one that fails is named under this, which stays too. A build
 // the server serves no longer is the one thing drawn in every route's place
 // (session/UpdateRequired.tsx). The page's title is its screen's to say (title.ts): one set
 // here would be set after a screen's own, and stand over it.
