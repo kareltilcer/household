@@ -164,6 +164,10 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   pull request that needs it. A modal is the platform's `<dialog>`, and a library that injects a
   style is not used; what a component draws apart from where it stands, a menu's list or the
   toasts, is drawn inside the open modal (`ui/topLayer.ts`), since the page outside one is inert.
+  What outlasts a modal's opening or its closing, the toasts, is drawn once and moved there and
+  back as one element (`standOnTop`), never drawn anew for it: a test may hold a toast's element
+  through a dialog that goes, and what stands in a modal so is a portal into an element of its
+  own.
   A component names its words by key (`useTranslate`) and formats through
   `useFormat`: `Intl`, money from whole minor units, an instant in the timezone its caller names. A
   screen spends the twelve states through `ui/states.ts` and `StateFrame`. A page is titled for

@@ -4,7 +4,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useEffect, useRef, useState } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { draw, Press } from '../test/render.tsx'
 import { Button, IconButton } from './Button.tsx'
 import { Dialog, Sheet } from './Dialog.tsx'
@@ -683,16 +683,153 @@ describe('a toast', () => {
     expect(undo).toHaveBeenCalledTimes(1)
   })
 
+  /** What reads the toasts out, for a second from when each is raised. */
+  const readOut = () => [
+    ...document.querySelectorAll<HTMLElement>('[role="status"][aria-live="assertive"]'),
+  ]
+
   it('stays, on the page again, when the dialog it was raised in closes', async () => {
     draw(<Editing undo={() => undefined} />)
     const panel = screen.getByRole('dialog', { name: words.meter })
     await userEvent.click(within(panel).getByRole('button', { name: 'clear' }))
-    await within(panel).findByText(words.cleared)
+    const raised = await within(panel).findByText(words.cleared)
+    const undo = within(panel).getByRole('button', { name: 'Undo' })
     await userEvent.click(within(panel).getByRole('button', { name: 'Close' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(await screen.findByText(words.cleared)).toBeVisible()
     expect(panel).not.toContainElement(screen.getByRole('region', { name: 'Notifications (F8)' }))
-    expect(screen.getByRole('button', { name: 'Undo' })).toBeVisible()
+    // The toast that was in the panel, moved, and no other drawn in its place: one that is
+    // drawn anew arrives a second time, and takes no press that began on the one before it.
+    expect(raised).toBeVisible()
+    expect(screen.getAllByText(words.cleared)).toEqual([raised])
+    expect(screen.getByRole('button', { name: 'Undo' })).toBe(undo)
+  })
+
+  it('stays, the same toast, when the screen that drew its dialog leaves the page', async () => {
+    // A confirmation that leads on to another screen is open, and busy, until that screen has
+    // taken its own screen's place: what the write came to is said meanwhile, inside it, and
+    // the confirmation is then taken out of the document with the screen that drew it.
+    const { rerender } = draw(<Editing undo={() => undefined} />)
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    await userEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+    const raised = await within(panel).findByText(words.cleared)
+    rerender(<Press name="elsewhere" onPress={() => undefined} />)
+    expect(panel).not.toBeInTheDocument()
+    expect(raised).toBeVisible()
+    expect(screen.getAllByText(words.cleared)).toEqual([raised])
+  })
+
+  it('stays, the same toast, when a dialog opens over the page it was raised on', async () => {
+    function Opening() {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <Clear />
+          <Press
+            name="edit"
+            onPress={() => {
+              setOpen(true)
+            }}
+          />
+          <Sheet open={open} onClose={() => undefined} title={words.meter} />
+        </>
+      )
+    }
+    draw(<Opening />)
+    await userEvent.click(screen.getByRole('button', { name: 'clear' }))
+    const raised = await screen.findByText(words.cleared)
+    await userEvent.click(screen.getByRole('button', { name: 'edit' }))
+    // Inside the panel, where it can be read and reached: the page it was on is inert now.
+    expect(screen.getByRole('dialog', { name: words.meter })).toContainElement(raised)
+    expect(screen.getAllByText(words.cleared)).toEqual([raised])
+  })
+
+  it('is read out by the one region, which goes where the toast goes', async () => {
+    draw(<Editing undo={() => undefined} />)
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    await userEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+    await waitFor(() => {
+      expect(readOut()).toHaveLength(1)
+    })
+    const [said] = readOut()
+    await waitFor(() => {
+      expect(said).toHaveTextContent(/^Notification 7 checked items cleared from Weekly shop/)
+    })
+    expect(panel).toContainElement(said ?? null)
+    await userEvent.click(within(panel).getByRole('button', { name: 'Close' }))
+    // What said it in the panel is on the page with it, and nothing was made beside it to say
+    // it over again.
+    expect(readOut()).toEqual([said])
+    expect(said).toBeInTheDocument()
+    expect(panel).not.toContainElement(said ?? null)
+  })
+
+  it('is read out where it stands by then, when its dialog goes before its words are said', async () => {
+    draw(<Editing undo={() => undefined} />)
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    // Raised and left in one turn: Radix puts a toast's words into what reads it out two
+    // frames after the toast is drawn, and the panel is gone by then.
+    fireEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+    const [said] = readOut()
+    expect(said).toBeEmptyDOMElement()
+    fireEvent.click(within(panel).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // Put into a region that is on the page already, and not held inert by a panel that closed:
+    // that is what is said.
+    expect(readOut()).toEqual([said])
+    expect(panel).not.toContainElement(said ?? null)
+    await waitFor(() => {
+      expect(said).toHaveTextContent(/^Notification 7 checked items cleared from Weekly shop/)
+    })
+    expect(readOut()).toEqual([said])
+  })
+
+  describe('where the platform moves an element as it is', () => {
+    /** What `moveBefore` was asked to move, and how the dialog it left stood as it was asked. */
+    const moves: { readonly to: string; readonly left: string }[] = []
+
+    beforeEach(() => {
+      moves.length = 0
+      // jsdom has no `moveBefore`: one that tells of the move, and makes it as jsdom can.
+      Object.defineProperty(Element.prototype, 'moveBefore', {
+        configurable: true,
+        value: function moveBefore(this: Element, node: Element, child: Node | null) {
+          const from = node.closest('dialog')
+          moves.push({
+            to: this.nodeName,
+            left: from === null ? 'the page' : from.open && from.isConnected ? 'open' : 'closed',
+          })
+          this.insertBefore(node, child)
+        },
+      })
+    })
+    afterEach(() => {
+      Reflect.deleteProperty(Element.prototype, 'moveBefore')
+    })
+
+    it('leaves a dialog that is shown still, and is in the document still', async () => {
+      // An animation part run goes on in an element moved so, and only from where it is drawn:
+      // a dialog that has closed draws nothing inside it, and one taken out of the document
+      // can be moved from by no such move at all.
+      const { rerender } = draw(<Editing undo={() => undefined} />)
+      const panel = screen.getByRole('dialog', { name: words.meter })
+      // Put into the panel that was open as the toasts were first drawn, which is no move.
+      expect(moves).toEqual([])
+      await userEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+      const raised = await within(panel).findByText(words.cleared)
+      await userEvent.click(within(panel).getByRole('button', { name: 'Close' }))
+      expect(moves).toEqual([{ to: 'BODY', left: 'open' }])
+      expect(raised).toBeVisible()
+
+      // And from one that goes with its screen.
+      moves.length = 0
+      rerender(<Editing key="again" undo={() => undefined} />)
+      rerender(<Press name="elsewhere" onPress={() => undefined} />)
+      expect(moves).toEqual([
+        { to: 'DIALOG', left: 'the page' },
+        { to: 'BODY', left: 'open' },
+      ])
+      expect(raised).toBeVisible()
+    })
   })
 
   /** Presses Escape where the focus is, and says whether the key was left for the platform. */

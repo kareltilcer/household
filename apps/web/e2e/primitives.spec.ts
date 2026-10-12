@@ -400,6 +400,51 @@ test.describe('inside a side panel, which makes the page outside it inert', () =
     await expect(page.locator('[data-undone]')).toHaveAttribute('data-undone', '1')
   })
 
+  test('a toast is the one element when the panel closes under it, and does not arrive again', async ({
+    page,
+  }) => {
+    // The toast's dwell is held with the clock, and what it animates by is not the clock's.
+    await holdTheClock(page)
+    const panel = await openPanel(page)
+    await panel.getByRole('button', { name: serial }).click()
+    await panel.getByRole('menuitem', { name: 'Clear the serial number' }).click()
+    const toast = page.locator('[data-third-party] li').filter({ hasText: 'Serial number cleared' })
+    await expect(toast).toBeVisible()
+    await expect(panel.locator('[data-third-party] li')).toHaveCount(1)
+    /** Whatever the toast is animating by has run to its end, and said so. */
+    const settled = () =>
+      toast.evaluate(async (element) => {
+        await Promise.all(element.getAnimations().map((animation) => animation.finished))
+      })
+    // The element is marked once its arrival is over, and notes for itself any arrival begun
+    // on it from then on.
+    await settled()
+    await toast.evaluate((element) => {
+      element.setAttribute('data-marked', 'in the panel')
+      element.addEventListener('animationstart', () => {
+        element.setAttribute('data-arrived-again', '')
+      })
+    })
+    await panel.getByRole('button', { name: 'Close' }).click()
+    await expect(panel).toBeHidden()
+    // The toast that was in the panel, on the page: drawn anew, it would be another element,
+    // and one taken out of the panel and put on the page would begin its arrival again.
+    await expect(toast).toBeVisible()
+    await expect(toast).toHaveAttribute('data-marked', 'in the panel')
+    expect(await toast.evaluate((element) => element.closest('dialog') === null)).toBe(true)
+    await settled()
+    await expect(toast).not.toHaveAttribute('data-arrived-again')
+
+    // And into a panel that opens over it, where it fades in with the panel and by no arrival
+    // of its own.
+    await page.getByRole('button', { name: 'Edit the cellar meter' }).click()
+    await expect(panel).toBeVisible()
+    const inside = panel.locator('[data-third-party] li')
+    await expect(inside).toHaveAttribute('data-marked', 'in the panel')
+    await settled()
+    await expect(inside).not.toHaveAttribute('data-arrived-again')
+  })
+
   test('a toast stays, its undo with it, when Escape closes the panel under it', async ({
     page,
   }) => {

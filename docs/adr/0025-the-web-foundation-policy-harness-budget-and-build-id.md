@@ -49,10 +49,18 @@ the page is left undimmed at the window's edge. `Menu` is Radix's dropdown menu
 opened non-modally, which takes no scroll lock; `Toast` is Radix's toast. Select is the platform's
 own. Sheets and menus stand on `surface-overlay`, so `@household/tokens` declares the three pairs
 they spend there and its test counts them: the strong border, the focus ring and `danger`.
-A modal makes everything outside itself inert, so a menu's list, which Radix draws at the end of
-the page, and the toasts, which stand at the app's root, are drawn inside the modal that is open
-for as long as one is (`ui/topLayer.ts`), and a toast is announced from inside it: a menu opened
-from a sheet can be chosen from, and an Undo raised over one can be pressed.
+A modal makes everything outside itself inert, so a menu's list and the toasts, which stand at
+the end of the page, stand inside the modal that is open for as long as one is
+(`ui/topLayer.ts`), and a toast is announced from inside it: a menu opened from a sheet can be
+chosen from, and an Undo raised over one can be pressed. A menu is drawn for a press, inside
+whichever modal is on top as it opens. The toasts outlast a modal's opening and its closing, so
+they are drawn once, in an element of their own, with what reads each of them out, and that
+element is moved into the modal and out of it again: in the turn the dialog says it opened or is
+closing, which is before it closes and before React takes it out of the document with the screen
+that drew it, and by the platform's `moveBefore` where it has one, which moves an element as it
+is, an arrival part run going on. A toast on the screen is one element whatever opens or closes
+under it. Where the platform has no such move the element is taken out and put in, the same
+element still, and the browser begins a toast's arrival again.
 What the platform and Radix leave to the app, the components do themselves. A dialog's owner
 names what takes the focus as it opens (`initialFocus`), where that is not its first control: a
 field's `autoFocus` cannot, since React focuses such a field as it mounts, before the dialog is
@@ -102,7 +110,12 @@ than the toasts are tall as the room is made is brought to its foot, its actions
 toasts, and one a member has scrolled anywhere else is left there, the room at its end to scroll
 to. A
 toast is read out after the one word
-*Notification*; the region's name, with the key that reaches it, is the viewport's. A banner that
+*Notification*; the region's name, with the key that reaches it, is the viewport's. What reads a
+toast out is in the toasts' own element and is moved with it. Radix puts a toast's words into it
+two frames after the toast is drawn, and takes it away a second later: moved before its words are
+in it, it says them where it stands by then, and moved with them in it, it has said them, and is
+from then on a region that arrived with its words in it, of which the next sentence says what a
+reader may make. A banner that
 is announced politely is drawn before its words, which are put into it two frames later, and so
 is the offline bar: what is put into a polite region already in the document is said, and a
 region that arrives with its words in it need not be. The region a hold says its word in is on
@@ -258,6 +271,9 @@ waits in the page, and is sent from there when the connection is back.
 | The toasts' dwell timed by the app, or Radix told by a made-up event that the pointer has left | The first is what Radix's toast is used for. The second steers a library by its internals, where a provider mounted afresh holds nothing by construction |
 | Escape under a modal left to Radix and the platform both, or given to the toast first | The first closes the panel and takes the Undo with it. The second leaves the panel open after the key that should have closed it, and loses the Undo all the same: a toast is no layer a member opened |
 | The toasts drawn at a side panel's own foot, in its flow, where they would cover nothing | A toast would move as the panel closed, out from under a pointer that holds its dwell, and Radix would hold every dwell after it. Their place is one, and the panel makes room |
+| The toasts' region drawn by a portal into whichever modal is on top, and at the app's root while none is, as item 24 had it | Each change of the modal on top drew the region anew, and every toast in it, and what reads each out: other elements in the same place. A toast said as a confirmation leads on to another screen, a household left or a member removed, is raised inside the confirmation, which stays until that screen has come: it arrived a second time as the confirmation went, a press begun on its Undo ended on another element, and what reads it out was made again with its words in it. Found by a unit test that held the first element while the second took its place, once in CI and on demand with each task of React's scheduler in a turn of its own (`household/leave.test.tsx`). One element is moved |
+| The toasts' element moved in a render that follows the dialog's closing | By then the dialog has closed, or left the document with its screen: what is inside one that is closed is not drawn, so a toast's arrival is begun again when it is drawn on the page, and the platform moves nothing that is out of the document. The dialog says it is closing first, and the element leaves it then |
+| What reads a toast out hidden from a reader as it is moved with its words in it, so that no reader says a toast twice | A region that arrives with its words in it need not be said, and a reader that says it says the toast a second time. Hidden as it is moved, it would not be: and hidden a moment after its words were put in it, before a reader had read them, the toast would not be said at all, which is the worse of the two |
 | A menu's Escape left to Radix's layers alone | A toast raised while a menu is open is the last layer: the key would close the panel the menu is drawn in, with what was typed there, or put away a toast the member did not mean |
 | Escape left to put the newest toast away on a page with nothing else open, as Radix has it | Whatever a screen gives the key to, a rename taken back or a search cleared, would put an Undo away with it, and the toasts would have to be told of each. The key is theirs only among them, where their own key takes a member |
 | A confirmation that makes room for the toasts, as a side panel does | A panel's foot is the window's, always under the toasts. A confirmation is centred and reaches them only at 200 % text in a phone's width, or in a window no taller than a phone held sideways. Room taken by the panel's property would move every confirmation by half a toast whenever one came or went, Keep and Delete under a press; a transform would make the dialog what its fixed toasts are placed against; and one that gives way only where it reaches them is the dialog rebuilt as a ground with its card inside. The toast is plainly over the buttons, goes with its dwell, and has its own control to put it away |
