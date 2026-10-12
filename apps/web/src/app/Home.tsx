@@ -10,7 +10,10 @@
 // lockout (shell/Lockout.tsx): a suspension is no reason to hold a member at a screen that
 // shows nothing, away from a household of theirs that works. A member in none but suspended
 // ones is opened at the first of them, where the lockout says what there is to say.
-import { Navigate } from 'react-router'
+//
+// Whoever is sent on is drawn the shape of a page until the address they are sent to is drawn
+// (`Waiting`, guards.tsx): a shell and its screen are files, as the way in is, and this route
+// is drawn until they have come.
 import { lastHousehold, useHouseholds } from '../household/households.ts'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import { useSession, type Me } from '../session/SessionProvider.tsx'
@@ -46,10 +49,9 @@ function MemberHome({ me }: { readonly me: Me }) {
     // being read again, and where the app opens waits for it. With no connection nothing is
     // being read, and what was kept is what there is to go by.
     if (households.isFetching) return <Waiting />
-    const to = me.is_child === true ? paths.account.path : paths.householdNew.path
-    return <Navigate to={to} replace />
+    return <Waiting to={me.is_child === true ? paths.account.path : paths.householdNew.path} />
   }
-  return <Navigate to={inHousehold.home(open.id)} replace />
+  return <Waiting to={inHousehold.home(open.id)} />
 }
 
 export function Home() {
@@ -58,7 +60,7 @@ export function Home() {
     case 'member':
       return <MemberHome me={state.me} />
     case 'visitor':
-      return <Navigate to={paths.signIn.path} replace />
+      return <Waiting to={paths.signIn.path} />
     case 'unknown':
       return <Waiting />
     case 'unreachable':

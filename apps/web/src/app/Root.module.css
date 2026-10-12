@@ -23,6 +23,13 @@
   padding: var(--space-6) var(--space-3);
 }
 
+/* The shape of a page, as wide as the page: its bars are shares of its width, and an item of a
+   page of words is no wider than what it holds, which for a shape is nothing. */
+.waiting {
+  composes: page;
+  align-items: stretch;
+}
+
 .title {
   composes: title1 from '../styles/type.module.css';
   overflow-wrap: anywhere;

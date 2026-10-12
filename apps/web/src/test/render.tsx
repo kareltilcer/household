@@ -1,8 +1,10 @@
 // A component drawn as the app draws it: in a language, with the display modes and the toasts
-// above it. English unless a test names another.
+// above it. English unless a test names another. And the files of an address, loaded before a
+// test waits for what is drawn at it.
 import type { DisplayLocale } from '@household/i18n/lazy'
 import { render, type RenderResult } from '@testing-library/react'
 import type { ReactNode } from 'react'
+import { matchRoutes, type RouteObject } from 'react-router'
 import { vi } from 'vitest'
 import { DisplayProvider } from '../display/DisplayProvider.tsx'
 import { I18nProvider } from '../i18n/I18nProvider.tsx'
@@ -28,6 +30,21 @@ export function draw(
     )
   }
   return render(ui, { wrapper: Around, reactStrictMode: strict })
+}
+
+/**
+ * Loads the files of the routes of `table` that `address` names, a shell's and its screen's, as
+ * the router does when the address is opened. A file imported for the first time is transformed
+ * as it is asked for, as is whatever it imports that nothing imported before: on a machine with
+ * other work that takes longer than the second a find waits by itself. A test that would be the
+ * first of its file to wait on such a screen loads its files first, and waits for what is drawn
+ * and no more.
+ */
+export async function loaded(table: RouteObject[], address: string): Promise<void> {
+  const named = matchRoutes(table, address) ?? []
+  await Promise.all(
+    named.flatMap(({ route }) => (typeof route.lazy === 'function' ? [route.lazy()] : [])),
+  )
 }
 
 /**
