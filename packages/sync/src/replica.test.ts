@@ -1393,6 +1393,80 @@ describe('a replica', waits, () => {
     expect(await replica.attachments().list()).toEqual([])
   })
 
+  it('sends a file a not found left once its wait is over, and at once where the app says the household answers again, the replica holding its row all the while', async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    let now = Date.parse('2026-10-02T10:00:00Z')
+    // A suspended household's sync credentials are answered as its uploads are (D-115): a replica
+    // that was not connected as the suspension came is never emptied, and holds its rows as they were.
+    let answer = (): Response => json(404, { code: 'not_found' })
+    const { fetch, calls } = routes({ '/content': () => answer() })
+    const { replica } = await open({ fetch, storage, now: () => new Date(now) })
+    const sends = (): number => calls.filter((c) => c.url.endsWith('/content')).length
+    const scan = newId()
+    await arrive(replica, 'items', scan, { household_id: household, title: 'Scan', version: 1 })
+    await replica.attach('items', scan, {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'scan.pdf',
+    })
+    await replica.attachments().upload()
+    expect(sends()).toBe(1)
+    // Inside the wait nothing is sent. At its end the file is, and is answered as it was: it waits on.
+    now += stateRetryMs - 1
+    await replica.attachments().upload()
+    expect(sends()).toBe(1)
+    now += 1
+    await replica.attachments().upload()
+    expect(sends()).toBe(2)
+    const [waiting] = await replica.attachments().list()
+    expect(waiting).toMatchObject({ id: scan, status: 'pending', attempts: 2, code: null })
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(true)
+    // The suspension is lifted, and the app says the household answers again: the file is sent with
+    // none of the second wait seen out.
+    answer = () => json(201, {})
+    await replica.attachments().upload()
+    expect(sends()).toBe(2)
+    replica.resume()
+    await replica.attachments().upload()
+    expect(sends()).toBe(3)
+    expect(await replica.attachments().list()).toEqual([])
+  })
+
+  it('keeps a file whose row leaves the replica while it is on its way to a not found', async () => {
+    const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
+    dirs.push(storage)
+    const scan = newId()
+    const opened: { replica?: Replica } = {}
+    let answer = async (): Promise<Response> => {
+      // The checkpoint that empties a suspended household's replica lands before the answer does.
+      await opened.replica?.db.execute('DELETE FROM ps_data__items WHERE id = ?', [scan])
+      return json(404, { code: 'not_found' })
+    }
+    const { fetch, calls } = routes({ '/content': () => answer() })
+    const { replica } = await open({ fetch, storage })
+    opened.replica = replica
+    const sends = (): number => calls.filter((c) => c.url.endsWith('/content')).length
+    await arrive(replica, 'items', scan, { household_id: household, title: 'Scan', version: 1 })
+    await replica.attach('items', scan, {
+      data: new TextEncoder().encode('%PDF-1.7').buffer,
+      contentType: 'application/pdf',
+      fileName: 'scan.pdf',
+    })
+    await replica.attachments().upload()
+    // A row that is gone is no tombstone: the file is kept, for the row the suspension's end brings.
+    const [waiting] = await replica.attachments().list()
+    expect(waiting).toMatchObject({ id: scan, status: 'pending', attempts: 1, code: null })
+    expect(existsSync(waiting?.local_uri ?? '')).toBe(true)
+    answer = () => Promise.resolve(json(201, {}))
+    await replica.attachments().upload()
+    expect(sends()).toBe(1)
+    await arrive(replica, 'items', scan, { household_id: household, title: 'Scan', version: 1 })
+    await replica.attachments().upload()
+    expect(sends()).toBe(2)
+    expect(await replica.attachments().list()).toEqual([])
+  })
+
   it("takes the API's not found for the end of a file whose row the replica holds as deleted, and sends the files behind it", async () => {
     const storage = mkdtempSync(join(tmpdir(), 'household-files-'))
     dirs.push(storage)

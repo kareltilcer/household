@@ -149,15 +149,17 @@ export class Attachments {
   /**
    * When a run may next send a file, in milliseconds since the epoch: stateRetryMs after the
    * household's state refused one, something that is not the API did, the API refused the build that
-   * sent it, or answered it as not found; a 429's Retry-After after the server's limit did; 0 for
-   * now. It is kept in memory: a replica opened again tries once more.
+   * sent it, or answered it as not found, whose wait may end sooner (unexplained); a 429's
+   * Retry-After after the server's limit did; 0 for now. It is kept in memory: a replica opened again
+   * tries once more.
    */
   private notBefore = 0
   /**
    * The file whose not found set the wait, where one did. The API answers so for a suspended
    * household, for what its caller can no longer see and for a row that was deleted, and the replica
-   * held the row as it stood before any of them: once it holds it as a tombstone, or not at all, a
-   * checkpoint has said which it was, and the wait is over (run).
+   * held the row as it stood before any of them: once it holds it as a tombstone, or not at all, the
+   * wait is over (run). A checkpoint has then said which it was, or the row went by the replica's own
+   * hand, its member's delete still queued or a download of itself, which costs the next file a try.
    */
   private unexplained: PendingAttachment | null = null
 
@@ -224,7 +226,8 @@ export class Attachments {
   /**
    * Uploads the files whose rows the server holds, oldest first, until one fails on the network or the
    * server: the rest wait for the next run. A run inside the time a refusal asked to be waited (the
-   * household's state, a not found, a 429) sends none. A run already under way is joined, not
+   * household's state, a not found, a 429) sends none, but that a not found's wait ends with the
+   * replica no longer holding its file's row as it did. A run already under way is joined, not
    * doubled, and is followed by another: it listed the files before this call, and one added since,
    * or one whose row a checkpoint has brought since, would otherwise wait for a call that may be long
    * in coming.
@@ -257,9 +260,9 @@ export class Attachments {
     if (wait > 0 && wait <= maxRetryAfterMs) {
       // A not found is waited out for what it may be, the household's own answer, which every file
       // behind this one would be given too. Once the replica no longer holds the file's row as it
-      // did, a checkpoint has said what it was: the row's own, deleted or out of its member's sight,
-      // and the files behind it wait on nothing; or the household's, whose rows have all left the
-      // replica, and then no file has a row to be sent for.
+      // did, the answer was the row's own, deleted or out of its member's sight, and the files
+      // behind it wait on nothing; or the household's, whose rows have all left the replica, and
+      // then no file has a row to be sent for.
       if (this.unexplained === null || (await this.holds(this.unexplained)) === 'live') return
       this.notBefore = 0
     }
@@ -388,8 +391,8 @@ export class Attachments {
   /**
    * How the replica holds a's row: live, as deleted, or not at all. A row its household deleted stays
    * in its streams, a tombstone, where one its member can no longer see, or one of a suspended
-   * household, leaves the replica (PRD 03 §2.6): of the three, the first alone is one the replica is
-   * told of as what it is.
+   * household, leaves the replica (PRD 03 §2.6): of those three rows, the deleted one alone is one
+   * the replica is told of as what it is.
    */
   private async holds(a: PendingAttachment): Promise<'live' | 'deleted' | 'absent'> {
     // Every column, since not every client table has this one, and naming it would fail the read.
