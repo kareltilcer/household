@@ -167,7 +167,12 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   What outlasts a modal's opening or its closing, the toasts, is drawn once and moved there and
   back as one element (`standOnTop`), never drawn anew for it: a test may hold a toast's element
   through a dialog that goes, and what stands in a modal so is a portal into an element of its
-  own. A dialog is said to be closing while it is open still (`enterTopLayer`), by its owner
+  own. It gives up a focus inside it as it is moved and is `inert` for that turn: after a commit
+  React puts the focus back on what held it before, if that is in the document still, and would
+  take it from what opened a dialog its owner closed. A press held on it through the move comes
+  to no click, which is the browser's; and what is done for the modal it stands in is told of
+  that modal by the move, not by asking which modal is on top.
+  A dialog is said to be closing while it is open still (`enterTopLayer`), by its owner
   before it closes it, for the dialogs open inside it too, and by the platform's `beforetoggle`
   where the platform closes it; and an animation that is to run once is marked as over on its
   element, as a toast's arrival is (`data-arrived`), since a browser begins one again on an

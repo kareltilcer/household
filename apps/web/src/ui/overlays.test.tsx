@@ -11,6 +11,7 @@ import { Dialog, Sheet } from './Dialog.tsx'
 import { TextField } from './Field.tsx'
 import { Menu, type MenuItem } from './Menu.tsx'
 import { useToast, type ShowToast } from './Toast.tsx'
+import { enterTopLayer, standOnTop } from './topLayer.ts'
 
 const words = {
   title: 'Delete Weekly shop?',
@@ -703,7 +704,7 @@ describe('a toast', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(panel).not.toContainElement(screen.getByRole('region', { name: 'Notifications (F8)' }))
     // The toast that was in the panel, moved, and no other drawn in its place: one that is
-    // drawn anew arrives a second time, and takes no press that began on the one before it.
+    // drawn anew arrives a second time, and is another element to whoever holds the first.
     expect(raised).toBeVisible()
     expect(screen.getAllByText(words.cleared)).toEqual([raised])
     expect(screen.getByRole('button', { name: 'Undo' })).toBe(undo)
@@ -746,6 +747,88 @@ describe('a toast', () => {
     // Inside the panel, where it can be read and reached: the page it was on is inert now.
     expect(screen.getByRole('dialog', { name: words.meter })).toContainElement(raised)
     expect(screen.getAllByText(words.cleared)).toEqual([raised])
+  })
+
+  it('gives up the focus as its dialog is closed, takes none back in that turn, and goes by its dwell', async () => {
+    // A dialog's owner closes it inside a commit of React's, and React puts the focus back,
+    // once a commit has changed the document, on what held it before, if that lost it and is in
+    // the document still. The toasts are, on the page by then: the focus the platform gives to
+    // what opened the dialog would be among them again, and their dwell held by it. Where the
+    // focus goes is the browser's own doing (e2e/primitives.spec.ts).
+    vi.useFakeTimers()
+    draw(<Editing undo={() => undefined} />)
+    const panel = screen.getByRole('dialog', { name: words.meter })
+    fireEvent.click(within(panel).getByRole('button', { name: 'clear' }))
+    const undo = within(panel).getByRole('button', { name: 'Undo' })
+    const toasts = region()
+    act(() => {
+      undo.focus()
+    })
+    // Radix holds a toast's dwell for as long as the focus is among the toasts.
+    act(() => {
+      vi.advanceTimersByTime(6000)
+    })
+    expect(undo).toHaveFocus()
+
+    // jsdom holds nothing inert, and would let the toast take the focus back. What is asked to
+    // take the focus while the dialog is closed is noted in its place, with whether a browser
+    // would have refused it, which it does of what is inert.
+    const refused: boolean[] = []
+    const asked = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function noted(
+      this: HTMLElement,
+    ) {
+      refused.push(this.closest('[inert]') !== null)
+    })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Close' }))
+    asked.mockRestore()
+    expect(panel).not.toContainElement(undo)
+    expect(refused).not.toContain(false)
+    expect(toasts.contains(document.activeElement)).toBe(false)
+    // The toasts' own element, which is what is moved, takes no focus while that turn lasts.
+    expect(toasts.parentElement).toHaveAttribute('inert')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // And is as it was from then on, its Undo there to be pressed and reached by a key.
+    expect(toasts.parentElement).not.toHaveAttribute('inert')
+    expect(toasts.contains(document.activeElement)).toBe(false)
+    expect(undo).toBeVisible()
+    // The focus was heard to leave: the dwell runs on, and the toast goes by it.
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(screen.queryByText(words.cleared)).not.toBeInTheDocument()
+  })
+
+  it('stands in an element that the move itself tells of its dialog, and of none while it is on the page', () => {
+    // What makes room for the toasts in a modal is told where they stand, and not which modal
+    // is on top: the two are not one where the platform closes a dialog without a word.
+    const dialog = document.createElement('dialog')
+    document.body.append(dialog)
+    const element = document.createElement('div')
+    const stood = vi.fn<(modal: HTMLDialogElement | null) => void>()
+    const away = standOnTop(element, stood)
+    expect(stood.mock.calls).toEqual([[null]])
+    expect(element.parentElement).toBe(document.body)
+
+    dialog.showModal()
+    const leave = enterTopLayer(dialog)
+    expect(stood).toHaveBeenLastCalledWith(dialog)
+    expect(element.parentElement).toBe(dialog)
+
+    // A browser that sends a dialog no `beforetoggle` closes it and says nothing: the element
+    // is inside it still, and nothing else is told, until its owner says it is closing.
+    stood.mockClear()
+    dialog.removeAttribute('open')
+    expect(stood).not.toHaveBeenCalled()
+    expect(element.parentElement).toBe(dialog)
+    leave()
+    expect(stood.mock.calls).toEqual([[null]])
+    expect(element.parentElement).toBe(document.body)
+
+    away()
+    expect(element).not.toBeInTheDocument()
+    dialog.remove()
   })
 
   it('is read out by the one region, which goes where the toast goes', () => {

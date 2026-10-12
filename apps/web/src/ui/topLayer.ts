@@ -2,9 +2,9 @@
 // inert: it takes no press and no focus, and assistive technology does not read it. So what a
 // component draws apart from where it stands, a menu's list or the toasts, is drawn inside the
 // open modal for as long as one is open, or it could not be reached. The dialogs say here when
-// they open and close, and a menu and the toasts ask which one is on top. A menu is drawn for a
-// press and gone with the next one. The toasts outlast a modal's opening and its closing, so they
-// are one element that is moved into the modal on top and out of it again (`standOnTop`).
+// they open and close, and a menu asks which one is on top. A menu is drawn for a press and gone
+// with the next one. The toasts outlast a modal's opening and its closing, so they are one element
+// that is moved into the modal on top and out of it again, and told where it stands (`standOnTop`).
 import { useSyncExternalStore } from 'react'
 
 /** The modals that said they opened, in that order: the last is the one over everything else. */
@@ -61,17 +61,44 @@ export function useTopModal(): HTMLDialogElement | null {
 }
 
 /**
- * Puts `element` at the end of `parent`. One that is in the document already is moved as it is,
- * where the platform can (`moveBefore`): an animation part run goes on, and a pointer on it is on
- * it still. Where it cannot, the element is taken out and put in, which is the same element to
- * whoever holds it, and one whose animation the browser begins again if it is still on it.
+ * Has `element` give up a focus inside it, and take none until the turn is over.
  *
- * A focus inside it is not kept, either way. The move itself leaves it there, and what the move
- * is made for takes it: a dialog takes the focus as it opens, and as one closes the platform
- * gives the focus to what opened it, wherever the focus was.
+ * The focus is not the element's to keep through a move: a dialog takes the focus as it opens,
+ * and as one closes the platform gives the focus to what opened it, wherever the focus was. But
+ * a dialog's owner closes it inside a commit of React's, and React, once a commit has changed
+ * the document, puts the focus back on what held it before the commit, if that lost it and is in
+ * the document still. The element is, on the page by then, where one left inside the dialog that
+ * closed could take no focus: the focus would be among the toasts again, and on a region with
+ * nothing in it where the last toast was put away by a key. So the focus leaves the element
+ * first, by a `blur` that is heard whichever way the element is then moved, as Radix has to hear
+ * it, which holds every toast's dwell for as long as the focus is among them; and the element
+ * is inert until the commit is over, which is to take no focus.
+ */
+function yieldFocus(element: HTMLElement): void {
+  const held = document.activeElement
+  if (held === null || !element.contains(held)) return
+  if (held instanceof HTMLElement || held instanceof SVGElement) held.blur()
+  element.toggleAttribute('inert', true)
+  queueMicrotask(() => {
+    element.removeAttribute('inert')
+  })
+}
+
+/**
+ * Puts `element` at the end of `parent`. One that is in the document already is moved as it is,
+ * where the platform can (`moveBefore`): an animation part run goes on, and a pointer that is
+ * over it is over it still. Where it cannot, the element is taken out and put in, which is the
+ * same element to whoever holds it, and one whose animation the browser begins again if it is
+ * still on it.
+ *
+ * Two things are kept through neither. A focus inside it is given up (`yieldFocus`). And a press
+ * held on it while it is moved comes to no click: a browser gives a click to no element that was
+ * moved between the two ends of a press, as it is or out and in (Chromium 152), as it gave none
+ * to an element drawn in the place of the one that was pressed.
  */
 function put(element: HTMLElement, parent: HTMLElement): void {
   if (element.parentNode === parent) return
+  yieldFocus(element)
   // The platform moves only what is in the document, to somewhere in it.
   if ('moveBefore' in Element.prototype && element.isConnected && parent.isConnected) {
     parent.moveBefore(element, null)
@@ -83,6 +110,9 @@ function put(element: HTMLElement, parent: HTMLElement): void {
 /**
  * Stands `element` in the modal that is open over everything else, and at the end of the page
  * while none is, until the function this returns is called, which takes it out of the document.
+ * `stood` is told where each time: the modal the element stands in, or null on the page. Whoever
+ * does something for that modal learns of it there and nowhere else, so that what it holds to be
+ * the element's modal is the one the element is in.
  *
  * It is moved in the turn a dialog says it opened or is closing, and not in a render that
  * follows: a dialog is said to be closing before it closes (`enterTopLayer`), and before React
@@ -95,9 +125,14 @@ function put(element: HTMLElement, parent: HTMLElement): void {
  * screen was one element inside the confirmation and another on the page a moment later, arriving
  * twice, with what reads it out made again beside it.
  */
-export function standOnTop(element: HTMLElement): () => void {
+export function standOnTop(
+  element: HTMLElement,
+  stood: (modal: HTMLDialogElement | null) => void,
+): () => void {
   const stand = () => {
-    put(element, top() ?? document.body)
+    const modal = top()
+    put(element, modal ?? document.body)
+    stood(modal)
   }
   stand()
   const unwatch = watch(stand)

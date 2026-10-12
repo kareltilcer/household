@@ -22,7 +22,7 @@ import {
 import { createPortal } from 'react-dom'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
 import styles from './Toast.module.css'
-import { standOnTop, useTopModal } from './topLayer.ts'
+import { standOnTop } from './topLayer.ts'
 
 export interface ToastOptions {
   /** What happened, naming what it happened to: "7 checked items cleared from Weekly shop". */
@@ -120,8 +120,9 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
   // from one to keep it from saying a toast twice: hidden a moment too early, the toast would
   // not be said at all.
   const [place] = useState(() => document.createElement('div'))
-  useLayoutEffect(() => standOnTop(place), [place])
-  const modal = useTopModal()
+  /** The modal the toasts stand in, as the move itself tells it: null while they are on the page. */
+  const [modal, setModal] = useState<HTMLDialogElement | null>(null)
+  useLayoutEffect(() => standOnTop(place, setModal), [place])
 
   // They are drawn over the foot of the window there as on the page, in the same place, so that
   // a pointer on a toast is on it still when the modal goes. A side panel keeps its actions at
