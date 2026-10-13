@@ -21,7 +21,9 @@ export function pictureKey(household: string) {
 /**
  * What the household stores against its allowance, by module and by member, its largest items
  * and the trend of its daily samples. A member who holds `none` on household settings is
- * answered `404`: the picture is what `view` on it unlocks (FR-AC3).
+ * answered `404`: the picture is what `view` on it unlocks (FR-AC3). What the query client
+ * held of it is let go of as that answer arrives (api/query.ts, `letGo`): its screen takes the
+ * picture down for it (Storage.tsx).
  */
 export function pictureQuery(api: ApiClient, household: string) {
   return queryOptions({
@@ -33,6 +35,7 @@ export function pictureQuery(api: ApiClient, household: string) {
           signal,
         }),
       ),
+    meta: { letGoWhereNotFound: true },
   })
 }
 

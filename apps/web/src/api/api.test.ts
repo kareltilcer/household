@@ -332,17 +332,18 @@ describe('the query client', () => {
     client.unmount()
   })
 
-  // The rule is for a read that says so, a household's own. Any other keeps its last answer
-  // under a `404`, which its screen draws by; and the one that says so keeps it under every
-  // failure that is no `404`, which has said nothing of what was read.
+  // The rule is for a read that says so, a household's own among them. Any other keeps its last
+  // answer under a `404`, a household's subscription, which billing's screens draw by until the
+  // household is read again; and one that says so keeps it under every failure that is no
+  // `404`, which has said nothing of what was read.
   it('lets go of nothing a read held under any other failure, nor under a not found where the read does not say to', async () => {
     const client = createQueryClient()
     client.mount()
-    const plain = ['households', 'a1', 'members', 'm1']
-    client.setQueryData(plain, { id: 'm1' }, read())
+    const plain = ['households', 'a1', 'billing', 'subscription']
+    client.setQueryData(plain, { state: 'active' }, read())
     const unsaid = failing(client, plain, [thrown(404, 'not_found')])
     await unsaid.failed()
-    expect(client.getQueryData(plain)).toEqual({ id: 'm1' })
+    expect(client.getQueryData(plain)).toEqual({ state: 'active' })
 
     const key = ['households', 'a2']
     client.setQueryData(key, { id: 'a2' }, read())

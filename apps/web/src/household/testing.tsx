@@ -11,9 +11,15 @@
 // and Miloš each hold one module to set up, Klára holds three and nothing of the household's
 // settings, and Adam is a child profile.
 import type { components } from '@household/api'
-import { render } from '@testing-library/react'
+import {
+  focusManager,
+  useQueryClient,
+  type QueryClient,
+  type QueryKey,
+} from '@tanstack/react-query'
+import { act, render } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ComponentType } from 'react'
+import { useEffect, type ComponentType } from 'react'
 import {
   Outlet,
   RouterProvider,
@@ -22,6 +28,7 @@ import {
   useParams,
   type RouteObject,
 } from 'react-router'
+import { expect, vi } from 'vitest'
 import {
   createServer as createAccountServer,
   jana,
@@ -478,12 +485,67 @@ export function openOver<Known extends Server>(
     // A request that got no answer is said to have got none at once: no test waits out a resend.
     retry: { delays: [] },
   })
+  const held: QueryClient[] = []
   const drawn = render(
     <Providers persist={false} client={client} cookies={cookies}>
+      <Reads
+        to={(queries) => {
+          held.push(queries)
+        }}
+      />
       <RouterProvider router={router} />
     </Providers>,
   )
-  return { ...drawn, router, server, user: userEvent.setup() }
+  /** The page's own query client, which holds what the page read as the page holds it. */
+  const reads = (): QueryClient => {
+    const [queries] = held
+    if (queries === undefined) throw new Error('the page has not been drawn yet')
+    return queries
+  }
+  return { ...drawn, router, server, user: userEvent.setup(), reads }
+}
+
+/** Hands `to` the page's own query client. */
+function Reads({ to }: { readonly to: (queries: QueryClient) => void }) {
+  const queries = useQueryClient()
+  useEffect(() => {
+    to(queries)
+  }, [queries, to])
+  return null
+}
+
+/**
+ * Says the page is looked at again, which has what it shows read again, and waits until `route`
+ * has been asked since and the read filed under `key` has been answered, or has got no answer,
+ * and whoever reads it has been told: the query client tells its readers a turn after it holds
+ * an answer. What is drawn then is what the answer came to, so a test may say what is not drawn
+ * (shell/household.test.tsx has the same for the household's own read). `within` is how long the
+ * answer may take, in milliseconds: longer than a second where the query client asks a failing
+ * server again before it holds the failure.
+ */
+export async function lookAgain(
+  { server, reads }: { readonly server: Server; readonly reads: () => QueryClient },
+  route: string,
+  key: QueryKey,
+  within = 1000,
+): Promise<void> {
+  const before = server.to(route).length
+  act(() => {
+    focusManager.setFocused(false)
+    focusManager.setFocused(true)
+  })
+  await act(async () => {
+    await vi.waitFor(
+      () => {
+        expect(server.to(route).length).toBeGreaterThan(before)
+        expect(reads().isFetching({ queryKey: key, exact: true })).toBe(0)
+      },
+      { timeout: within },
+    )
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0)
+    })
+  })
 }
 
 /**

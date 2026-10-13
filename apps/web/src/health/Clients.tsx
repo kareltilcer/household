@@ -40,7 +40,7 @@ import { agentOf, useClientNames, type ClientNames } from '../account/userAgent.
 import { clientName } from '../api/client.ts'
 import { NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
-import { notTheirs, useRereadWhereRefused, writes } from '../household/data.ts'
+import { useNotTheirs, useRereadWhereRefused, writes } from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { HouseholdSettingsPage, useStanding } from '../household/settings/Page.tsx'
 import { useTimeZone } from '../household/timezone.ts'
@@ -161,8 +161,10 @@ function Listed() {
 
   // The list's own refusal says its reader is an owner no longer. The household alone is read
   // again, which is what takes this screen and its way in away: read again with it, the list
-  // would only be refused again.
-  const refused = notTheirs(read)
+  // would only be refused again. Until the household says so the refusal stands, through a
+  // re-read of the list that got no answer: where the household could not be read again either,
+  // nothing else says it, and the list is not put back from what this browser kept.
+  const refused = useNotTheirs(read)
   useRereadWhereRefused(household.id, refused)
 
   const items = read.data?.items ?? []

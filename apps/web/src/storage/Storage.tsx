@@ -40,7 +40,12 @@ import { readState, together, useFocusKept } from '../account/common.ts'
 import account from '../account/Settings.module.css'
 import { NotAvailable } from '../app/NotAvailable.tsx'
 import { inHousehold } from '../app/paths.ts'
-import { notTheirs, useRereadWhereRefused, useSubscription, useUsage } from '../household/data.ts'
+import {
+  useNotTheirs,
+  useRereadWhereRefused,
+  useSubscription,
+  useUsage,
+} from '../household/data.ts'
 import { useHousehold } from '../household/HouseholdContext.tsx'
 import { HouseholdSettingsPage, useEverHeld, useStanding } from '../household/settings/Page.tsx'
 import { useTranslate } from '../i18n/I18nProvider.tsx'
@@ -85,9 +90,17 @@ function Stored() {
   // A read's own refusal says where its reader stands now, whatever the household said when it
   // was read: the picture's, that their level on household settings was lowered, and an owner's
   // two, that they are an owner no longer. The household alone is read again, which is what
-  // tells the rest of the app; read again with it, each would only be refused again.
-  const lowered = standing.storage && notTheirs(picture)
-  const demoted = standing.owner && (notTheirs(usage) || notTheirs(plan))
+  // tells the rest of the app; read again with it, each would only be refused again. Until the
+  // household says so each refusal stands, through a re-read that got no answer: where the
+  // household could not be read again either, nothing else says it, and what was taken down
+  // for it is not put back from what this browser kept. The picture lets go of what it held at
+  // its refusal (data.ts); the month's two are billing's reads too, which draws by them until
+  // the household is read, and keep theirs (api/query.ts, `letGoWhereNotFound`).
+  const pictureRefused = useNotTheirs(picture)
+  const usageRefused = useNotTheirs(usage)
+  const planRefused = useNotTheirs(plan)
+  const lowered = standing.storage && pictureRefused
+  const demoted = standing.owner && (usageRefused || planRefused)
   useRereadWhereRefused(household.id, lowered || demoted)
   const withdrawn = !standing.storage || lowered
   // Somebody the server no longer answers as an owner reads the picture as a member does.

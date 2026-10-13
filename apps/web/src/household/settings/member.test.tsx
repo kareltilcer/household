@@ -15,6 +15,7 @@ import {
   invalid,
   jana,
   klara,
+  lookAgain,
   memberOf,
   milos,
   noContent,
@@ -26,7 +27,7 @@ import {
   type AccessLevel,
   type HouseholdServer,
 } from '../testing.tsx'
-import { grantChange } from './member.ts'
+import { grantChange, memberKey } from './member.ts'
 
 const at = `/households/${home}`
 
@@ -302,6 +303,87 @@ describe('one member’s page', () => {
         name: 'This link doesn’t open anything here.',
       }),
     ).toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  })
+})
+
+// The server's *not found* is its last word of a member until it answers with them. The query
+// client keeps the last answer it was given through a failure, and holds only the last failure:
+// a member read while their page stood open, then answered `404`, then asked for again of a
+// server that gave no answer, was left with the kept answer and nothing over it, and the page
+// was drawn again, an owner's controls with it. A re-read that got no answer has said nothing
+// of the member.
+describe('a member the server said is not found, asked for again of a server that gives no answer', () => {
+  const absent = 'This link doesn’t open anything here.'
+  const unread = 'This member’s page did not load'
+  const route = `GET ${at}/members/${petr}`
+  const key = memberKey(home, petr)
+  const away = () => Promise.reject(new TypeError('offline'))
+
+  it('stays not available, whatever this browser kept of them, until the server answers with them', async () => {
+    const server = createServer()
+    const opened = await page(petr, server)
+    expect(screen.getByRole('button', { name: 'Remove Petr Tilcer' })).toBeInTheDocument()
+
+    // Removed by another owner since: the page is looked at again, and what it shows is read again.
+    const removed = memberOf(petr, server.members)
+    server.members = server.members.filter((each) => each.user_id !== petr)
+    await lookAgain(opened, route, key)
+    const said = await screen.findByRole('heading', { level: 1, name: absent })
+
+    // The server gives no answer, and the page is looked at again.
+    server.on(route, away)
+    await lookAgain(opened, route, key)
+    // The very heading: what stood in the member's place was not taken down.
+    expect(screen.getByRole('heading', { level: 1, name: absent })).toBe(said)
+    expect(screen.queryByRole('heading', { name: 'Petr Tilcer' })).not.toBeInTheDocument()
+    expect(screen.queryByText(unread)).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove Petr Tilcer' })).not.toBeInTheDocument()
+
+    // Only an answer with the member ends it: they are a member of the household again.
+    server.members = [...server.members, removed]
+    server.on(route, () => Response.json(removed))
+    await lookAgain(opened, route, key)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Petr Tilcer' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Petr Tilcer' })).toBeInTheDocument()
+  })
+
+  // Nothing was kept of them, so nothing could be put back; and what stood in their place was
+  // taken down for *could not be read*, of a member the server had just said is not there.
+  it('stays not available where nothing of them was kept, and is not said to be unread', async () => {
+    const server = createServer()
+    server.on(route, () => problem(404, 'not_found'))
+    const opened = open(inHousehold.member(home, petr), server)
+    const said = await screen.findByRole('heading', { level: 1, name: absent })
+
+    server.on(route, away)
+    await lookAgain(opened, route, key)
+    expect(screen.getByRole('heading', { level: 1, name: absent })).toBe(said)
+    expect(screen.queryByText(unread)).not.toBeInTheDocument()
+  })
+
+  // What says *not available* through a failed re-read is the page that heard the `404`, and an
+  // owner who leaves the address and comes back to it is drawn a page that heard nothing. The
+  // query client holds nothing of the member by then, so that page has nothing to draw them
+  // from: they could not be read.
+  it('is not drawn from what this browser kept by a page opened at their address afterwards', async () => {
+    const server = createServer()
+    const opened = await page(petr, server)
+    server.members = server.members.filter((each) => each.user_id !== petr)
+    await lookAgain(opened, route, key)
+    await screen.findByRole('heading', { level: 1, name: absent })
+    server.on(route, away)
+    await lookAgain(opened, route, key)
+
+    // To the household's modules, and back.
+    await act(() => opened.router.navigate(inHousehold.modules(home)))
+    await screen.findByRole('heading', { level: 1, name: 'Modules' })
+    await act(() => opened.router.navigate(inHousehold.member(home, petr)))
+    expect(await screen.findByText(unread)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Petr Tilcer' })).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   })
 })

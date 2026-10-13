@@ -60,7 +60,9 @@ export function useSyncState(household: string): UseQueryResult<Report[]> {
 /**
  * Every client that synced the household, whose it is and the version it named, with the oldest
  * versions the deployment serves. An owner's to read: a member and a child profile are answered
- * `404`, so a screen asks only where its reader is an owner (`enabled`).
+ * `404`, so a screen asks only where its reader is an owner (`enabled`). What the query client
+ * held of the list is let go of as that answer arrives (api/query.ts, `letGo`): its screen
+ * takes the list down for it (Clients.tsx).
  */
 export function useClients(
   household: string,
@@ -77,6 +79,7 @@ export function useClients(
         }),
       ),
     enabled,
+    meta: { letGoWhereNotFound: true },
   })
 }
 
