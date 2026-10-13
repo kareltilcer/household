@@ -61,8 +61,8 @@ export interface PortraitProps {
   readonly address: string | null
   /**
    * Which answer of its read handed this the link (`useAnswered`, api/query.ts): a number that
-   * is another once the read is answered again, which is when a picture that did not load is
-   * asked for again.
+   * is another once the read is answered again, which is one of the two things a picture that
+   * did not load is asked for again for.
    */
   readonly answered: number
   /** The member's name, whose initials stand where the picture does not. */
@@ -73,13 +73,64 @@ export interface PortraitProps {
 }
 
 /**
- * What a picture that did not load failed under: it is not asked for again while all of it
- * stands.
+ * One asking for a picture: its link, the element that asks, and what it was begun under, which
+ * is what its failure is held against.
  */
-interface Missed {
+interface Asking {
   readonly address: string
+  /** Which answer of its read it was begun under. */
   readonly answered: number
-  readonly online: boolean
+  /** Whether the browser has said it had no connection, as the asking was begun or since. */
+  readonly away: boolean
+  /** Which element makes it: another for each asking that follows one that failed. */
+  readonly element: number
+  /** Whether it is made behind the initials: the link has failed, and has not loaded since. */
+  readonly behind: boolean
+  readonly failed: boolean
+}
+
+/**
+ * The asking a picture is drawn by: `kept`, or the one that what has happened since it was begun
+ * comes to.
+ */
+function askingOf(kept: Asking | null, address: string, answered: number, online: boolean): Asking {
+  if (kept?.address !== address) {
+    // Another link than the one kept: asked for in the picture's own place, and by the element
+    // that draws the link before it, where one does.
+    return {
+      address,
+      answered,
+      away: !online,
+      element: kept?.element ?? 0,
+      behind: false,
+      failed: false,
+    }
+  }
+  if (kept.failed && online && (kept.answered !== answered || kept.away)) {
+    return {
+      address,
+      answered,
+      away: false,
+      element: kept.element + 1,
+      behind: true,
+      failed: false,
+    }
+  }
+  return !online && !kept.away ? { ...kept, away: true } : kept
+}
+
+/**
+ * `kept` with what the element of `asking` says became of it. An element speaks of its own
+ * asking alone, and of that as it is kept by then: one that is no longer the asking drawn says
+ * nothing of the one that is.
+ */
+function settled(
+  kept: Asking | null,
+  asking: Asking,
+  outcome: Pick<Asking, 'behind'> | Pick<Asking, 'failed'>,
+): Asking | null {
+  const own = kept?.address === asking.address && kept.element === asking.element
+  return own ? { ...kept, ...outcome } : kept
 }
 
 /**
@@ -95,38 +146,46 @@ export function Portrait({ address, answered, name, tone = 1, className }: Portr
   // this another link, and one in the same five the same link (D-9): left to that, the initials
   // would stand for minutes after whatever kept the picture away had passed.
   //
-  // So it is asked for again where asking can succeed: once its read is answered again, the
-  // link it then holds being one the server would sign now, and when the browser's word on its
-  // connection changes. Either way: a picture may fail as the connection goes, before the
-  // browser says so, and asked for with none it fails at once, with nothing sent, under the
-  // word the return is then told by. Each is one asking, and none follows from a failure, so a
-  // link that has lapsed, which is refused every time, is asked for no oftener than that.
+  // So it is asked for again where asking can succeed: once something has happened since the
+  // asking that failed was begun. Its read was answered again, the link it then holds being
+  // one the server would sign now; or the browser said it had no connection, as the asking was
+  // begun or since, and says it has one again. Since it was begun, and not since its failure
+  // was told: a picture fails some time after whatever failed it, and by then its read may
+  // have been answered, or the connection be back. It is not asked for again while the browser
+  // says it has no connection, nor for a failure alone, so a link that has lapsed, which is
+  // refused every time, is asked for once for each answer and each return, and no oftener.
   //
-  // And it is asked for behind the initials, which stand until it has loaded: the element that
-  // loaded it is the one then drawn, and the picture is fetched once.
+  // Each asking that follows a failure is another element's. A browser asks nothing more of an
+  // element whose link did not load, and React may draw a failure together with what the
+  // picture is asked for again by: the element that failed, kept and hidden, would be an
+  // asking nobody made. And it is made behind the initials, which stand until it has loaded:
+  // the element that loaded it is the one then drawn, and the picture is fetched once.
   const online = useOnline()
-  const [missed, setMissed] = useState<Missed | null>(null)
+  const [kept, setKept] = useState<Asking | null>(null)
   const initials = <Avatar initials={initialsOf(name)} tone={tone} />
   if (address === null) return initials
-  const behind = missed?.address === address
-  const held = behind && missed.answered === answered && missed.online === online
+  const asking = askingOf(kept, address, answered, online)
+  // Kept as it is drawn, so that the next drawing holds what has happened against what this
+  // asking was begun under: the component is drawn again at once, by an asking that is kept.
+  if (asking !== kept) setKept(asking)
   return (
     <>
-      {behind ? initials : null}
-      {held ? null : (
+      {asking.behind || asking.failed ? initials : null}
+      {asking.failed ? null : (
         <img
+          key={asking.element}
           // Hidden by the attribute alone, which a class that says how its element is laid out
           // would undo: it takes its screen's class once it is drawn.
-          className={behind ? undefined : className}
-          hidden={behind}
+          className={asking.behind ? undefined : className}
+          hidden={asking.behind}
           src={address}
           // Decoration: the member's name is written beside it, or is the page's own title.
           alt=""
           onLoad={() => {
-            setMissed(null)
+            if (asking.behind) setKept((was) => settled(was, asking, { behind: false }))
           }}
           onError={() => {
-            setMissed({ address, answered, online })
+            setKept((was) => settled(was, asking, { failed: true }))
           }}
         />
       )}

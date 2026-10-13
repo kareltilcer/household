@@ -234,11 +234,14 @@ export function useNotFound(read: {
 }
 
 /**
- * Which answer the read filed under `key` holds: a count that is another each time the read is
- * answered, by the server or by a write that kept its answer there, and zero where it holds
- * none. An answer that says what the last one said draws nothing anew, the query client handing
- * its reader the data it had, so what is to be done again whenever the server has answered
- * reads this: a picture that did not load is asked for again by it (ui/Chip.tsx).
+ * Which answer the read filed under `key` holds: the query's own count of them, which is
+ * another each time the read is answered, by the server or by what the page itself keeps
+ * there, a write's answer or a change of its own to what it read, and zero for a query that
+ * nothing has answered. It is no word on whether the read holds anything: one that was let go
+ * of (`letGo`) keeps its count. An answer that says what the last one said draws nothing anew,
+ * the query client handing its reader the data it had, so what is to be done again whenever
+ * the server has answered reads this: a picture that did not load is asked for again by it
+ * (ui/Chip.tsx).
  *
  * By the whole key, and off the cache itself: it is no reader of the read, asks for nothing and
  * keeps nothing there. It is told as the query client tells its own readers, in the turn it
