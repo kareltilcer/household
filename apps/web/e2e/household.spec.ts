@@ -1194,6 +1194,65 @@ test('a change that another owner got in first is not laid over theirs: it is sa
   await expectAccessible(page)
 })
 
+/** The page is looked at again, as the query client hears it, on `window`: what it shows is read again. */
+function lookAgain(page: Page): Promise<void> {
+  return page.evaluate(() => {
+    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))
+  })
+}
+
+// The query client keeps a read's last answer through a failure. Under the `404` of a member
+// removed while their page stood open, a re-read that got no answer left the member this page
+// had read with nothing over it, and the page drew them again, an owner's controls with them
+// (ADR 0026). The household is its reader's still, and is drawn throughout. The browser is
+// online throughout: with no connection the re-read waits and fails at nothing.
+test('the page of a member removed while it is open stays not available through a server that gives no answer', async ({
+  page,
+  faults,
+}) => {
+  const { household } = await owner(page)
+  const young = await createChild(page, household, child)
+  await open(page, inHousehold.member(household, young))
+  await expect(title(page, child)).toBeVisible()
+  const remove = page.getByRole('button', { name: `Remove ${child}` })
+  await expect(remove).toBeVisible()
+
+  // Removed since, as from another owner's device: the page is looked at again, and what it
+  // shows is read again.
+  const removed = await call(page, 'DELETE', `/households/${household}/members/${young}`)
+  expect(removed.status).toBe(204)
+  await lookAgain(page)
+  const absent = 'This link doesn’t open anything here.'
+  await expect(title(page, absent)).toBeVisible()
+
+  // The server cannot be reached, and the page is looked at again. A request that got no answer
+  // is sent three times before the transport says so (@household/api, `retryingFetch`).
+  const address = `${apiPath}/households/${household}/members/${young}`
+  let unanswered = 0
+  page.on('requestfailed', (request) => {
+    if (new URL(request.url()).pathname === address) unanswered += 1
+  })
+  await page.route(`**${apiPath}/**`, (route) => route.abort('connectionfailed'))
+  await lookAgain(page)
+  await expect.poll(() => unanswered, { timeout: 10_000 }).toBe(3)
+  // A task for the failure to be heard in, and the frames a member's page would be drawn over.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)))
+  await frames(page, 6)
+  await expect(title(page, absent)).toBeVisible()
+  await expect(title(page, child)).toHaveCount(0)
+  await expect(remove).toHaveCount(0)
+  await expect(page.getByText('This member’s page did not load')).toHaveCount(0)
+  // The household is its reader's still: its navigation stands around what the page says.
+  await expect(sidebar(page)).toContainText(home)
+
+  // What the test took away is its own doing: each request that got no answer, as the browser
+  // says it, and what the replica's SDK says of an attempt of its own meanwhile.
+  expect(
+    faults.filter((fault) => !fault.includes('ERR_CONNECTION_FAILED') && !ofNoConnection(fault)),
+  ).toEqual([])
+  faults.length = 0
+})
+
 interface Second {
   /** The owner who made the household. */
   readonly first: Person
