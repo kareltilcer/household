@@ -6,7 +6,8 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clientName } from '../api/client.ts'
 import { inHousehold } from '../app/paths.ts'
-import type { Client, ClientList } from './data.ts'
+import { lookAgain } from '../household/testing.tsx'
+import { clientsKey, type Client, type ClientList } from './data.ts'
 import {
   accountOf,
   adam,
@@ -326,6 +327,50 @@ describe('who reads clients and versions', () => {
       expect(server.to(`GET /households/${home}`).length).toBeGreaterThan(1)
     })
     expect(server.to(`GET ${routes.clients}`)).toHaveLength(1)
+  })
+})
+
+// The list's own *not found* has the household read again, and that answer is what takes the
+// screen away. Where it gets none, the household stands as this browser kept it, an owner's,
+// and the list's `404` is all the server has said. The query client keeps a read's last answer
+// through a failure and holds only the last failure: the list asked for again of a server that
+// gave no answer was left with what was kept and nothing over it, and was drawn again.
+describe('the list the server said is not its reader’s, where the household could not be read again', () => {
+  const absent = 'This link doesn’t open anything here.'
+  const unread = 'The list of apps did not load'
+  const route = `GET ${routes.clients}`
+  const away = () => Promise.reject(new TypeError('offline'))
+
+  /** The list read, then refused of a server that gives the household no answer, then unanswered. */
+  async function refused() {
+    const server = listing([petrs])
+    const opened = await clients(server)
+    await rowOf('Petr Tilcer')
+    server.on(`GET /households/${home}`, away)
+    server.on(route, () => problem(404, 'not_found'))
+    await lookAgain(opened, route, clientsKey(home))
+    const said = await screen.findByRole('heading', { level: 1, name: absent })
+    server.on(route, away)
+    await lookAgain(opened, route, clientsKey(home))
+    return { ...opened, said }
+  }
+
+  it('stays not available through a re-read of the list that got no answer', async () => {
+    const { said } = await refused()
+    // The very heading: what stood in the list's place was not taken down.
+    expect(screen.getByRole('heading', { level: 1, name: absent })).toBe(said)
+    expect(screen.queryByText('Petr Tilcer')).not.toBeInTheDocument()
+    expect(screen.queryByText(unread)).not.toBeInTheDocument()
+  })
+
+  // The screen that heard the `404` is what says *not available* through a failed re-read. One
+  // opened at the address afterwards heard nothing, and has nothing kept to draw the list from.
+  it('is not drawn from what this browser kept by a screen opened at its address afterwards', async () => {
+    const { router } = await refused()
+    await act(() => router.navigate(inHousehold.home(home)))
+    await act(() => router.navigate(at))
+    expect(await screen.findByText(unread)).toBeInTheDocument()
+    expect(screen.queryByText('Petr Tilcer')).not.toBeInTheDocument()
   })
 })
 

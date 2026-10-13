@@ -6,6 +6,7 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { inHousehold } from '../../app/paths.ts'
 import { defaultsFor } from '../grants.ts'
+import { invitationsKey } from '../households.ts'
 import {
   accountOf,
   adam,
@@ -15,6 +16,7 @@ import {
   invitation,
   jana,
   klara,
+  lookAgain,
   memberOf,
   noContent,
   open,
@@ -367,6 +369,55 @@ describe('the invitations a household sent', () => {
     // He was here when it changed: he is told so, and not shown a screen that never was.
     expect(screen.getByText(sentence)).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1, name: 'Invitations' })).toBeInTheDocument()
+  })
+
+  // The list's own *not found* has the household read again, and that answer is what says where
+  // its reader stands from then on. Where it gets none, the household stands as this browser
+  // kept it, and the list's `404` is all the server has said. The query client keeps a read's
+  // last answer through a failure and holds only the last failure: asked for again of a server
+  // that gave no answer, the list was left with what was kept and nothing over it, and was
+  // drawn again.
+  describe('where the household could not be read again after the list’s own not found', () => {
+    const sentence =
+      'Your access changed, so this is no longer part of your app. Nobody deleted anything.'
+    const unread = 'The invitations did not load'
+    const route = `GET ${invitations}`
+    const away = () => Promise.reject(new TypeError('offline'))
+
+    /** Petr's list read, then refused of a server that gives the household no answer, then unanswered. */
+    async function refused() {
+      const server = createServer(accountOf(petr))
+      server.invitations = [waiting]
+      const opened = await list(server)
+      await rowOf('babicka@example.cz')
+      server.on(`GET /households/${home}`, away)
+      server.on(route, () => problem(404, 'not_found'))
+      await lookAgain(opened, route, invitationsKey(home))
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toHaveTextContent(sentence)
+      })
+      server.on(route, away)
+      await lookAgain(opened, route, invitationsKey(home))
+      return opened
+    }
+
+    it('goes on saying that access changed through a re-read of the list that got no answer', async () => {
+      await refused()
+      expect(screen.getByText(sentence)).toBeInTheDocument()
+      expect(screen.queryByText('babicka@example.cz')).not.toBeInTheDocument()
+      expect(screen.queryByText(unread)).not.toBeInTheDocument()
+    })
+
+    // The screen that heard the `404` is what goes on saying it. One opened at the address
+    // afterwards heard nothing, and has nothing kept to draw the list from.
+    it('draws no list from what this browser kept on a screen opened at its address afterwards', async () => {
+      const { router } = await refused()
+      await act(() => router.navigate(inHousehold.modules(home)))
+      await screen.findByRole('heading', { level: 1, name: 'Modules' })
+      await act(() => router.navigate(at))
+      expect(await screen.findByText(unread)).toBeInTheDocument()
+      expect(screen.queryByText('babicka@example.cz')).not.toBeInTheDocument()
+    })
   })
 })
 

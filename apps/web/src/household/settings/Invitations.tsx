@@ -40,9 +40,9 @@ import { Link } from 'react-router'
 import account from '../../account/Settings.module.css'
 import { readState, refocus, useFocusKept, useSaid } from '../../account/common.ts'
 import { useApi } from '../../api/ApiProvider.tsx'
-import { problemIn, unwrap } from '../../api/problem.ts'
+import { unwrap } from '../../api/problem.ts'
 import { useProblemText } from '../../api/problemText.ts'
-import { askedNow } from '../../api/query.ts'
+import { askedNow, useNotFound } from '../../api/query.ts'
 import { NotAvailable } from '../../app/NotAvailable.tsx'
 import { inHousehold } from '../../app/paths.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
@@ -245,8 +245,12 @@ function Sent() {
   const read = useInvitations(household.id, { enabled: standing.invitations })
   // The list's own refusal says the level was lowered since the household was read. The
   // household alone is read again, which is what tells the rest of the app; read again with it,
-  // the list would only be refused again.
-  const lowered = standing.invitations && problemIn(read.error)?.status === 404
+  // the list would only be refused again. Until the household says so the refusal stands,
+  // through a re-read of the list that got no answer: where the household could not be read
+  // again either, nothing else says it, and the list, which lets go of what it held at its
+  // refusal (data.ts), is not put back from what this browser kept.
+  const refusedList = useNotFound(read)
+  const lowered = standing.invitations && refusedList
   useEffect(() => {
     if (!lowered) return
     void queries.invalidateQueries({ queryKey: householdKey(household.id), exact: true })

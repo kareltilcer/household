@@ -61,8 +61,10 @@ export function createQueryClient({ onProblem }: QueryClientOptions = {}): Query
   return new QueryClient({
     queryCache: new QueryCache({
       // Told once a read has failed for good, its failure already held: what is let go here is
-      // gone before anything is drawn of it. By the status, as its reader draws it as not found
-      // (`useNotFound`).
+      // gone before anything is drawn of it. By the status, as the shell and a member's page
+      // read it (`useNotFound`): a `404` that is no word of the server's empties a read too, and
+      // a screen that tells by the code (`useNotTheirs`, household/data.ts) then says the read
+      // could not be made, which is so.
       onError: (error, query) => {
         report(error)
         if (query.meta?.letGoWhereNotFound === true && problemIn(error)?.status === 404) {
@@ -169,10 +171,14 @@ export interface QueryNotes extends Record<string, unknown> {
   /**
    * `true` has the query client let go of what the read holds as the server answers that it is
    * not found (`letGo`): a read whose *not found* says that nothing of it is its reader's any
-   * longer, a household's own (household/households.ts) and one member's
-   * (household/settings/member.ts). Its reader draws by `useNotFound`. A read that does not say
-   * so keeps its last answer through every failure, a `404` among them, and its screen draws by
-   * the failure it holds.
+   * longer, and whose screen takes down what it drew for that, a household's own
+   * (household/households.ts), one member's (household/settings/member.ts), and the three a
+   * screen of the settings reads alone, the invitations (household/data.ts), the storage picture
+   * (storage/data.ts) and the clients (health/data.ts). Its screen holds the word until the
+   * server answers with what was asked for (`useHeldUntilAnswered`). A read that does not say so
+   * keeps its last answer through every failure, a `404` among them: a screen that draws by its
+   * read's state until the household's own answer takes it away, billing's, would say *could
+   * not be read* for that turn.
    */
   readonly letGoWhereNotFound?: boolean
 }
@@ -184,29 +190,42 @@ declare module '@tanstack/react-query' {
 }
 
 /**
- * Whether the server's last word of `read` is that it is not found, as the screen that heard it
- * draws by it: from the `404` until the server answers with what was asked for. A read holds
- * only its last failure, so the `404` is read off it no longer once asking again has failed
- * another way; and a read that let go of what it held (`letGoWhereNotFound`) puts the `404`
- * away as it is asked for again. It stands through both: a re-read that is on its way, that got
- * no answer, or that the server failed or refused for now, has said nothing of what was asked
- * for, so neither a skeleton nor *could not be read* takes the place of what the server said
- * last, and nothing this browser kept does.
+ * `said`, the server's word that `read` is not found, as the screen that heard it draws by it:
+ * from when it is said until the server answers with what was asked for. A read holds only its
+ * last failure, so the word is read off it no longer once asking again has failed another way;
+ * and a read that let go of what it held (`letGoWhereNotFound`) puts its failure away as it is
+ * asked for again. It stands through both: a re-read that is on its way, that got no answer, or
+ * that the server failed or refused for now, has said nothing of what was asked for, so neither
+ * a skeleton nor *could not be read* takes the place of what the server said last, and nothing
+ * this browser kept does.
  *
- * It is the state of the screen that heard the `404`. One drawn at the address afterwards heard
- * nothing, and draws by what the read holds, which is why the read lets go of it too.
+ * It is the state of the screen that heard it. One drawn at the address afterwards heard
+ * nothing, and draws by what the read holds, which is why a read whose screen takes down what
+ * it drew for the word lets go of it too.
+ */
+export function useHeldUntilAnswered(
+  said: boolean,
+  read: { readonly status: QueryStatus },
+): boolean {
+  const [wasSaid, setWasSaid] = useState(false)
+  const answered = read.status === 'success'
+  if (said && !wasSaid) setWasSaid(true)
+  else if (answered && wasSaid) setWasSaid(false)
+  return said || (wasSaid && !answered)
+}
+
+/**
+ * Whether the server's last word of `read` is that it is not found, held until it answers with
+ * what was asked for (`useHeldUntilAnswered`). By the status, as the query client lets go by it:
+ * of a read whose `404` says nothing of where its reader stands, a household's own and one
+ * member's. A read whose `404` does is told by the problem's code (`useNotTheirs`,
+ * household/data.ts).
  */
 export function useNotFound(read: {
   readonly error: unknown
   readonly status: QueryStatus
 }): boolean {
-  // By the status, as the query client lets go by it.
-  const refused = problemIn(read.error)?.status === 404
-  const [wasRefused, setWasRefused] = useState(false)
-  const answered = read.status === 'success'
-  if (refused && !wasRefused) setWasRefused(true)
-  else if (answered && wasRefused) setWasRefused(false)
-  return refused || (wasRefused && !answered)
+  return useHeldUntilAnswered(problemIn(read.error)?.status === 404, read)
 }
 
 /** Whether a query's answer is written to this browser: one that succeeded, unless it says no. */

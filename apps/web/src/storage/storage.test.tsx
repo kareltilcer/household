@@ -8,6 +8,7 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { inHousehold } from '../app/paths.ts'
 import { defaultsFor } from '../household/grants.ts'
+import { usageKey } from '../household/households.ts'
 import { storageKey } from '../i18n/locale.ts'
 import {
   accountOf,
@@ -16,13 +17,14 @@ import {
   home,
   jana,
   klara,
+  lookAgain,
   memberOf,
   petr,
   problem,
   readBy,
   tilcerovi,
 } from '../household/testing.tsx'
-import type { StorageReport } from './data.ts'
+import { pictureKey, type StorageReport } from './data.ts'
 import {
   columnsOf,
   fullestDay,
@@ -713,6 +715,70 @@ describe('the storage picture, to a member who is no owner', () => {
     expect(said(await section('Right now'), 'Stored')).toHaveTextContent('19.4 GB')
     expect(document.body).not.toHaveTextContent(/EUR/)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  // A read's own *not found* has the household read again, and that answer is what says where
+  // its reader stands from then on. Where it gets none, the household stands as this browser
+  // kept it, and the read's `404` is all the server has said. The query client keeps a read's
+  // last answer through a failure and holds only the last failure: asked for again of a server
+  // that gave no answer, the read was left with what was kept and nothing over it, and what
+  // the `404` had taken down was drawn again.
+  describe('where the household could not be read again after a read’s own not found', () => {
+    const away = () => Promise.reject(new TypeError('offline'))
+    const unread = 'The storage figures did not load'
+
+    /** Petr's picture read, then refused of a server that gives the household no answer, then unanswered. */
+    async function refused() {
+      const server = createServer(accountOf(petr))
+      server.household = petrs
+      const opened = await storage(server)
+      await section('Right now')
+      server.on(household, away)
+      server.on(routes.picture, () => problem(404, 'not_found'))
+      await lookAgain(opened, routes.picture, pictureKey(home))
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toHaveTextContent(changed)
+      })
+      server.on(routes.picture, away)
+      await lookAgain(opened, routes.picture, pictureKey(home))
+      return opened
+    }
+
+    it('goes on saying that access changed through a re-read of the picture that got no answer', async () => {
+      await refused()
+      expect(screen.getByText(changed)).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Right now' })).not.toBeInTheDocument()
+      expect(screen.queryByText(unread)).not.toBeInTheDocument()
+    })
+
+    // The screen that heard the `404` is what goes on saying it. One opened at the address
+    // afterwards heard nothing, and has nothing kept to draw the picture from.
+    it('draws no picture from what this browser kept on a screen opened at its address afterwards', async () => {
+      const { router } = await refused()
+      await act(() => router.navigate(inHousehold.home(home)))
+      await act(() => router.navigate(at))
+      expect(await screen.findByText(unread)).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Right now' })).not.toBeInTheDocument()
+    })
+
+    it('keeps the money from an owner the server answered as one no longer, through a re-read that got no answer', async () => {
+      const server = createServer()
+      const opened = await storage(server)
+      await section('This month')
+      server.on(household, away)
+      server.on(routes.usage, () => problem(404, 'not_found'))
+      await lookAgain(opened, routes.usage, usageKey(home))
+      await waitFor(() => {
+        expect(screen.queryByRole('region', { name: 'This month' })).not.toBeInTheDocument()
+      })
+
+      server.on(routes.usage, away)
+      await lookAgain(opened, routes.usage, usageKey(home))
+      expect(screen.queryByRole('region', { name: 'This month' })).not.toBeInTheDocument()
+      expect(document.body).not.toHaveTextContent(/EUR/)
+      // The picture is a member's to read, and is drawn as one's.
+      expect(said(await section('Right now'), 'Stored')).toHaveTextContent('19.4 GB')
+    })
   })
 })
 

@@ -9,12 +9,19 @@
 // they changed who holds what with no connection. Every write of these screens is asked at once
 // (`askedNow`, api/query.ts), and says so where the server could not be reached.
 import type { ApiClient, components } from '@household/api'
-import { queryOptions, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
+import {
+  queryOptions,
+  useQuery,
+  useQueryClient,
+  type QueryStatus,
+  type UseQueryResult,
+} from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo } from 'react'
 import { catalogLocale, pseudoLocale, pseudolocalize } from '@household/i18n/lazy'
 import { sameId } from '../account/common.ts'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
+import { useHeldUntilAnswered } from '../api/query.ts'
 import { useFormat, useI18n } from '../i18n/I18nProvider.tsx'
 import { useMe } from '../session/SessionProvider.tsx'
 import {
@@ -89,7 +96,10 @@ export function useReader(household: Pick<Household, 'id' | 'my_role'>): Reader 
 
 /**
  * The invitations a household sent, newest first, in every status. A member who holds `none` on
- * household settings is answered `404`: the invitations are what `view` on it unlocks.
+ * household settings is answered `404`: the invitations are what `view` on it unlocks. What the
+ * query client held of them is let go of as that answer arrives (api/query.ts, `letGo`): the
+ * list takes down what it drew for it (settings/Invitations.tsx), and the members' screen
+ * counts none that wait (settings/Members.tsx).
  */
 export function invitationsQuery(api: ApiClient, household: string) {
   return queryOptions({
@@ -101,6 +111,7 @@ export function invitationsQuery(api: ApiClient, household: string) {
           signal,
         }),
       ).items ?? [],
+    meta: { letGoWhereNotFound: true },
   })
 }
 
@@ -269,6 +280,23 @@ export function writes(household: Pick<Household, 'entitlement'>): boolean {
  */
 export function notTheirs(read: { readonly error: unknown }): boolean {
   return problemIn(read.error)?.code === 'not_found'
+}
+
+/**
+ * `notTheirs`, as a screen that takes down what it drew for it draws by it: held from the
+ * answer until the server answers with what was asked for (api/query.ts,
+ * `useHeldUntilAnswered`). The household is read again at that answer (`useRereadWhereRefused`),
+ * and what it then says of its reader is what keeps the screen away. Where it gets no answer
+ * the household stands as this browser kept it, and the read's last failure is all that says
+ * *not theirs*: read off that, the next re-read that failed another way would put back what was
+ * taken down. A screen that takes nothing down for it, and draws what it kept until the
+ * household's own answer takes the screen away, reads `notTheirs` itself.
+ */
+export function useNotTheirs(read: {
+  readonly error: unknown
+  readonly status: QueryStatus
+}): boolean {
+  return useHeldUntilAnswered(notTheirs(read), read)
 }
 
 /**
