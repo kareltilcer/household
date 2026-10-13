@@ -1,4 +1,4 @@
-import { dehydrate, MutationObserver, onlineManager } from '@tanstack/react-query'
+import { dehydrate, MutationObserver, onlineManager, QueryObserver } from '@tanstack/react-query'
 import type { PersistedClient } from '@tanstack/react-query-persist-client'
 import type { UseStore } from 'idb-keyval'
 import { renderHook } from '@testing-library/react'
@@ -273,6 +273,90 @@ describe('the query client', () => {
       'update_required',
       'csrf_failed',
     ])
+  })
+
+  /** A reader of `key` that is answered with `answers`, one for each asking, each a failure. */
+  function failing(
+    client: ReturnType<typeof createQueryClient>,
+    key: readonly string[],
+    answers: Error[],
+    meta?: { readonly letGoWhereNotFound: true },
+  ) {
+    const reader = new QueryObserver(client, {
+      queryKey: key,
+      queryFn: () => Promise.reject(answers.shift() ?? new Error('asked once too often')),
+      ...(meta === undefined ? {} : { meta }),
+    })
+    const leave = reader.subscribe(() => undefined)
+    const failed = () =>
+      vi.waitFor(() => {
+        expect(client.getQueryState(key)).toMatchObject({ status: 'error', fetchStatus: 'idle' })
+      })
+    return { reader, leave, failed }
+  }
+
+  /** Read a minute ago: what a reader that arrives asks for again. */
+  const read = () => ({ updatedAt: Date.now() - 60_000 })
+
+  // The query client keeps the last answer through a failure. Left under the server's *not
+  // found*, the next re-read that failed another way would leave it with no *not found* over
+  // it: a household its member was taken out of, drawn again as this browser kept it.
+  it('lets go of what a read held once the server says it is not found, where the read says to: a failure after it puts nothing back', async () => {
+    const client = createQueryClient()
+    client.mount()
+    const key = ['households', 'a1']
+    const members = [{ display_name: 'a name' }]
+    client.setQueryData(key, { id: 'a1' }, read())
+    client.setQueryData([...key, 'members'], members, read())
+    client.setQueryData(['households', 'a2'], { id: 'a2' }, read())
+    const { reader, leave, failed } = failing(
+      client,
+      key,
+      [thrown(404, 'not_found'), new TypeError('network')],
+      { letGoWhereNotFound: true },
+    )
+    await failed()
+    expect(problemIn(client.getQueryState(key)?.error)?.status).toBe(404)
+    expect(client.getQueryData(key)).toBeUndefined()
+    // What is filed under it is its screens' to draw, which whoever reads it takes away: it is
+    // left, since one of them drawn again before that reader was told would ask for it anew.
+    expect(client.getQueryData([...key, 'members'])).toBe(members)
+    // Another household's own answer is nothing of this one's.
+    expect(client.getQueryData(['households', 'a2'])).toEqual({ id: 'a2' })
+
+    // Asked again, of a server that cannot be reached: nothing is said of it, and nothing is back.
+    await reader.refetch()
+    expect(client.getQueryState(key)?.error).toBeInstanceOf(TypeError)
+    expect(client.getQueryData(key)).toBeUndefined()
+    leave()
+    client.unmount()
+  })
+
+  // The rule is for a read that says so, a household's own. Any other keeps its last answer
+  // under a `404`, which its screen draws by; and the one that says so keeps it under every
+  // failure that is no `404`, which has said nothing of what was read.
+  it('lets go of nothing a read held under any other failure, nor under a not found where the read does not say to', async () => {
+    const client = createQueryClient()
+    client.mount()
+    const plain = ['households', 'a1', 'members', 'm1']
+    client.setQueryData(plain, { id: 'm1' }, read())
+    const unsaid = failing(client, plain, [thrown(404, 'not_found')])
+    await unsaid.failed()
+    expect(client.getQueryData(plain)).toEqual({ id: 'm1' })
+
+    const key = ['households', 'a2']
+    client.setQueryData(key, { id: 'a2' }, read())
+    const said = failing(client, key, [thrown(403, 'forbidden'), new TypeError('network')], {
+      letGoWhereNotFound: true,
+    })
+    await said.failed()
+    expect(client.getQueryData(key)).toEqual({ id: 'a2' })
+    await said.reader.refetch()
+    expect(client.getQueryState(key)?.error).toBeInstanceOf(TypeError)
+    expect(client.getQueryData(key)).toEqual({ id: 'a2' })
+    unsaid.leave()
+    said.leave()
+    client.unmount()
   })
 })
 

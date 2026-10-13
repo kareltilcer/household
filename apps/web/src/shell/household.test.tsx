@@ -1,6 +1,13 @@
-import { focusManager, onlineManager } from '@tanstack/react-query'
+import type { Replica } from '@household/sync'
+import {
+  focusManager,
+  onlineManager,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useEffect } from 'react'
 import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createWebClient } from '../api/client.ts'
@@ -8,19 +15,32 @@ import { Providers } from '../app/App.tsx'
 import { inHousehold, paths } from '../app/paths.ts'
 import { routes } from '../app/routes.tsx'
 import { HouseholdContext } from '../household/HouseholdContext.tsx'
-import { lastHousehold, rememberHousehold, type Household } from '../household/households.ts'
+import {
+  householdKey,
+  lastHousehold,
+  rememberHousehold,
+  type Household,
+} from '../household/households.ts'
+import { openHouseholdReplica, type Opened } from '../sync/open.ts'
 import { SyncFixture, type Sync } from '../sync/ReplicaProvider.tsx'
 import { home, household, me, notFound, signedIn } from '../test/member.ts'
 import { draw, loaded } from '../test/render.tsx'
 import { HouseholdBars } from './HouseholdBars.tsx'
 
+// The file that opens a replica, with the sync library and its SDK behind it, is no part of
+// these tests: what the shell asks it to open is counted, in a browser that has what a replica
+// needs (`withReplicas`). jsdom has none of it, and every other test here opens none.
+vi.mock('../sync/open.ts', () => ({ openHouseholdReplica: vi.fn() }))
+
 const origin = 'https://household.example'
 
 // A test that says the page is looked at again leaves the next one a page nobody has looked at,
-// and one that takes the connection away leaves the next one a browser that has it.
+// one that takes the connection away leaves the next one a browser that has it, and one that
+// gave the browser its locks leaves the next one jsdom's, which has none.
 afterEach(() => {
   focusManager.setFocused(undefined)
   onlineManager.setOnline(true)
+  Reflect.deleteProperty(window.navigator, 'locks')
 })
 const cottage = '01900000-0000-7000-8000-0000000000a2'
 
@@ -44,6 +64,20 @@ interface Server {
   readonly households?: () => Response | undefined
   /** Told of each request as it is asked, before it is answered. */
   readonly asking?: (path: string) => void
+  /**
+   * Whether the server cannot be reached, asked as each request leaves: one that then leaves
+   * gets no answer, whatever it asks for.
+   */
+  readonly away?: () => boolean
+}
+
+/** Hands `to` the page's own query client, which holds what the page read as the page holds it. */
+function Reads({ to }: { readonly to: (queries: QueryClient) => void }) {
+  const queries = useQueryClient()
+  useEffect(() => {
+    to(queries)
+  }, [queries, to])
+  return null
 }
 
 /** What the platform told a suspended household of why: its own words, shown as written. */
@@ -66,6 +100,7 @@ function open(
     household: answer,
     households,
     asking,
+    away,
   }: Server = {},
 ) {
   const asked: string[] = []
@@ -77,6 +112,7 @@ function open(
       const path = new URL(request.url).pathname.replace('/api/v1', '')
       asked.push(path)
       asking?.(path)
+      if (away?.() === true) return Promise.reject(new TypeError('offline'))
       if (path === '/me') return Promise.resolve(Response.json(me))
       if (path === '/households') {
         return Promise.resolve(
@@ -108,12 +144,102 @@ function open(
     },
   })
   const router = createMemoryRouter(routes, { initialEntries: [address] })
+  const held: QueryClient[] = []
   render(
     <Providers persist={false} client={client} cookies={signedIn}>
+      <Reads
+        to={(queries) => {
+          held.push(queries)
+        }}
+      />
       <RouterProvider router={router} />
     </Providers>,
   )
-  return { router, asked }
+  const reads = (): QueryClient => {
+    const [queries] = held
+    if (queries === undefined) throw new Error('the page has not been drawn yet')
+    return queries
+  }
+  return { router, asked, reads }
+}
+
+type Page = Pick<ReturnType<typeof open>, 'asked' | 'reads'>
+
+/**
+ * Does `doing`, which has `id`'s own address asked for, and waits until that has been answered,
+ * or has got no answer, and whoever reads it has been told: the query client tells its readers
+ * a turn after it holds an answer. What is drawn then is what the answer came to, so a test may
+ * say what is not drawn.
+ */
+async function asksAgain({ asked, reads }: Page, id: string, doing: () => unknown): Promise<void> {
+  const asks = () => asked.filter((path) => path === `/households/${id}`).length
+  const before = asks()
+  // Drawn before the wait begins: a shell that `doing` opens asks as it is drawn.
+  await act(async () => {
+    await doing()
+  })
+  await act(async () => {
+    await vi.waitFor(() => {
+      expect(asks()).toBeGreaterThan(before)
+      expect(reads().isFetching({ queryKey: householdKey(id), exact: true })).toBe(0)
+    })
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0)
+    })
+  })
+}
+
+/** Says the page is looked at again, which has what it shows read again (`asksAgain`). */
+function lookAgain(page: Page, id: string): Promise<void> {
+  return asksAgain(page, id, () => {
+    focusManager.setFocused(false)
+    focusManager.setFocused(true)
+  })
+}
+
+/** A replica as far as the shell reads one: connected, with nothing that needs its member. */
+const replica: Opened = {
+  replica: {
+    db: { currentStatus: { connected: true }, registerListener: () => () => undefined },
+    connect: () => Promise.resolve(),
+    close: () => Promise.resolve(),
+    resume: () => undefined,
+  } as unknown as Replica,
+  needsConnection: () => false,
+  watchInbox: (listener) => {
+    listener([])
+    return () => undefined
+  },
+}
+
+/**
+ * Gives the browser what a replica needs, which jsdom has none of: its storage, its workers, and
+ * Web Locks that are this tab's for the asking. It answers with what says the households whose
+ * replica the shell has opened since, one for each opening. A replica is opened some turns
+ * after the shell that keeps it is drawn, its lock taken as it is drawn and the file that opens
+ * it imported then: what is said waits until every lock taken has come to its opening.
+ */
+function withReplicas(): () => Promise<string[]> {
+  let taken = 0
+  Object.defineProperty(window.navigator, 'locks', {
+    configurable: true,
+    value: {
+      request: (_name: string, _options: unknown, hold: (lock: object) => Promise<unknown>) => {
+        taken += 1
+        return hold({})
+      },
+    },
+  })
+  vi.stubGlobal('Worker', () => undefined)
+  vi.stubGlobal('indexedDB', {})
+  const opens = vi.mocked(openHouseholdReplica)
+  opens.mockImplementation(() => Promise.resolve(replica))
+  return async () => {
+    await waitFor(() => {
+      expect(opens.mock.calls).toHaveLength(taken)
+    })
+    return opens.mock.calls.map(([options]) => options.household)
+  }
 }
 
 // The router draws nothing of a shell until every file its address names has come, the shell's
@@ -567,6 +693,135 @@ describe('a suspended household’s lockout', () => {
       }),
     ).toBeInTheDocument()
     expect(screen.queryByText(notice)).not.toBeInTheDocument()
+  })
+})
+
+// The server's *not found* is its last word of a household until it answers otherwise. The query
+// client keeps the last answer it was given through a failure, so a household read while it was
+// its member's, then answered `404`, then asked for again of a server that gave no answer, was
+// left with the kept answer and nothing over it: drawn again as its member's, its replica
+// opened. A re-read that got no answer has said nothing of the household.
+describe('a household the server said is not found, asked for again of a server that gives no answer', () => {
+  const absent = 'This link doesn’t open anything here.'
+  const unread = 'This household could not be read'
+
+  it('stays not available, whatever this browser kept of it, and opens its replica once more only when the server says it is there', async () => {
+    const opened = withReplicas()
+    const memberships = [home, cottage]
+    const server = { member: true, away: false }
+    const page = open(inHousehold.home(home), {
+      memberships,
+      household: (id) => {
+        const found = known[id]
+        return found === undefined || (id === home && !server.member)
+          ? notFound()
+          : Response.json(found)
+      },
+      away: () => server.away,
+    })
+    await screen.findByRole('navigation', { name: 'Household' })
+    expect(await opened()).toEqual([home])
+
+    // Taken out of it since: the page is looked at again, and what it shows is read again.
+    server.member = false
+    memberships.splice(0, 1)
+    await lookAgain(page, home)
+    expect(await screen.findByRole('heading', { level: 1, name: absent })).toBeInTheDocument()
+
+    // The server cannot be reached, and the page is looked at again.
+    server.away = true
+    await lookAgain(page, home)
+    expect(screen.getByRole('heading', { level: 1, name: absent })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Household' })).not.toBeInTheDocument()
+    expect(screen.getByRole('banner')).not.toHaveTextContent('Tilcerovi')
+    expect(await opened()).toEqual([home])
+
+    // Only an answer that is no `404` ends it: they are a member of it again.
+    server.away = false
+    server.member = true
+    memberships.unshift(home)
+    await lookAgain(page, home)
+    expect(await screen.findByRole('navigation', { name: 'Household' })).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toHaveTextContent('Tilcerovi')
+    expect(await opened()).toEqual([home, home])
+  })
+
+  it('stands as the lockout of a household suspended since this browser read it, with the focus on it', async () => {
+    const opened = withReplicas()
+    const suspended: string[] = []
+    const server = { away: false }
+    const page = open(inHousehold.home(cottage), { suspended, away: () => server.away })
+    await screen.findByRole('navigation', { name: 'Household' })
+    expect(await opened()).toEqual([cottage])
+
+    suspended.push(cottage)
+    await lookAgain(page, cottage)
+    const title = 'Chata is suspended'
+    await screen.findByRole('heading', { level: 1, name: title })
+    const out = within(screen.getByRole('main')).getByRole('button', { name: 'Sign out' })
+    out.focus()
+
+    server.away = true
+    await lookAgain(page, cottage)
+    expect(screen.getByRole('heading', { level: 1, name: title })).toBeInTheDocument()
+    // The very control, and the focus still on it: the lockout was not taken down.
+    expect(within(screen.getByRole('main')).getByRole('button', { name: 'Sign out' })).toBe(out)
+    expect(out).toHaveFocus()
+    expect(screen.queryByRole('navigation', { name: 'Household' })).not.toBeInTheDocument()
+    expect(screen.getByRole('banner')).not.toHaveTextContent('Chata')
+    expect(await opened()).toEqual([cottage])
+  })
+
+  // Nothing was kept of it, so nothing could be put back; and what stood in its place was taken
+  // down for *could not be read*, of a household the server had just said is not there.
+  it('stays not available where nothing of it was kept, and is not said to be unread', async () => {
+    const stranger = '01900000-0000-7000-8000-0000000000ff'
+    const server = { away: false }
+    const page = open(inHousehold.home(stranger), { away: () => server.away })
+    const said = await screen.findByRole('heading', { level: 1, name: absent })
+
+    server.away = true
+    await lookAgain(page, stranger)
+    expect(screen.getByRole('heading', { level: 1, name: absent })).toBe(said)
+    expect(screen.queryByRole('heading', { name: unread })).not.toBeInTheDocument()
+  })
+
+  // What says *not available* through a failed re-read is the shell that heard the `404`, and a
+  // member who leaves the address and comes back to it is drawn a shell that heard nothing. The
+  // query client holds nothing of the household by then, so that shell has nothing to draw it
+  // from: it could not be read.
+  it('is not drawn from what this browser kept by a shell opened at its address afterwards', async () => {
+    const opened = withReplicas()
+    const memberships = [home, cottage]
+    const server = { member: true, away: false }
+    const page = open(inHousehold.home(home), {
+      memberships,
+      household: (id) => {
+        const found = known[id]
+        return found === undefined || (id === home && !server.member)
+          ? notFound()
+          : Response.json(found)
+      },
+      away: () => server.away,
+    })
+    await screen.findByRole('navigation', { name: 'Household' })
+    expect(await opened()).toEqual([home])
+    server.member = false
+    memberships.splice(0, 1)
+    await lookAgain(page, home)
+    await screen.findByRole('heading', { level: 1, name: absent })
+    server.away = true
+    await lookAgain(page, home)
+
+    // To another household of theirs, which cannot be read either, and back.
+    await act(() => page.router.navigate(inHousehold.home(cottage)))
+    await screen.findByRole('heading', { level: 1, name: unread })
+    await asksAgain(page, home, () => page.router.navigate(inHousehold.home(home)))
+    expect(page.router.state.location.pathname).toBe(inHousehold.home(home))
+    expect(screen.getByRole('heading', { level: 1, name: unread })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Household' })).not.toBeInTheDocument()
+    expect(screen.getByRole('banner')).not.toHaveTextContent('Tilcerovi')
+    expect(await opened()).toEqual([home])
   })
 })
 
