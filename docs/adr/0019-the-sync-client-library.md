@@ -168,11 +168,26 @@ before a file added meanwhile; a refusal of the file itself is kept with its cod
 and the server marks the row; a refusal for the household's state (`entitlement_*`) is not one, nor is
 one that carries no problem of the API's, sent by a proxy or a host that never judged the file, nor one
 of the build that sent it (`update_required`, which the API answers every request of a build older than
-it serves with, and which judges no file, so that the app its member updates to sends it), and the file
-waits, its bytes and its row. After such a refusal the queue sends no file for fifteen minutes, or
+it serves with, and which judges no file, so that the app its member updates to sends it), nor the
+API's `404`, which every route of a suspended household answers (D-115) while its rows leave the
+replica, to fill it again when the suspension is lifted, and the file waits, its bytes and its row.
+After a refusal the file waits through, the queue sends no file for fifteen minutes, or
 until the app's `resume()`, and after a `429` none until its `Retry-After`, a day at most: a household
 in grace writes and does not upload for days, a run starts at every checkpoint and every upload, and
 each try sends the whole file. The wait is kept in memory, so a replica opened again tries once more.
+The wait after the API's `404` (`not_found`, as the push reads it) lasts no longer than the replica
+holds that file's row as it did: the API answers the same for a row another member deleted and for one
+its member can no longer see, the checkpoint that says which may land after the answer, and a
+run that finds the row a tombstone, or gone from the replica, ends the wait, so that the files behind
+are not kept a quarter of an hour for an answer that was never theirs; where the row went with every
+other of a suspended household's, no file has one left to be sent for. Such a `404` is the row's own, and the
+file kept as refused with it, the run going on to the next, only where the replica holds the row as a
+tombstone when it is answered: a row its household deleted stays in its streams, where one its member
+can no longer see leaves (FR-SY7), and left waiting its file would be answered so at every run, before
+any file behind it. A delete can be undone inside its module's window (PRD 03 §5), and a row that comes
+back after that answer has no file on the device to be sent: the queue knows no module's window and
+waits none out, so the route of a module whose rows come back decides whether it takes a file for one
+meanwhile (ADR 0029, item 30).
 A refused create the member discards takes its waiting file with it, its row being one the server will never hold. A file
 whose bytes the device no longer holds, lost with its storage or in a run that ended between deleting
 them and forgetting the row, is kept as refused too (`bytes_lost`), and one it cannot read is passed
@@ -207,6 +222,11 @@ download losing nothing queued; the web build passes the same in Playwright's Ch
 | **Counting an entity's redacted projection as an entity type of its own** | The contract's entity types are module-qualified entities; counting each id once over both tables is what the server can compute from the entity's rows alone |
 | **Comparing every entity type the server syncs, reported or not** | An app older than the server subscribes to fewer streams, and would be told to download itself again for ever |
 | **PowerSync's attachment queue** (`AttachmentQueue`, alpha) | It manages downloads and an archive the platform does not want, behind a remote storage interface that does not fit a module's upload route and the server marking the row; its storage adapters are used |
+| **A waiting file dropped at the API's `404`**, as at a refusal of the file | A `404` says what its caller cannot see, never what a file is. Every route of a suspended household answers it (D-115), and a photo taken offline and still waiting then would be deleted from the device at the next try, and be gone when the suspension is lifted |
+| **The app telling the queue, from its member's list of households, what a `404` was** | The list tells a suspended household from one its member is no longer in, and the queue does the same for both: the file waits, and goes with the replica where the app removes that. What the queue has to tell is a row its household deleted, whose file would stand at its head and be answered `404` at every run; the replica holds such a row as a tombstone, and needs nobody's word for it |
+| **A file answered `404` passed over, and the files behind it sent** | In a suspended household each of them would be sent whole, at every run, to be answered the same |
+| **A `404`'s wait seen out whatever the replica is told meanwhile** | A device back online sends its queue and then its files, and PowerSync applies the checkpoint that holds what changed while it was away only once the queue has drained: a row another member deleted meanwhile may be answered `404` before the replica holds its tombstone, and every file of the household would then wait a quarter of an hour, and until the run that follows it, on an answer that was one row's |
+| **A tombstone's file kept, for a delete that may be undone**, or dropped on the replica's word, unsent | The window a delete can be undone in is its module's, and the queue knows none: kept for every deleted row, the bytes would stay on the device, listed as waiting, until the app removed them or its member signed out, for an undo that mostly never comes. And the tombstone alone may be older than an undo the replica has not been told of, so the file is sent once more and dropped only at the server's own `404`. What an undo after that finds is left to the route whose rows can come back |
 | **One TypeScript program for every build** | The DOM's, Node's and React Native's globals cannot be one program's, and merged they hide exactly the React Native gaps a separate check found |
 
 ## Consequences
