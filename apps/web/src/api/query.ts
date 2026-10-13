@@ -172,9 +172,9 @@ export interface QueryNotes extends Record<string, unknown> {
    * `true` has the query client let go of what the read holds as the server answers that it is
    * not found (`letGo`): a read whose *not found* says that nothing of it is its reader's any
    * longer, and whose screen takes down what it drew for that, a household's own
-   * (household/households.ts), one member's (household/settings/member.ts), and the three a
-   * screen of the settings reads alone, the invitations (household/data.ts), the storage picture
-   * (storage/data.ts) and the clients (health/data.ts). Its screen holds the word until the
+   * (household/households.ts), one member's (household/settings/member.ts), and three of the
+   * settings', the invitations (household/data.ts), the storage picture (storage/data.ts) and
+   * the clients (health/data.ts). Its screen holds the word until the
    * server answers with what was asked for (`useHeldUntilAnswered`). A read that does not say so
    * keeps its last answer through every failure, a `404` among them: a screen that draws by its
    * read's state until the household's own answer takes it away, billing's, would say *could
@@ -210,16 +210,18 @@ export function useHeldUntilAnswered(
   const [wasSaid, setWasSaid] = useState(false)
   const answered = read.status === 'success'
   if (said && !wasSaid) setWasSaid(true)
-  else if (answered && wasSaid) setWasSaid(false)
+  // Never while it is being said: a caller that said it of a read that is answered would have
+  // the two lines undo each other at every render.
+  else if (!said && answered && wasSaid) setWasSaid(false)
   return said || (wasSaid && !answered)
 }
 
 /**
  * Whether the server's last word of `read` is that it is not found, held until it answers with
  * what was asked for (`useHeldUntilAnswered`). By the status, as the query client lets go by it:
- * of a read whose `404` says nothing of where its reader stands, a household's own and one
- * member's. A read whose `404` does is told by the problem's code (`useNotTheirs`,
- * household/data.ts).
+ * so the shell reads a household's `404`, a member's page its member's, and the invitations
+ * their list's. The clients and the storage screen tell theirs by the problem's code
+ * (`useNotTheirs`, household/data.ts).
  */
 export function useNotFound(read: {
   readonly error: unknown

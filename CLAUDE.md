@@ -399,7 +399,8 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   which nothing else takes away, its reader being in the household still. And a screen of the
   settings that takes down what it drew for a `404` of its own, the invitations, the storage
   picture and the clients, holds that `404` until the server answers with what was asked for
-  (`useNotTheirs`, `household/data.ts`) and never reads it off the failure its read holds,
+  (`useNotTheirs`, `household/data.ts`, by the problem's code; the invitations tell theirs by
+  the status, `useNotFound`) and never reads it off the failure its read holds,
   which the next failure replaces: its own `404` has the household read again, and where that
   got no answer nothing else says it. A read that is one such screen's lets go as well. One
   whose screens draw by it until the household's answer takes them away, billing's, keeps what

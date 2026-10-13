@@ -355,12 +355,18 @@ describe('the list the server said is not its reader’s, where the household co
     return { ...opened, said }
   }
 
-  it('stays not available through a re-read of the list that got no answer', async () => {
-    const { said } = await refused()
+  it('stays not available through a re-read of the list that got no answer, until the server answers with the list', async () => {
+    const opened = await refused()
     // The very heading: what stood in the list's place was not taken down.
-    expect(screen.getByRole('heading', { level: 1, name: absent })).toBe(said)
+    expect(screen.getByRole('heading', { level: 1, name: absent })).toBe(opened.said)
     expect(screen.queryByText('Petr Tilcer')).not.toBeInTheDocument()
     expect(screen.queryByText(unread)).not.toBeInTheDocument()
+
+    // Only an answer with the list ends it: its reader is an owner, as the household said.
+    listing([petrs], undefined, opened.server)
+    await lookAgain(opened, route, clientsKey(home))
+    expect(await rowOf('Petr Tilcer')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: absent })).not.toBeInTheDocument()
   })
 
   // The screen that heard the `404` is what says *not available* through a failed re-read. One

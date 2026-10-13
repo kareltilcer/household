@@ -8,7 +8,7 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { inHousehold } from '../app/paths.ts'
 import { defaultsFor } from '../household/grants.ts'
-import { usageKey } from '../household/households.ts'
+import { subscriptionKey, usageKey } from '../household/households.ts'
 import { storageKey } from '../i18n/locale.ts'
 import {
   accountOf,
@@ -761,24 +761,31 @@ describe('the storage picture, to a member who is no owner', () => {
       expect(screen.queryByRole('region', { name: 'Right now' })).not.toBeInTheDocument()
     })
 
-    it('keeps the money from an owner the server answered as one no longer, through a re-read that got no answer', async () => {
-      const server = createServer()
-      const opened = await storage(server)
-      await section('This month')
-      server.on(household, away)
-      server.on(routes.usage, () => problem(404, 'not_found'))
-      await lookAgain(opened, routes.usage, usageKey(home))
-      await waitFor(() => {
-        expect(screen.queryByRole('region', { name: 'This month' })).not.toBeInTheDocument()
-      })
+    // Either of an owner's two reads says it, the month as it will be billed or the plan.
+    it.each([
+      ['the month', routes.usage, usageKey(home)],
+      ['the plan', routes.plan, subscriptionKey(home)],
+    ])(
+      'keeps the money from an owner the server answered as one no longer of %s, through a re-read that got no answer',
+      async (_read, route, key) => {
+        const server = createServer()
+        const opened = await storage(server)
+        await section('This month')
+        server.on(household, away)
+        server.on(route, () => problem(404, 'not_found'))
+        await lookAgain(opened, route, key)
+        await waitFor(() => {
+          expect(screen.queryByRole('region', { name: 'This month' })).not.toBeInTheDocument()
+        })
 
-      server.on(routes.usage, away)
-      await lookAgain(opened, routes.usage, usageKey(home))
-      expect(screen.queryByRole('region', { name: 'This month' })).not.toBeInTheDocument()
-      expect(document.body).not.toHaveTextContent(/EUR/)
-      // The picture is a member's to read, and is drawn as one's.
-      expect(said(await section('Right now'), 'Stored')).toHaveTextContent('19.4 GB')
-    })
+        server.on(route, away)
+        await lookAgain(opened, route, key)
+        expect(screen.queryByRole('region', { name: 'This month' })).not.toBeInTheDocument()
+        expect(document.body).not.toHaveTextContent(/EUR/)
+        // The picture is a member's to read, and is drawn as one's.
+        expect(said(await section('Right now'), 'Stored')).toHaveTextContent('19.4 GB')
+      },
+    )
   })
 })
 
