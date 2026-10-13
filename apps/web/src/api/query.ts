@@ -7,6 +7,7 @@ import {
   QueryCache,
   QueryClient,
   type Query,
+  type QueryStatus,
 } from '@tanstack/react-query'
 import type {
   PersistedClient,
@@ -15,6 +16,7 @@ import type {
 } from '@tanstack/react-query-persist-client'
 import type { ApiProblem, UnreadableProblem } from '@household/api'
 import { createStore, del, get, set, type UseStore } from 'idb-keyval'
+import { useState } from 'react'
 import { isRetryable, problemIn } from './problem.ts'
 
 /** How long a read is kept in this browser, and so how long the cache holds one unobserved. */
@@ -59,8 +61,8 @@ export function createQueryClient({ onProblem }: QueryClientOptions = {}): Query
   return new QueryClient({
     queryCache: new QueryCache({
       // Told once a read has failed for good, its failure already held: what is let go here is
-      // gone before anything is drawn of it. By the status, as the shell reads a household as
-      // gone (shell/HouseholdShell.tsx).
+      // gone before anything is drawn of it. By the status, as its reader draws it as not found
+      // (`useNotFound`).
       onError: (error, query) => {
         report(error)
         if (query.meta?.letGoWhereNotFound === true && problemIn(error)?.status === 404) {
@@ -167,9 +169,10 @@ export interface QueryNotes extends Record<string, unknown> {
   /**
    * `true` has the query client let go of what the read holds as the server answers that it is
    * not found (`letGo`): a read whose *not found* says that nothing of it is its reader's any
-   * longer, a household's own (household/households.ts). A read that does not say so keeps its
-   * last answer through every failure, a `404` among them, and its screen draws by the failure
-   * it holds.
+   * longer, a household's own (household/households.ts) and one member's
+   * (household/settings/member.ts). Its reader draws by `useNotFound`. A read that does not say
+   * so keeps its last answer through every failure, a `404` among them, and its screen draws by
+   * the failure it holds.
    */
   readonly letGoWhereNotFound?: boolean
 }
@@ -178,6 +181,32 @@ declare module '@tanstack/react-query' {
   interface Register {
     queryMeta: QueryNotes
   }
+}
+
+/**
+ * Whether the server's last word of `read` is that it is not found, as the screen that heard it
+ * draws by it: from the `404` until the server answers with what was asked for. A read holds
+ * only its last failure, so the `404` is read off it no longer once asking again has failed
+ * another way; and a read that let go of what it held (`letGoWhereNotFound`) puts the `404`
+ * away as it is asked for again. It stands through both: a re-read that is on its way, that got
+ * no answer, or that the server failed or refused for now, has said nothing of what was asked
+ * for, so neither a skeleton nor *could not be read* takes the place of what the server said
+ * last, and nothing this browser kept does.
+ *
+ * It is the state of the screen that heard the `404`. One drawn at the address afterwards heard
+ * nothing, and draws by what the read holds, which is why the read lets go of it too.
+ */
+export function useNotFound(read: {
+  readonly error: unknown
+  readonly status: QueryStatus
+}): boolean {
+  // By the status, as the query client lets go by it.
+  const refused = problemIn(read.error)?.status === 404
+  const [wasRefused, setWasRefused] = useState(false)
+  const answered = read.status === 'success'
+  if (refused && !wasRefused) setWasRefused(true)
+  else if (answered && wasRefused) setWasRefused(false)
+  return refused || (wasRefused && !answered)
 }
 
 /** Whether a query's answer is written to this browser: one that succeeded, unless it says no. */

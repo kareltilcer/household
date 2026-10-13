@@ -32,7 +32,7 @@ import { useRef } from 'react'
 import { useParams } from 'react-router'
 import { readState, useNoWithdrawal } from '../../account/common.ts'
 import styles from '../../account/Settings.module.css'
-import { problemIn } from '../../api/problem.ts'
+import { useNotFound } from '../../api/query.ts'
 import { NotAvailable } from '../../app/NotAvailable.tsx'
 import { inHousehold } from '../../app/paths.ts'
 import { useTranslate } from '../../i18n/I18nProvider.tsx'
@@ -77,10 +77,13 @@ function MemberPage({ userId }: { readonly userId: string }) {
   useFocusHandedOn(standing.changes, view)
 
   // Nobody of the household is at this address, or is any more. It opens nothing, as any other
-  // address that does (F-17): whatever this browser kept of them is not drawn in its place.
-  if (problemIn(read.error)?.status === 404) {
-    return <NotAvailable home={inHousehold.home(household.id)} />
-  }
+  // address that does (F-17): whatever this browser kept of them is not drawn in its place,
+  // which the read lets go of as that is answered (member.ts). And it opens nothing until the
+  // server answers with the member: asked again, as they are each time the page is looked at,
+  // of a server that gives no answer, they are neither drawn from what was kept nor said to be
+  // unread, in the place of what the server said last.
+  const gone = useNotFound(read)
+  if (gone) return <NotAvailable home={inHousehold.home(household.id)} />
   const subject = read.data === undefined ? undefined : subjectOf(read.data, userId, me.id)
   // Until the member is read the page is the members', which is where it stands.
   const title =

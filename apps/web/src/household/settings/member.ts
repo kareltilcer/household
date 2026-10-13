@@ -35,6 +35,13 @@ export function memberKey(household: string, user: string) {
  * The member `user` names, as the caller reads them. An id that is no member's answers `404`;
  * one that is no id at all is refused before anybody is looked for (`422`), so the page asks
  * for none (Member.tsx).
+ *
+ * That `404` is the server's word that nobody of the household is at the address, or is any
+ * more, so what the query client held of the member is let go of as it arrives (api/query.ts,
+ * `letGo`): a kept read stands in for a server that cannot be asked, never for one that
+ * answered (F-17). Left where it was, the next re-read that failed another way would leave it
+ * with no *not found* over it, in a household its reader is still in: nothing but this read
+ * takes the page away.
  */
 export function memberQuery(api: ApiClient, household: string, user: string) {
   return queryOptions({
@@ -46,6 +53,7 @@ export function memberQuery(api: ApiClient, household: string, user: string) {
           signal,
         }),
       ),
+    meta: { letGoWhereNotFound: true },
   })
 }
 

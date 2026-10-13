@@ -394,7 +394,9 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   as the `404` arrives (a read says so by `letGoWhereNotFound`, `api/query.ts`, and the
   household's own does; what is filed under it is left, a read removed under a screen that is
   still drawn being asked for anew), and the shell that heard it draws neither the household
-  nor *could not be read* for a re-read that got no answer.
+  nor *could not be read* for a re-read that got no answer (`useNotFound`, beside it). One
+  member's page does both of its own read (`household/settings/member.ts`, `Member.tsx`),
+  which nothing else takes away, its reader being in the household still.
   `billing/stripe.ts` is the one file that calls the processor's script, which is fetched when
   a payment form is first drawn, and the form (`billing/PaymentForm.tsx`) is drawn in the page
   and never in a dialog, which would stand above a bank's challenge. On billing's screens a
