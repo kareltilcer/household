@@ -1414,18 +1414,21 @@ platform.
   merge, Firebase's among them, and on iOS the notifications' plugin writes `aps-environment`
   as `development` in every variant: **item 30**'s first build reads both, and **item 93**'s
   table.
-- **A member's picture is kept by whatever cache its reader has, past their sign-out, on a
+- **A member's picture was kept by whatever cache its reader has, past their sign-out, on a
   device as in a browser** *(read: `objectstore.go`, `FrescoModule.kt`, `RCTImageLoader.mm`;
-  no member's screen of the app draws a picture yet)*. The object store answers every object
+  no member's screen of the app draws a picture yet)*. The object store answered every object
   `private, max-age=31536000, immutable`, its bytes never changing (ADR 0015), and a picture
   is asked of it by the link the API hands out, so the API's `no-store` is no part of that
   answer. `Portrait` (`src/ui/Chip.tsx`) draws one with React Native's `Image`, whose loader
   keeps it on disk, Fresco's cache on Android and the shared `URLCache` on iOS; the web's
-  `<img>` leaves it in the browser's cache the same way. Neither is emptied when a sign-in
+  `<img>` left it in the browser's cache the same way. Neither is emptied when a sign-in
   ends. Whether a member's picture is among what a sign-in's end removes (D-187, D-161) was
-  decided nowhere: **item 29**, whose screens first draw one on a device, puts it to the
-  product's rules, for both clients, a link that answers otherwise being the object store's
-  `ResponseCacheControl` to sign.
+  decided nowhere when this item was built, and is decided since: **D-198** has every link
+  answer `no-store`, which mends a browser and, by what is recalled of `URLCache`, iOS
+  ([ADR 0015](0015-files-object-storage-the-meter-and-pictures.md), *No cache keeps what a
+  link fetches*, with what Chromium was seen to keep). Fresco's cache reads no answer: **item
+  29**, whose screens first draw a picture on a device, has it go with the sign-in, or keeps
+  pictures in a place of the app's own that `onForget` removes.
 - **The emulator's HTTP cache is read by the run, which CI's seventeenth run (38178021709)
   was the first to make.** That the API's header keeps it empty is held on the server and
   read of the two clients. The emulator job asks the device as root for the files under the

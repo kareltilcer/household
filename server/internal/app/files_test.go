@@ -259,6 +259,11 @@ func fetchLink(t *testing.T, link string) fetched {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// No cache keeps what a link fetches, a file's or a picture's (D-198): a client's own cache is
+	// not its app's to empty when its member signs out.
+	if got := res.Header.Get("Cache-Control"); res.StatusCode == http.StatusOK && got != "no-store" {
+		t.Errorf("the link's answer says Cache-Control %q, which a client's cache may keep", got)
+	}
 	return fetched{status: res.StatusCode, header: res.Header, body: body}
 }
 

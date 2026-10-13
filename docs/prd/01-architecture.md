@@ -342,8 +342,11 @@ platform work in the product.
 **Pre-signed URLs carry the authorization decision, not the authorization.** They are issued
 for a single object, expire in minutes, and are never handed out for a prefix. **D-9.** Each is
 signed as of the start of the five minutes it is issued in and lasts fifteen, so every link to an
-object issued in the same five minutes is one URL, which a client's cache keeps. The store cannot set
-`X-Content-Type-Options` on what it serves; the edge in front of it does
+object issued in the same five minutes is one URL: a client that reads the link again in that time
+is drawing it already. What a link fetches says `Cache-Control: no-store`, which the link itself
+signs: no cache keeps an object, a client's own or one on the way, and a client that keeps an
+object's bytes keeps them itself, for no longer than its member's sign-in (**D-198**). The store
+cannot set `X-Content-Type-Options` on what it serves; the edge in front of it does
 ([runbook](../runbooks/object-storage.md)).
 
 ## 9. Environments and deployment

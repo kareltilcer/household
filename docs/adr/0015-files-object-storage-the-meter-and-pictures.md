@@ -5,7 +5,8 @@
 - **Plan item:** 14
 - **Decides for:** [PRD 01](../prd/01-architecture.md) §2.3 (the meter role) and §8; [PRD 03](../prd/03-platform-strands.md)
   §3 (FR-ST1–ST4) and §8 (FR-FL1–FL4); [PRD 07](../prd/07-nonfunctional.md) FR-NF3 for object storage;
-  [modules/17](../prd/modules/17-household-admin.md) FR-HA14; D-9, D-25, D-28, D-107, D-108, D-109; plan Q14
+  [modules/17](../prd/modules/17-household-admin.md) FR-HA14; D-9, D-25, D-28, D-107, D-108, D-109; plan Q14;
+  and, since 2026-10-13, D-198 (*No cache keeps what a link fetches*, below)
 
 ## Context
 
@@ -162,12 +163,61 @@ without it, the original's file name is the label.
 
 **A link** (`Link`, the contract's `ContentLink`) is pre-signed for one object, signed as of the start
 of the five minutes it is issued in and valid for fifteen from then, so it works for ten minutes at
-least, and every link to an object issued in the same five minutes is the same URL, which a client's
-cache keeps. It is issued only to a caller who can see the module, and for a private entity only to
+least, and every link to an object issued in the same five minutes is the same URL: a client that
+reads the link again in that time is handed the address it is drawing already, and fetches nothing.
+It is issued only to a caller who can see the module, and for a private entity only to
 its owner, or, for a child profile's, to the household's owners too (D-19); each refusal is the `404`
 a missing object is. The storage picture's largest items keep to the same rule. The response
 presents the stored type, and an active type or a type a browser does not show as an attachment,
 whatever the object says.
+
+**No cache keeps what a link fetches** (`cacheControl`, `objectstore.go`; D-198, decided on
+2026-10-13, item 28's review having left it to item 29). Every object is stored
+`Cache-Control: no-store`, and every link signs `response-cache-control=no-store`, one of the six
+headers of its answer S3 lets a pre-signed URL set: an object written under another policy answers
+as one written under this, and the policy cannot be taken out of a link, which fetches nothing once
+it is changed. Until then every object was stored `private, max-age=31536000, immutable`: bytes that
+never change may be kept by their reader for as long as it likes, and by no shared cache. What that
+came to was looked at in Chromium, through the app, with a profile on disk and no route on the
+context, Playwright turning the HTTP cache off for a context that has one *(seen on 2026-10-13,
+against the development stack's RustFS, by a check that is in no suite)*: a member uploaded a
+picture and signed out at the screen, and the browser was closed and opened again on its profile.
+
+- **Under the earlier policy** the profile's cache (`Cache/Cache_Data`) held the picture's bytes and,
+  in the clear, the link that fetched them; and with no network the link drew the picture, from the
+  disk cache. Nothing a page of the app's origin can read held the link once its member had signed
+  out, IndexedDB, the two storages, the cookies and CacheStorage: a cache answers the exact link
+  alone, the app removes it with what it kept (D-156), and the API hands out another every five
+  minutes. So the copy was out of the reach of the app, of any page and of whoever signed in next,
+  and in the reach of whoever reads the profile's files. *(Recalled, and run in no browser: Firefox
+  lists its cache at `about:cache` and shows an entry, with no file read.)*
+- **Under `private, max-age=1`** the same file held the same bytes and the same link. A lifetime
+  bounds how long a cache answers without asking, not how long it keeps what it was answered: with
+  no network the link drew nothing, and with one the store confirmed the copy (`304`).
+- **Under `no-store`** the profile held nothing of the picture. Each page that drew it fetched it
+  once, 1.2 kB for the suite's picture, and a screen drawn again within a page fetched nothing under
+  any of the three, the document holding what it had drawn.
+- **Under all three**, what the app had removed at the sign-out, the kept account with its member's
+  address and the picture's link in it, was still in the file IndexedDB logs its writes to
+  (`IndexedDB/….leveldb/*.log`), the browser closed and opened again. No page can make a browser
+  erase a file: D-156, D-161 and this rule are held against a browser and its pages, and none of
+  them against whoever takes the disk.
+
+What the year gave the web was a picture drawn at once from a link the browser had kept, on a second
+visit and with no connection; `Portrait` draws the member's initials there until a read hands it
+another link (`apps/web/src/ui/Chip.tsx`). A link that did not load is asked for once, and a link
+read again within the five minutes it was issued in is the same one, so a picture that failed with
+no connection may wait for a read in the next five after the connection is back. Online the year
+gave little: an object's link is another every five minutes, and a cache answers a link, not an
+object. A device is not mended by the answer alone
+*(read in React Native 0.86.3, and run on no device)*: on Android `ReactOkHttpNetworkFetcher` asks
+for a picture with a `no-store` of its own, which keeps it out of OkHttp's cache, and Fresco's
+pipeline keeps what it fetched on disk under its address *(recalled: it reads no header of the
+answer)*, which `FrescoModule.clearSensitiveData` empties; on iOS `RCTImageLoader` reads the shared
+`URLCache`, which heeds the answer *(recalled)*. A picture a device keeps is its member's for as
+long as their sign-in (D-187), and how the app has it go, by that cache emptied or by a keep of its
+own that `onForget` removes, is item 29's, before a member's screen draws one
+(`apps/mobile/src/ui/Chip.tsx`).
 
 **Pictures are the account's** (`internal/platform/avatar`, D-107): the upload (JPEG, PNG, GIF or WebP,
 20 MB) is decoded, its centred square scaled to at most 512 pixels, turned upright and written again,
@@ -196,6 +246,12 @@ holder of the household code that lists a child's profile.
 | Computing attribution at sampling time from each module's tables | The meter would need to read what modules keep, which the role exists not to; the module knows whose its entity is when it records it |
 | Pictures under each household's prefix, metered there | A user in three households would have three pictures, or one billed to a household that did not choose it; a picture is a few kilobytes, and the account holds it as it holds the user's name |
 | Serving pictures through an API route that redirects to the store | An authorised request per picture per member list, and a redirect whose `Authorization` header some mobile clients carry to the store, which refuses it |
+| Every object answered `private, max-age=31536000, immutable`, as items 14 to 28 had it: a browser's cache is its reader's own, and no page reaches into it | A member's picture stayed on a shared computer's disk past their sign-out, with its link, for as long as the cache had room, and a document's preview would have; D-161 and D-187 say what a client keeps is for no longer than its member's session, and D-197 held the API to it for this cache's sake (D-198) |
+| A lifetime as short as the link's | It leaves the bytes on the disk as a year's did *(seen)*: a lifetime bounds how long a cache answers without asking, and nothing of how long it keeps |
+| `no-store` for a picture and an export alone, a module's files left to its item | The rule would be open for the files that matter most, a document's and a conversation's, until somebody closed it. `Presign` signs one policy; a module with a reason to have its files kept brings a decision of its own |
+| The policy in the object's own metadata alone, or in the link alone | An object's metadata is written once with its bytes, so a rule that changed would reach no object written before it, as this one reached none of development's. The link's alone rests on a store that heeds `response-cache-control`, which RustFS does *(seen)* and S3 documents; stored as well, a store that passes over it still says what the object says |
+| The web keeping a picture itself for the session, in a store it empties | A page reads another origin's answer only with that origin's leave, and the bucket is given no rule that grants it *(read: the runbook and the development stack set none)*; and it is a store to open, fill and empty for a few kilobytes a page |
+| `Clear-Site-Data: "cache"` on the answer to a sign-out | *(Recalled, and run in no browser.)* It clears what the browser kept of the origin that says it, which is the app's and not the store's; and a session that lapses, or is ended from elsewhere, is ended by no answer the header could be on |
 
 ## Consequences
 
@@ -219,10 +275,24 @@ holder of the household code that lists a child's profile.
   member's, Chat's conversations (item 85), extends the attribution with that audience before it
   records a file; recorded as shared, its attachments would be named in the picture to members who
   are not in the conversation (D-108).
-- `nosniff` cannot be set on what the store serves: S3 lets a pre-signed URL override the type and
-  the disposition, not other headers. The edge in front of the bucket adds it in a deployment
-  (`docs/runbooks/object-storage.md`); in development RustFS serves without it, from an origin other
-  than the app's.
+- `nosniff` cannot be set on what the store serves: S3 lets a pre-signed URL set six headers of its
+  answer, the type, the disposition and the cache policy among them, and `X-Content-Type-Options` is
+  none of the six. The edge in front of the bucket adds it in a deployment
+  (`docs/runbooks/object-storage.md`), passes the store's `Cache-Control` through as it is and keeps
+  nothing itself (D-198); in development RustFS serves without it, from an origin other than the
+  app's.
+- What a link's answer says is held where a link is fetched: by the store's own test, for an object
+  written in one write, in parts and under the earlier policy, and for a link whose policy was
+  taken out or changed; by the server's tests of a picture, a file and an export's archive
+  (`fetchLink`, `archive`); and in a real browser for the picture a member's screen draws
+  (`apps/web/e2e/account.spec.ts`). What a browser's cache then keeps is looked at by no test: every
+  context of the web's suite has a route, and Playwright turns the cache off for it. A development
+  bucket holds objects stored under the earlier policy, whose links answer `no-store` all the same.
+- `Presign` signs one policy for every link, and `Presentation` has no field for another. A module
+  with a reason to have a browser's cache keep its files brings a decision of its own, and what a
+  device keeps of an object, a picture first, it keeps for its member's sign-in and by the app's
+  own hand: item 29 builds that for pictures before a member's screen draws one, and the Documents
+  client its budget of originals ([modules/08](../prd/modules/08-documents.md), *Sync*).
 - The meter role's grants widen with each column a later item needs to count by, and test 11 names
   every one; a column that says what a household wrote is the line the role never crosses.
 - Office previews need the sidecar: without `pnpm run up:convert` in development, an office document

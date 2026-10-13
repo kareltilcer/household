@@ -16,6 +16,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+
 	"github.com/kareltilcer/household/server/internal/platform/objectstore"
 	"github.com/kareltilcer/household/server/internal/platform/testsupport"
 )
@@ -462,6 +466,9 @@ func TestPresignFetchesOneObjectForMinutes(t *testing.T) {
 	if cd := res.Header.Get("Content-Disposition"); !strings.HasPrefix(cd, "attachment;") || !strings.Contains(cd, "filename*=utf-8''Pl%C3%A1n%20zahrady.svg") {
 		t.Errorf("Content-Disposition = %q", cd)
 	}
+	if cc := res.Header.Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("Cache-Control = %q, which a client's cache may keep", cc)
+	}
 
 	// The URL names one object: pointed at another, its signature no longer holds.
 	other, err := url.Parse(link)
@@ -479,6 +486,99 @@ func TestPresignFetchesOneObjectForMinutes(t *testing.T) {
 	}
 	if res := fetch(t, old); res.StatusCode != http.StatusForbidden {
 		t.Errorf("an expired link = %d, want 403", res.StatusCode)
+	}
+}
+
+// earlierPolicy is what every object was stored with before D-198, and what a deployed store's
+// objects written under some other rule would still say of themselves.
+const earlierPolicy = "private, max-age=31536000, immutable"
+
+// What a link fetches is no cache's to keep (D-198), however its object was written, in one write
+// or a part at a time as an export's archive is, and whatever policy the object was stored with:
+// the policy is the link's own, so an object written under another rule answers as one written
+// under this. And it is signed with the rest: taken out of a link, or changed, the link fetches
+// nothing, so whoever is handed one cannot have the store answer the object's own. What the Store
+// writes is stored with the policy as well, either way it writes.
+func TestWhatALinkFetchesIsNoCachesToKeep(t *testing.T) {
+	s := testsupport.ObjectStore(t)
+	if err := put(t, s, "u/a/avatar/b/picture", []byte("picture"), "image/png"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Upload(t.Context(), "u/a/exports/b/c", strings.NewReader("archive"), "application/zip"); err != nil {
+		t.Fatal(err)
+	}
+	// An object as a store holds one written under the earlier rule, which the Store writes no
+	// longer: put past it, by a client of the test's own.
+	loc := testsupport.ObjectStoreLocation(t, s.Bucket())
+	raw := s3.New(s3.Options{
+		Region:       loc.Region,
+		BaseEndpoint: aws.String(loc.Endpoint.String()),
+		UsePathStyle: true,
+		Credentials: credentials.StaticCredentialsProvider{
+			Value: aws.Credentials{AccessKeyID: loc.AccessKey, SecretAccessKey: loc.Secret},
+		},
+		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
+		ResponseChecksumValidation: aws.ResponseChecksumValidationWhenRequired,
+	})
+	// Each object the Store wrote holds the policy itself too, which is what a store that passed
+	// over a link's would answer with.
+	for _, k := range []string{"u/a/avatar/b/picture", "u/a/exports/b/c"} {
+		head, err := raw.HeadObject(t.Context(), &s3.HeadObjectInput{Bucket: aws.String(s.Bucket()), Key: aws.String(k)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := aws.ToString(head.CacheControl); got != "no-store" {
+			t.Errorf("%s is stored as %q, which a client's cache may keep", k, got)
+		}
+	}
+	const before = "h/a/documents/b/original"
+	if _, err := raw.PutObject(t.Context(), &s3.PutObjectInput{
+		Bucket: aws.String(s.Bucket()), Key: aws.String(before), Body: strings.NewReader("document"),
+		ContentType: aws.String("application/pdf"), CacheControl: aws.String(earlierPolicy),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	head, err := raw.HeadObject(t.Context(), &s3.HeadObjectInput{Bucket: aws.String(s.Bucket()), Key: aws.String(before)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := aws.ToString(head.CacheControl); got != earlierPolicy {
+		t.Fatalf("the store holds the earlier object as %q, not %q: its link would prove nothing", got, earlierPolicy)
+	}
+
+	var link string
+	for _, k := range []string{"u/a/avatar/b/picture", "u/a/exports/b/c", before} {
+		var err error
+		if link, _, err = s.Presign(t.Context(), k, objectstore.Presentation{Disposition: objectstore.Inline}, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		res := fetch(t, link)
+		if cc := res.Header.Get("Cache-Control"); res.StatusCode != http.StatusOK || cc != "no-store" {
+			t.Errorf("%s: its link answered %d, Cache-Control %q, which a client's cache may keep", k, res.StatusCode, cc)
+		}
+	}
+
+	// The last link is the earlier object's, whose own policy the store would answer without it.
+	// Its query read and written again as it was still fetches, so what refuses the other two is
+	// the policy and not the writing.
+	for name, c := range map[string]struct {
+		change func(url.Values)
+		status int
+	}{
+		"as it was": {func(url.Values) {}, http.StatusOK},
+		"taken out": {func(q url.Values) { q.Del("response-cache-control") }, http.StatusForbidden},
+		"changed":   {func(q url.Values) { q.Set("response-cache-control", earlierPolicy) }, http.StatusForbidden},
+	} {
+		u, err := url.Parse(link)
+		if err != nil {
+			t.Fatal(err)
+		}
+		q := u.Query()
+		c.change(q)
+		u.RawQuery = q.Encode()
+		if res := fetch(t, u.String()); res.StatusCode != c.status {
+			t.Errorf("a link with its policy %s = %d, Cache-Control %q; want %d", name, res.StatusCode, res.Header.Get("Cache-Control"), c.status)
+		}
 	}
 }
 
