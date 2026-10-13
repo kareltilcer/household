@@ -241,6 +241,39 @@ describe('the list of members', () => {
     expect(within(row).getByText('PT')).toBeInTheDocument()
     expect(within(await rowOf('Jana Tilcerová (you)')).getByText('JT')).toBeInTheDocument()
   })
+
+  // The list read again within the five minutes a link was signed in names the same link (D-9),
+  // and no cache keeps the picture (D-198): left to a new link, one that failed for a moment
+  // stayed initials.
+  it('asks again for a picture that did not load once the list is answered again', async () => {
+    const server = createServer()
+    const address = `${origin}/files/petr`
+    server.members = changed(petr, { avatar_url: address })
+    await membersScreen(server)
+    fireEvent.error(within(await rowOf('Petr Tilcer')).getByRole('presentation'))
+    expect(within(await rowOf('Petr Tilcer')).queryByRole('presentation')).not.toBeInTheDocument()
+    const asked = server.to(membersRoute).length
+
+    // The page is looked at again: the list is read, and answered as it was.
+    act(() => {
+      focusManager.setFocused(true)
+    })
+    await waitFor(() => {
+      expect(server.to(membersRoute)).toHaveLength(asked + 1)
+    })
+    const row = await rowOf('Petr Tilcer')
+    await waitFor(() => {
+      expect(row.querySelector('img')).toHaveAttribute('src', address)
+    })
+    // Behind the initials, until it has loaded.
+    const again = row.querySelector('img')
+    expect(again).not.toBeVisible()
+    expect(within(row).getByText('PT')).toBeVisible()
+    if (again === null) throw new Error('no picture')
+    fireEvent.load(again)
+    expect(within(row).getByRole('presentation')).toBe(again)
+    expect(within(row).queryByText('PT')).not.toBeInTheDocument()
+  })
 })
 
 describe('a child profile that ten wrong PINs locked', () => {

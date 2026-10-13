@@ -4,9 +4,12 @@
 import {
   defaultShouldDehydrateQuery,
   MutationCache,
+  notifyManager,
   QueryCache,
   QueryClient,
+  useQueryClient,
   type Query,
+  type QueryKey,
   type QueryStatus,
 } from '@tanstack/react-query'
 import type {
@@ -16,7 +19,7 @@ import type {
 } from '@tanstack/react-query-persist-client'
 import type { ApiProblem, UnreadableProblem } from '@household/api'
 import { createStore, del, get, set, type UseStore } from 'idb-keyval'
-import { useState } from 'react'
+import { useCallback, useState, useSyncExternalStore } from 'react'
 import { isRetryable, problemIn } from './problem.ts'
 
 /** How long a read is kept in this browser, and so how long the cache holds one unobserved. */
@@ -228,6 +231,30 @@ export function useNotFound(read: {
   readonly status: QueryStatus
 }): boolean {
   return useHeldUntilAnswered(problemIn(read.error)?.status === 404, read)
+}
+
+/**
+ * Which answer the read filed under `key` holds: the query's own count of them, which is
+ * another each time the read is answered, by the server or by what the page itself keeps
+ * there, a write's answer or a change of its own to what it read, and zero for a query that
+ * nothing has answered. It is no word on whether the read holds anything: one that was let go
+ * of (`letGo`) keeps its count. An answer that says what the last one said draws nothing anew,
+ * the query client handing its reader the data it had, so what is to be done again whenever
+ * the server has answered reads this: a picture that did not load is asked for again by it
+ * (ui/Chip.tsx).
+ *
+ * By the whole key, and off the cache itself: it is no reader of the read, asks for nothing and
+ * keeps nothing there. It is told as the query client tells its own readers, in the turn it
+ * tells them in (`batchCalls`): the cache says what changed as it changes, which may be while
+ * another component is being drawn.
+ */
+export function useAnswered(key: QueryKey): number {
+  const queries = useQueryClient()
+  const subscribe = useCallback(
+    (notify: () => void) => queries.getQueryCache().subscribe(notifyManager.batchCalls(notify)),
+    [queries],
+  )
+  return useSyncExternalStore(subscribe, () => queries.getQueryState(key)?.dataUpdateCount ?? 0)
 }
 
 /** Whether a query's answer is written to this browser: one that succeeded, unless it says no. */

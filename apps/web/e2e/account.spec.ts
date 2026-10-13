@@ -5,9 +5,10 @@
 // first. The member is this file's own, with a second step on and a phone signed in beside the
 // browser, so that every control that opens something is on the page.
 import type { Page } from '@playwright/test'
+import { apiPath } from '../src/api/names.ts'
 import { paths } from '../src/app/paths.ts'
 import { buildFile } from '../src/update/build.ts'
-import { expect, expectAccessible, inspect, open, test } from './fixtures.ts'
+import { expect, expectAccessible, frames, inspect, open, test } from './fixtures.ts'
 import {
   call,
   person,
@@ -142,4 +143,139 @@ test('a member’s picture is drawn from the object store, under the policy', as
 
   await page.getByRole('button', { name: 'Remove picture' }).click()
   await expect(portrait).toHaveCount(0)
+})
+
+// A read within the five minutes a link was signed in hands the same link (D-9), and no cache
+// keeps what it fetched (D-198): a picture that did not load is drawn by the page's own asking
+// again (ui/Chip.tsx), and what that stands on is the browser's to show. A picture the page
+// hides is fetched all the same, and an address that failed is fetched anew.
+
+/** The picture as the account's screen draws it, and the member's initials in its place. */
+const portraitIn = (page: Page) => page.locator('main img')
+const initialsIn = (page: Page) => page.getByRole('main').getByText('ÁD', { exact: true })
+
+/** Whether a request or an answer is the account's own read. */
+const ofAccount = (asked: { url: () => string }) =>
+  new URL(asked.url()).pathname === `${apiPath}/me`
+
+/** Chooses the member's picture, as the screen's own control hands the browser's file over. */
+const choose = (page: Page) =>
+  page
+    .locator('main input[type="file"]')
+    .setInputFiles({ name: 'picture.png', mimeType: 'image/png', buffer: picture() })
+
+/**
+ * A member at their account, whose picture was asked for while the object store could not be
+ * reached: its one fetch failed, and their initials stand. It answers with the store's reach
+ * given back, and nothing told to the page.
+ */
+async function unfetched(page: Page): Promise<void> {
+  const who = person()
+  await page.goto(buildFile)
+  await register(page, who)
+  await signIn(page, who)
+  await open(page, paths.account.example)
+  const portrait = portraitIn(page)
+  // A first picture says where the object store is, and is removed: the one these tests are
+  // about is chosen once the store is away, so that it is asked for once, as the upload's
+  // answer names it. A page opened again would ask for it as it drew the account it kept and
+  // for the account's answer, by one asking or two as the two fell.
+  await choose(page)
+  await expect(portrait).toBeVisible()
+  const store = new URL((await portrait.getAttribute('src')) ?? '').origin
+  await page.getByRole('button', { name: 'Remove picture' }).click()
+  await expect(portrait).toHaveCount(0)
+
+  // Each asking for a picture is counted, and each failure.
+  let asked = 0
+  let failed = 0
+  page.on('request', (request) => {
+    if (new URL(request.url()).origin === store) asked += 1
+  })
+  page.on('requestfailed', (request) => {
+    if (new URL(request.url()).origin === store) failed += 1
+  })
+  await page.route(`${store}/**`, (route) => route.abort('connectionfailed'))
+  await choose(page)
+  await expect.poll(() => failed).toBe(1)
+  await expect(portrait).toHaveCount(0)
+  await expect(initialsIn(page)).toBeVisible()
+
+  // The store can be reached again, which nothing tells the page: the initials stand, and the
+  // picture was asked for once, a failure being no reason to ask.
+  await page.unroute(`${store}/**`)
+  await frames(page)
+  expect(asked).toBe(1)
+  await expect(portrait).toHaveCount(0)
+}
+
+/** Whether the picture is drawn, and not only asked for: its element shown, with its pixels. */
+async function expectDrawn(page: Page): Promise<void> {
+  const portrait = portraitIn(page)
+  await expect(portrait).toBeVisible()
+  await expect
+    .poll(() => portrait.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBeGreaterThan(0)
+  await expect(initialsIn(page)).toHaveCount(0)
+}
+
+/**
+ * What the browser says of the one fetch `unfetched` fails on purpose, the picture's: the only
+ * fault either of these tests provokes, the picture not being asked for again while the
+ * connection is away.
+ */
+const aborted = 'ERR_CONNECTION_FAILED'
+
+test('a picture that did not load is drawn once the account is answered again', async ({
+  page,
+  faults,
+}) => {
+  await unfetched(page)
+  // The page is looked at again: the account is read, and names the link it named.
+  const answered = page.waitForResponse(ofAccount)
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))
+  })
+  await answered
+  await expectDrawn(page)
+  await expectAccessible(page)
+  expect(faults.filter((fault) => !fault.includes(aborted))).toEqual([])
+  faults.length = 0
+})
+
+test('a picture that did not load is drawn once the browser has its connection back', async ({
+  page,
+  context,
+  faults,
+}) => {
+  await unfetched(page)
+  // The account's answer is a moment old and is not asked for again for this: the browser's
+  // word alone.
+  let asked = 0
+  page.on('request', (request) => {
+    if (ofAccount(request)) asked += 1
+  })
+  // The page is told that the connection is gone before it is given back. A listener added
+  // after the app's own hears of it after them, each of which has drawn by then.
+  const gone = await page.evaluateHandle(() => ({
+    heard: new Promise<void>((resolve) => {
+      window.addEventListener(
+        'offline',
+        () => {
+          resolve()
+        },
+        { once: true },
+      )
+    }),
+  }))
+  await context.setOffline(true)
+  await gone.evaluate((it) => it.heard)
+  // With no connection it is not asked for again: the initials stand, and no picture behind them.
+  await expect(initialsIn(page)).toBeVisible()
+  await expect(portraitIn(page)).toHaveCount(0)
+  await context.setOffline(false)
+  await expectDrawn(page)
+  expect(asked).toBe(0)
+  expect(faults.filter((fault) => !fault.includes(aborted))).toEqual([])
+  faults.length = 0
 })

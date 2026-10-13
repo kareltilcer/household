@@ -2,7 +2,7 @@
 // the key–value block, the money value, the metric tile, the three charts and the search result
 // row, with the chip and the avatar a row carries.
 import { money } from '@household/domain'
-import { screen, within } from '@testing-library/react'
+import { act, fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -10,7 +10,7 @@ import { storageKey } from '../display/modes.ts'
 import { draw } from '../test/render.tsx'
 import { Button } from './Button.tsx'
 import { Composition, Flow, TimeSeries } from './charts/Charts.tsx'
-import { Avatar, initialsOf, ModuleChip } from './Chip.tsx'
+import { Avatar, initialsOf, ModuleChip, Portrait } from './Chip.tsx'
 import { DataTable, type Column, type Sort } from './DataTable.tsx'
 import { KeyValue } from './KeyValue.tsx'
 import { List, ListRow } from './ListRow.tsx'
@@ -146,6 +146,200 @@ describe('a module chip and an avatar', () => {
   it('take for a member’s initials the first letters of their name’s first two words', () => {
     expect(initialsOf(' jana  tilcerová nováková ')).toBe('JT')
     expect(initialsOf('')).toBe('')
+  })
+})
+
+// A picture's link is the object store's, which answers it as no cache's to keep (D-198): one
+// that did not load is drawn from nowhere else, and is asked for again where asking can succeed.
+describe('a portrait', () => {
+  const address = 'https://files.test/h/petr'
+  const later = 'https://files.test/h/petr-later'
+
+  /** Drawn where a screen draws it: `answered` is which answer of its read handed it the link. */
+  function portrait(answered: number, link: string | null = address) {
+    return <Portrait address={link} answered={answered} name={words.petr} className="portrait" />
+  }
+
+  function pictureIn(container: HTMLElement): HTMLImageElement {
+    const picture = container.querySelector('img')
+    if (picture === null) throw new Error('no picture')
+    return picture
+  }
+
+  /** The browser's word on its connection, as it changes it: the property and then the event. */
+  function connection(online: boolean, word = vi.spyOn(window.navigator, 'onLine', 'get')) {
+    word.mockReturnValue(online)
+    act(() => {
+      window.dispatchEvent(new Event(online ? 'online' : 'offline'))
+    })
+    return word
+  }
+
+  it('is the member’s picture, and their initials where they have none', () => {
+    const { container, rerender } = draw(portrait(1))
+    const picture = pictureIn(container)
+    expect(picture).toHaveAttribute('src', address)
+    expect(picture).toHaveClass('portrait')
+    // Decoration: the member's name is written beside it.
+    expect(picture).toHaveAttribute('alt', '')
+    expect(screen.queryByText('PN')).not.toBeInTheDocument()
+    rerender(portrait(1, null))
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    expect(screen.getByText('PN')).toBeVisible()
+  })
+
+  it('gives way to the initials where its link does not load, and is no broken image', () => {
+    const { container, rerender } = draw(portrait(1))
+    fireEvent.error(pictureIn(container))
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    expect(screen.getByText('PN')).toBeVisible()
+    // Drawn again by the same answer, with the browser saying what it said: nothing has
+    // happened that the link could load for, and it is not asked for.
+    rerender(portrait(1))
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    expect(screen.getByText('PN')).toBeVisible()
+  })
+
+  it('is asked for again once its read is answered again, behind the initials until it loads', () => {
+    const { container, rerender } = draw(portrait(1))
+    fireEvent.error(pictureIn(container))
+    // The read answered again, with the link it handed before: one the server would sign now.
+    rerender(portrait(2))
+    const again = pictureIn(container)
+    expect(again).toHaveAttribute('src', address)
+    // Asked for where nobody sees it: the initials stand until there is a picture to draw.
+    expect(again).not.toBeVisible()
+    expect(screen.getByText('PN')).toBeVisible()
+    fireEvent.load(again)
+    // The element that loaded it is the one drawn: the picture is fetched once.
+    expect(pictureIn(container)).toBe(again)
+    expect(again).toBeVisible()
+    expect(again).toHaveClass('portrait')
+    expect(screen.queryByText('PN')).not.toBeInTheDocument()
+  })
+
+  it('is asked for once for each answer, and never over again for a link that has lapsed', () => {
+    const { container, rerender } = draw(portrait(1))
+    fireEvent.error(pictureIn(container))
+    rerender(portrait(2))
+    // Refused again, as a link that has lapsed is every time: the initials never left.
+    expect(screen.getByText('PN')).toBeVisible()
+    fireEvent.error(pictureIn(container))
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    expect(screen.getByText('PN')).toBeVisible()
+    rerender(portrait(2))
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    // And once more for the next answer, and no oftener.
+    rerender(portrait(3))
+    expect(pictureIn(container)).not.toBeVisible()
+  })
+
+  it('is asked for again when the browser says the connection is back', () => {
+    // A page opened with no connection, drawn from what the browser kept.
+    const word = connection(false)
+    const { container } = draw(portrait(1))
+    fireEvent.error(pictureIn(container))
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    connection(true, word)
+    const again = pictureIn(container)
+    expect(again).toHaveAttribute('src', address)
+    expect(again).not.toBeVisible()
+    expect(screen.getByText('PN')).toBeVisible()
+    fireEvent.load(again)
+    expect(again).toBeVisible()
+    expect(screen.queryByText('PN')).not.toBeInTheDocument()
+  })
+
+  it('is asked for again on the connection’s return, and for nothing while there is none', () => {
+    const { container } = draw(portrait(1))
+    // On its way as the connection went, and failed before the browser said so.
+    fireEvent.error(pictureIn(container))
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    // The browser says so: with no connection nothing loads, and it is not asked for again.
+    const word = connection(false)
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    expect(screen.getByText('PN')).toBeVisible()
+    connection(true, word)
+    expect(pictureIn(container)).not.toBeVisible()
+    expect(screen.getByText('PN')).toBeVisible()
+  })
+
+  // A failure is told some time after whatever failed the picture, and by then the connection
+  // may be back: it is held against what the picture was asked for under, not what stands now.
+  it('is asked for again where the connection went and came back while it was on its way', () => {
+    const { container } = draw(portrait(1))
+    const first = pictureIn(container)
+    const word = connection(false)
+    connection(true, word)
+    // Failed by the change, and told of only after the browser said the connection was back.
+    fireEvent.error(first)
+    const again = pictureIn(container)
+    expect(again).not.toBe(first)
+    expect(again).toHaveAttribute('src', address)
+    expect(again).not.toBeVisible()
+    expect(screen.getByText('PN')).toBeVisible()
+  })
+
+  it('is asked for once more where its read was answered again while it was on its way', () => {
+    const { container, rerender } = draw(portrait(1))
+    const first = pictureIn(container)
+    // Answered again with the picture on its way: the same link, and nothing asked for anew.
+    rerender(portrait(2))
+    expect(pictureIn(container)).toBe(first)
+    fireEvent.error(first)
+    // Since it was asked for its read has been answered: once more, behind the initials.
+    const again = pictureIn(container)
+    expect(again).not.toBe(first)
+    expect(again).not.toBeVisible()
+    expect(screen.getByText('PN')).toBeVisible()
+    // And no oftener: nothing has happened since this one was asked for.
+    fireEvent.error(again)
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    expect(screen.getByText('PN')).toBeVisible()
+  })
+
+  // React draws a failure with whatever a store tells it of before it has drawn: an `error`
+  // waits for a task of its own, and the query client's word, or the browser's, does not.
+  it('is asked for again by another element where its failure is drawn with its read’s answer', () => {
+    const { container, rerender } = draw(portrait(1))
+    const first = pictureIn(container)
+    act(() => {
+      fireEvent.error(first)
+      rerender(portrait(2))
+    })
+    // A browser asks nothing more of an element whose link did not load, hidden or shown.
+    const again = pictureIn(container)
+    expect(again).not.toBe(first)
+    expect(again).toHaveAttribute('src', address)
+    expect(again).not.toBeVisible()
+    expect(screen.getByText('PN')).toBeVisible()
+    fireEvent.load(again)
+    expect(again).toBeVisible()
+    expect(screen.queryByText('PN')).not.toBeInTheDocument()
+  })
+
+  it('is fetched once where it loaded, whatever its read is answered and the connection does', () => {
+    const { container, rerender } = draw(portrait(1))
+    const picture = pictureIn(container)
+    fireEvent.load(picture)
+    rerender(portrait(2))
+    const word = connection(false)
+    connection(true, word)
+    expect(pictureIn(container)).toBe(picture)
+    expect(picture).toBeVisible()
+    expect(screen.queryByText('PN')).not.toBeInTheDocument()
+  })
+
+  it('draws another link at once, in the picture’s own place', () => {
+    const { container, rerender } = draw(portrait(1))
+    fireEvent.error(pictureIn(container))
+    // A read in a later five minutes hands another link (D-9).
+    rerender(portrait(2, later))
+    const picture = pictureIn(container)
+    expect(picture).toHaveAttribute('src', later)
+    expect(picture).toBeVisible()
+    expect(picture).toHaveClass('portrait')
+    expect(screen.queryByText('PN')).not.toBeInTheDocument()
   })
 })
 

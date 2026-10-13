@@ -32,6 +32,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { readState, useFocusKept } from '../../account/common.ts'
 import settings from '../../account/Settings.module.css'
+import { useAnswered } from '../../api/query.ts'
 import { inHousehold } from '../../app/paths.ts'
 import { useFormat, useTranslate } from '../../i18n/I18nProvider.tsx'
 import { useMe } from '../../session/SessionProvider.tsx'
@@ -48,7 +49,7 @@ import { StatusMark } from '../../ui/StatusMark.tsx'
 import { useInvitations, useMembers, type Membership } from '../data.ts'
 import { GrantSummary } from '../GrantMatrix.tsx'
 import { useHousehold } from '../HouseholdContext.tsx'
-import { useRoleWord } from '../households.ts'
+import { membersKey, useRoleWord } from '../households.ts'
 import { useTimeZone } from '../timezone.ts'
 import { ChildCreate } from './ChildCreate.tsx'
 import { statusAt } from './invitations.ts'
@@ -62,7 +63,16 @@ function toneOf(place: number): MemberTone {
   return tones[place % tones.length] ?? 1
 }
 
-function Row({ member, tone }: { readonly member: Membership; readonly tone: MemberTone }) {
+function Row({
+  member,
+  tone,
+  answered,
+}: {
+  readonly member: Membership
+  readonly tone: MemberTone
+  /** Which answer of the members' read the row is drawn from (`useAnswered`). */
+  readonly answered: number
+}) {
   const t = useTranslate()
   const format = useFormat()
   const household = useHousehold()
@@ -87,6 +97,7 @@ function Row({ member, tone }: { readonly member: Membership; readonly tone: Mem
     <li className={styles.row}>
       <Portrait
         address={member.avatar_url ?? null}
+        answered={answered}
         name={name}
         tone={tone}
         className={styles.picture}
@@ -128,6 +139,8 @@ export function Members() {
   const online = useOnline()
   const standing = useStanding()
   const members = useMembers(household.id)
+  // A picture that did not load is asked for again once the members are answered again.
+  const answered = useAnswered(membersKey(household.id))
   const invitations = useInvitations(household.id, { enabled: standing.invitations })
 
   const list = members.data ?? []
@@ -168,7 +181,7 @@ export function Members() {
   const rows = (
     <List label={t('household.settings.members.title')}>
       {list.map((member, place) => (
-        <Row key={member.user_id} member={member} tone={toneOf(place)} />
+        <Row key={member.user_id} member={member} tone={toneOf(place)} answered={answered} />
       ))}
     </List>
   )

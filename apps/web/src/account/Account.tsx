@@ -29,7 +29,7 @@ import { Link } from 'react-router'
 import { useApi } from '../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../api/problem.ts'
 import { useProblemText } from '../api/problemText.ts'
-import { askedNow } from '../api/query.ts'
+import { askedNow, useAnswered } from '../api/query.ts'
 import { inHousehold, paths } from '../app/paths.ts'
 import { fieldCodes, useRefusedField } from '../auth/fields.tsx'
 import { useDisplay } from '../display/DisplayProvider.tsx'
@@ -187,6 +187,8 @@ function Picture({ me }: { readonly me: Me }) {
   })
   const remove = useSaveMe()
   const has = (me.avatar_url ?? null) !== null
+  // A picture that did not load is asked for again once the account is answered again.
+  const answered = useAnswered(meKey)
 
   let failure: string | undefined
   if (upload.isError) {
@@ -203,6 +205,7 @@ function Picture({ me }: { readonly me: Me }) {
       <div className={styles.picture}>
         <Portrait
           address={me.avatar_url ?? null}
+          answered={answered}
           name={me.display_name}
           className={styles.portrait}
         />
