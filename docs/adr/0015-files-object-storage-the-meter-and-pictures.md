@@ -172,7 +172,7 @@ presents the stored type, and an active type or a type a browser does not show a
 whatever the object says.
 
 **No cache keeps what a link fetches** (`cacheControl`, `objectstore.go`; D-198, decided on
-2026-10-13, items 25 and 28 having left it to item 29). Every object is stored
+2026-10-13, item 28's review having left it to item 29). Every object is stored
 `Cache-Control: no-store`, and every link signs `response-cache-control=no-store`, one of the six
 headers of its answer S3 lets a pre-signed URL set: an object written under another policy answers
 as one written under this, and the policy cannot be taken out of a link, which fetches nothing once
@@ -204,9 +204,12 @@ picture and signed out at the screen, and the browser was closed and opened agai
   them against whoever takes the disk.
 
 What the year gave the web was a picture drawn at once from a link the browser had kept, on a second
-visit and with no connection; `Portrait` draws the member's initials there until the link is read
-again (`apps/web/src/ui/Chip.tsx`). Online it gave little: an object's link is another every five
-minutes, and a cache answers a link, not an object. A device is not mended by the answer alone
+visit and with no connection; `Portrait` draws the member's initials there until a read hands it
+another link (`apps/web/src/ui/Chip.tsx`). A link that did not load is asked for once, and a link
+read again within the five minutes it was issued in is the same one, so a picture that failed with
+no connection may wait for a read in the next five after the connection is back. Online the year
+gave little: an object's link is another every five minutes, and a cache answers a link, not an
+object. A device is not mended by the answer alone
 *(read in React Native 0.86.3, and run on no device)*: on Android `ReactOkHttpNetworkFetcher` asks
 for a picture with a `no-store` of its own, which keeps it out of OkHttp's cache, and Fresco's
 pipeline keeps what it fetched on disk under its address *(recalled: it reads no header of the

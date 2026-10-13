@@ -497,7 +497,8 @@ const earlierPolicy = "private, max-age=31536000, immutable"
 // or a part at a time as an export's archive is, and whatever policy the object was stored with:
 // the policy is the link's own, so an object written under another rule answers as one written
 // under this. And it is signed with the rest: taken out of a link, or changed, the link fetches
-// nothing, so whoever is handed one cannot have the store answer the object's own.
+// nothing, so whoever is handed one cannot have the store answer the object's own. What the Store
+// writes is stored with the policy as well, either way it writes.
 func TestWhatALinkFetchesIsNoCachesToKeep(t *testing.T) {
 	s := testsupport.ObjectStore(t)
 	if err := put(t, s, "u/a/avatar/b/picture", []byte("picture"), "image/png"); err != nil {
@@ -519,6 +520,17 @@ func TestWhatALinkFetchesIsNoCachesToKeep(t *testing.T) {
 		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
 		ResponseChecksumValidation: aws.ResponseChecksumValidationWhenRequired,
 	})
+	// Each object the Store wrote holds the policy itself too, which is what a store that passed
+	// over a link's would answer with.
+	for _, k := range []string{"u/a/avatar/b/picture", "u/a/exports/b/c"} {
+		head, err := raw.HeadObject(t.Context(), &s3.HeadObjectInput{Bucket: aws.String(s.Bucket()), Key: aws.String(k)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := aws.ToString(head.CacheControl); got != "no-store" {
+			t.Errorf("%s is stored as %q, which a client's cache may keep", k, got)
+		}
+	}
 	const before = "h/a/documents/b/original"
 	if _, err := raw.PutObject(t.Context(), &s3.PutObjectInput{
 		Bucket: aws.String(s.Bucket()), Key: aws.String(before), Body: strings.NewReader("document"),
