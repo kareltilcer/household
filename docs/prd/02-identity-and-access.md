@@ -146,7 +146,9 @@ sign-in and removes nothing (**D-156**, [ADR 0026](../adr/0026-the-web-shell-the
 What a browser keeps is its member's, and for no longer than their session: it is removed too
 where the session is found gone by a page that never knew its member, the account it read kept
 no longer or its cookies lapsed, and a page that finds another member signed in under it removes
-what it kept and starts again (**D-161**).
+what it kept and starts again (**D-161**). The browser's own cache keeps nothing of theirs beside
+that, which no page could remove from it: the API and the object store each say `no-store` of
+what they answer (**D-197**, **D-198**).
 
 **FR-ID8 — Account deletion.** Self-service, from the app. See
 [05-privacy-and-compliance.md](05-privacy-and-compliance.md) §4 for what happens to households

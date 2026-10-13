@@ -264,6 +264,11 @@ func archive(t *testing.T, url string) (map[string]string, privacy.Manifest) {
 	if got := res.Header.Get("Content-Disposition"); !strings.HasPrefix(got, "attachment") || !strings.Contains(got, ".zip") {
 		t.Errorf("the archive downloads as %q, want an attachment named as a ZIP", got)
 	}
+	// The file a member saves is theirs; the copy a browser's cache would keep beside it is nobody's
+	// to find or to remove (D-198).
+	if got := res.Header.Get("Cache-Control"); got != "no-store" {
+		t.Errorf("the archive's link says Cache-Control %q, which a client's cache may keep", got)
+	}
 	return unpack(t, raw)
 }
 

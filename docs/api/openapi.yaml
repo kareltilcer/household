@@ -92,7 +92,10 @@ info:
     request. A device's HTTP client and a browser each keep a cache on disk by themselves, which
     no client of Household's empties when its member signs out (D-197). The one answer that says
     otherwise is the keys' (`GET /sync/jwks`), which is `no-cache`: PowerSync keeps them, and
-    asks the API again before it answers with a set it holds.
+    asks the API again before it answers with a set it holds. What a pre-signed link fetches is
+    the object store's answer and no part of this API, and says `no-store` too, the link signing
+    it: a picture, an export's archive or a file is kept by no cache, and a client that keeps an
+    object's bytes keeps them itself, for no longer than its member's sign-in (D-198).
 
     An unsafe request whose `Origin` (or, lacking one, `Referer`) names an origin that is not
     Household's own web client's is refused `403` (`csrf_failed`), whatever it carries: a page on
@@ -4989,8 +4992,10 @@ paths:
       summary: Obtain a short-lived link to a document variant
       description: |
         Authorises the caller, then issues a pre-signed URL **for one object**, expiring in minutes.
-        Never issued for a prefix. `variant=original` serves the bytes with the checksum as `ETag`
-        and an immutable cache policy, because the bytes never change.
+        Never issued for a prefix. `variant=original` serves the bytes with the checksum as `ETag`.
+        The bytes never change, and what the link fetches says `Cache-Control: no-store` all the
+        same, as every link's answer does: a client that keeps them keeps them itself, by the
+        checksum, and no cache does (D-198).
 
         Active types — HTML, SVG, anything scriptable — return `disposition: attachment` and are
         never rendered in the app's origin.
@@ -11525,14 +11530,16 @@ components:
 
     ContentLink:
       type: object
-      description: A pre-signed URL for **one object**, expiring in minutes. Never issued for a prefix.
+      description: |
+        A pre-signed URL for **one object**, expiring in minutes. Never issued for a prefix. What it
+        fetches says `Cache-Control: no-store`, which is part of what the link signs (D-198).
       properties:
         url: { type: string, format: uri }
         expires_at: { type: string, format: date-time }
         content_type: { type: string }
         byte_size: { type: integer, format: int64 }
         disposition: { type: string, enum: [inline, attachment], description: 'Active types — HTML, SVG, anything scriptable — are always `attachment` and are never rendered in the app''s origin.' }
-        etag: { type: [string, 'null'], description: 'The SHA-256 checksum. Bytes never change, so the cache policy is immutable.' }
+        etag: { type: [string, 'null'], description: 'The SHA-256 checksum. The bytes never change, so a client that keeps them itself keeps them by it.' }
 
     PinScope:
       type: string

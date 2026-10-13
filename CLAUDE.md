@@ -558,7 +558,10 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   app's: it is kept empty of the API's answers by the API's own header
   ([D-197](docs/prd/09-decisions.md)), which `src/api/transport.ts` says, and a member's
   picture, once a screen draws one (`Portrait`, `src/ui/Chip.tsx`), is in the platform's
-  image cache, which nothing empties: item 29 decides it.
+  image cache, which nothing empties yet and which on Android heeds no answer of the object
+  store's: a picture a device keeps goes with its member's sign-in
+  ([D-198](docs/prd/09-decisions.md)), which item 29 builds before a member's screen draws
+  one.
   The note of a push registration goes with a
   removal the server took, or with the sign-in (`forgetPush`, `src/push/registration.ts`):
   removed where the server was not told, a turning-off after a sign-out that failed asked
@@ -749,7 +752,7 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   store: a module's handler `Receive`s the upload (sniffed, capped, programs refused), `Put`s it
   (ceiling checked, written once under `h/{household}/{module}/{entity}/{variant}`), `Record`s it in
   its mutation with the attribution only it knows, and hands out `Link`s, pre-signed for one object
-  for minutes. It declares its tables and labels through `module.StorageSource`. The meter role
+  for minutes and answered `no-store` (D-198). It declares its tables and labels through `module.StorageSource`. The meter role
   reads every household's counting columns, and nothing else (architecture test 11,
   [ADR 0015](docs/adr/0015-files-object-storage-the-meter-and-pictures.md)); a user's picture is the
   account's (D-107). What the platform keeps of the work after a commit is no entity's history
@@ -840,8 +843,15 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   CI's Android job reads the emulator's HTTP cache after a member's reads
   (`apps/mobile/e2e/run.ts --cache`, `apps/mobile/e2e/cache.ts`), so a handler that sets its
   own header on a route those reads ask fails there, and iOS's `URLCache` is read by no run.
-  What the object store answers is not the API's: an object is `private` and its reader's to
-  keep ([ADR 0015](docs/adr/0015-files-object-storage-the-meter-and-pictures.md)).
+  What the object store answers is not the API's, and says the same: every object is stored
+  `no-store` and every link signs it (`cacheControl`, `objectstore.Presign`), a picture's, an
+  export's and a module's file's alike, so a client that keeps an object's bytes keeps them
+  itself, where it removes them with its member's sign-in, and a module with a reason to have
+  a browser's cache keep its files brings a decision of its own
+  ([D-198](docs/prd/09-decisions.md),
+  [ADR 0015](docs/adr/0015-files-object-storage-the-meter-and-pictures.md)). The edge in front
+  of the bucket keeps nothing and sets no cache policy of its own
+  ([runbook](docs/runbooks/object-storage.md)).
 - **Migrations** are goose, one numbered block per module, forward-only and
   expand/contract: an old app in the field must keep working against the new schema.
 - **Tests hit real PostgreSQL.** No database mocks: RLS, `SET LOCAL` and the change feed

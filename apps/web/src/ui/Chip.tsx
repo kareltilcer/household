@@ -72,6 +72,8 @@ export interface PortraitProps {
 export function Portrait({ address, name, tone = 1, className }: PortraitProps) {
   // A picture's link is good for minutes (D-9), and whose it is may be read from what this
   // browser kept: a link that no longer loads gives way to the initials, and is no broken image.
+  // The browser keeps the link and never the picture, which the store answers as no cache's to
+  // keep (D-198): with no connection, and until a kept link is read again, the initials stand.
   const [failed, setFailed] = useState<string | null>(null)
   if (address !== null && failed !== address) {
     return (

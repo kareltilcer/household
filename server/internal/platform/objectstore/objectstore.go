@@ -205,9 +205,17 @@ type Object struct {
 	SHA256 [32]byte
 }
 
-// cacheControl is every object's: its bytes never change, so a client may keep them for as long as
-// it likes, but no shared cache may.
-const cacheControl = "private, max-age=31536000, immutable"
+// cacheControl is every object's, as the API's own answers are (D-197, D-198): no cache keeps what
+// the store answers, a client's own or one on the way. A client's HTTP cache is not an app's to
+// empty when its member signs out, and held a member's picture on disk past it, with the link that
+// fetched it, for as long as the cache had room; a lifetime of minutes leaves the bytes where a
+// year's did, and only this keeps them off the disk. A client that keeps an object's bytes, which
+// never change, keeps them itself, where it removes them with its member's sign-in.
+//
+// It is stored with every object and signed into every link (Presign), so an object written under
+// another policy answers as one written under this, and a store that passes over the one says the
+// other.
+const cacheControl = "no-store"
 
 // sha256Meta is the metadata key the digest is kept under (x-amz-meta-sha256).
 const sha256Meta = "sha256"
@@ -536,8 +544,8 @@ type Presentation struct {
 
 // The pre-signed URLs' window: each is signed as of the start of the five minutes it is issued in,
 // and lasts fifteen from then, so that it is valid for ten minutes at least and fifteen at most, and
-// every link to one object issued in the same five minutes is the same URL, which a client's cache
-// keeps.
+// every link to one object issued in the same five minutes is the same URL: a client that reads an
+// object's link again in that time is handed the address it is drawing already, and fetches nothing.
 const (
 	LinkWindow   = 5 * time.Minute
 	LinkLifetime = 15 * time.Minute
@@ -545,7 +553,9 @@ const (
 
 // Presign returns a URL that fetches the object at k, as p presents it, and the time it stops
 // working. It makes no request, and is issued for one object only, never a prefix (D-9): the
-// caller has authorised the one who receives it first.
+// caller has authorised the one who receives it first. What it fetches is answered as no cache's to
+// keep (cacheControl), whatever the object was stored with: the policy is part of what is signed, so
+// whoever holds the link cannot take it out.
 func (s *Store) Presign(ctx context.Context, k string, p Presentation, now time.Time) (string, time.Time, error) {
 	if !ValidKey(k) {
 		return "", time.Time{}, ErrInvalidKey
@@ -568,6 +578,7 @@ func (s *Store) Presign(ctx context.Context, k string, p Presentation, now time.
 		}
 	}
 	q.Set("response-content-disposition", disposition)
+	q.Set("response-cache-control", cacheControl)
 	u.RawQuery = q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {

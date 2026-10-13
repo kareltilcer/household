@@ -123,6 +123,10 @@ export function Portrait({ address, name, tone = 1 }: PortraitProps) {
   const { textScale } = useDisplay()
   // A picture's link is good for minutes (D-9), and whose it is may be read from what this
   // device kept: a link that no longer loads gives way to the initials, and is no broken image.
+  // React Native's loader keeps what it draws in a cache of the platform's, on Android whatever
+  // the store answers, and nothing of the app empties it: a picture is its member's to keep for
+  // no longer than their sign-in (D-198), so before a member's screen draws one, item 29 has that
+  // cache go with the sign-in, or keeps pictures where `onForget` removes them.
   const [failed, setFailed] = useState<string | null>(null)
   if (address !== null && failed !== address) {
     const size = avatarRem * remPx * textScale

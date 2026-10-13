@@ -42,8 +42,12 @@ wrong.
    secret, like the database's; outside development the server refuses the compose store's published
    one and plain http.
 5. **Put an edge in front of the bucket that adds `X-Content-Type-Options: nosniff`** to every
-   response (FR-FL2). The store cannot: a pre-signed URL sets the response's type and disposition, and
-   no other header. Name the edge's scheme and host in `HOUSEHOLD_OBJECT_STORE_PUBLIC_URL` when
+   response (FR-FL2). The store cannot: a pre-signed URL sets the response's type, its disposition and
+   its cache policy, and this header is none it can set. **The edge keeps nothing and changes nothing
+   else**: every object is answered `Cache-Control: no-store`, which each link signs (D-198), so an
+   edge that caches what it passes, or that sets a cache policy of its own, puts a household's files
+   where nothing removes them. Fetch one link through the edge and read the header before clients
+   are pointed at it. Name the edge's scheme and host in `HOUSEHOLD_OBJECT_STORE_PUBLIC_URL` when
    clients reach the bucket there rather than where the API does; the links are signed for the host
    they name.
 6. **Run the converter beside the API with no route out**: a document may name remote resources,

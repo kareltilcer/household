@@ -155,7 +155,7 @@ and any tenant-isolation assertion failure — the last paging immediately, at a
 | Compute | Households, not members | Horizontal; the binary is one process |
 | Database | Rows and IOPS | Compaction, partitioning, fair-use ceilings |
 | Object storage | Uploads | **Passed through to the customer above the allowance** — the only line that scales with individual behaviour |
-| Egress | Downloads and image variants | Right-sized variants; long cache lifetimes on immutable bytes |
+| Egress | Downloads and image variants | Right-sized variants; bytes that never change kept by a client itself, by their checksum, for as long as its member's sign-in, and by no cache of a browser's or a device's own (**D-198**) |
 | Push and email | Members and rules | Coalescing windows; category mutes |
 | Support | Bugs and confusion | Self-service export and deletion; the diagnostic bundle |
 

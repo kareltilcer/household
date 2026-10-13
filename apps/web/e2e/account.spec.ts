@@ -116,6 +116,11 @@ test('a member’s picture is drawn from the object store, under the policy', as
   // Their initials stand where a picture would be, until there is one.
   const portrait = page.locator('main img')
   await expect(portrait).toHaveCount(0)
+  // What each address was answered with, as to who may keep it.
+  const policies = new Map<string, string | undefined>()
+  page.on('response', (response) => {
+    policies.set(response.url(), response.headers()['cache-control'])
+  })
   await page
     .locator('main input[type="file"]')
     .setInputFiles({ name: 'picture.png', mimeType: 'image/png', buffer: picture() })
@@ -126,9 +131,13 @@ test('a member’s picture is drawn from the object store, under the policy', as
   await expect
     .poll(() => portrait.evaluate((image: HTMLImageElement) => image.naturalWidth))
     .toBeGreaterThan(0)
-  expect(new URL((await portrait.getAttribute('src')) ?? '').origin).not.toBe(
-    new URL(page.url()).origin,
-  )
+  const address = (await portrait.getAttribute('src')) ?? ''
+  expect(new URL(address).origin).not.toBe(new URL(page.url()).origin)
+  // And the store said that no cache keeps it (D-198): a browser's own would hold the picture on
+  // disk past its member's sign-out, where nothing of the app's reaches to remove it. The answer's
+  // word is what a test here can hold: Playwright turns the HTTP cache off in a context that has a
+  // route, as each of this suite's has, and what Chromium does with a profile on disk is ADR 0015's.
+  expect(policies.get(address)).toBe('no-store')
   await expectAccessible(page)
 
   await page.getByRole('button', { name: 'Remove picture' }).click()

@@ -44,7 +44,7 @@ short-lived pre-signed URL or streaming through:
 
 | Endpoint | Behaviour |
 |---|---|
-| `…/raw` | Original bytes, correct sniffed type, `ETag` = checksum, `Cache-Control: private, immutable`, HTTP Range supported |
+| `…/raw` | Original bytes, correct sniffed type, `ETag` = checksum, `Cache-Control: no-store` as every link's answer is (**D-198**: the bytes never change, and a client that keeps them keeps them itself, by the checksum), HTTP Range supported |
 | `…/download` | Same bytes, always `Content-Disposition: attachment` |
 | `…/preview` | The best previewable representation — the original for natively previewable types, else a derived PDF. `409` while pending, `404` when the type has none |
 | `…/thumbnail` | A small image, or `404` |
