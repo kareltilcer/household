@@ -244,9 +244,10 @@ panel draws no answer, and the refused-change panel keeps *Discard*.
 households is read again, and only that answer decides between the lockout, where the list
 names the household suspended, and *not available*: what this browser kept of the list is not
 gone by. The `404` stands while the household is asked for again with nothing kept of it, as it
-is each time the page is looked at: the lockout is not taken down and built again around a
-skeleton, the focus on it lost, nor replaced by *could not be read* where the asking waits for a
-connection.
+is each time the page is looked at, and where asking again came to nothing: the lockout is not
+taken down and built again around a skeleton, the focus on it lost, nor replaced by *could not
+be read* where the asking waits for a connection, got no answer or was failed by the server.
+It ends when the server answers with the household, and with nothing else (ADR 0026).
 
 **An export is downloaded by a navigation, after its job is read again** (`privacy/ExportList.tsx`).
 A job's link is good for minutes and each read renews it, and the policy's `connect-src` does

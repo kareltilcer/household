@@ -31,13 +31,43 @@ export interface QueryClientOptions {
   readonly onProblem?: (problem: ApiProblem | UnreadableProblem) => void
 }
 
+/**
+ * Lets go of what `absent` held: the server has just answered that it is not found, and its
+ * word stands over what was read before. The query client keeps the last answer through a
+ * failure, so left where it was, the next re-read that failed any other way, a server that
+ * could not be reached, would leave that answer with no *not found* over it, and whoever read
+ * it next would draw it as kept.
+ *
+ * The read itself stays, emptied: removed, the reader still on it would build it anew at its
+ * next render and ask again, be answered *not found* again and removed again, without end.
+ * What is filed under its key is left as it is. A household's screens are its readers, under
+ * the shell that reads the household, which stops drawing them a turn after this, when the
+ * query client tells it: removed under them, one that was drawn again in that turn would build
+ * its read anew and ask for it, of a server that has just said nothing there is its reader's.
+ * A reader that stands elsewhere, the screen that deletes an account over a household's
+ * members, draws by its own read of them, which nothing here changes.
+ */
+function letGo(absent: Query<unknown, unknown, unknown>): void {
+  absent.setState({ data: undefined, dataUpdatedAt: 0 })
+}
+
 export function createQueryClient({ onProblem }: QueryClientOptions = {}): QueryClient {
   const report = (error: unknown) => {
     const problem = problemIn(error)
     if (problem !== undefined) onProblem?.(problem)
   }
   return new QueryClient({
-    queryCache: new QueryCache({ onError: report }),
+    queryCache: new QueryCache({
+      // Told once a read has failed for good, its failure already held: what is let go here is
+      // gone before anything is drawn of it. By the status, as the shell reads a household as
+      // gone (shell/HouseholdShell.tsx).
+      onError: (error, query) => {
+        report(error)
+        if (query.meta?.letGoWhereNotFound === true && problemIn(error)?.status === 404) {
+          letGo(query)
+        }
+      },
+    }),
     mutationCache: new MutationCache({ onError: report }),
     defaultOptions: {
       queries: {
@@ -134,6 +164,14 @@ export interface QueryNotes extends Record<string, unknown> {
    * Such a query names its own `gcTime` too, where it should not stay in memory for the day.
    */
   readonly persist?: boolean
+  /**
+   * `true` has the query client let go of what the read holds as the server answers that it is
+   * not found (`letGo`): a read whose *not found* says that nothing of it is its reader's any
+   * longer, a household's own (household/households.ts). A read that does not say so keeps its
+   * last answer through every failure, a `404` among them, and its screen draws by the failure
+   * it holds.
+   */
+  readonly letGoWhereNotFound?: boolean
 }
 
 declare module '@tanstack/react-query' {

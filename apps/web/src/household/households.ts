@@ -149,6 +149,12 @@ export function useHouseholds(): UseQueryResult<HouseholdSummary[]> {
 /**
  * The household `household` names, as its member reads it. A household the member is not in, one
  * that is `suspended`, and an id that is none answer `404` alike, and read the same here.
+ *
+ * That answer is the server's word that nothing of the household is this member's to read, so
+ * what the query client held of the household is let go of as it arrives (api/query.ts,
+ * `letGo`): a kept read stands in for a server that cannot be asked, never for one that
+ * answered (F-17). What is filed under the household is left where it is, for the reason given
+ * there.
  */
 export function householdQuery(api: ApiClient, household: string) {
   return queryOptions({
@@ -160,6 +166,7 @@ export function householdQuery(api: ApiClient, household: string) {
           signal,
         }),
       ),
+    meta: { letGoWhereNotFound: true },
   })
 }
 

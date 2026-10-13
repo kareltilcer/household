@@ -16,6 +16,7 @@ import type { Page } from '@playwright/test'
 import { previewOrigin } from '../build/preview.ts'
 import { apiPath } from '../src/api/names.ts'
 import { inHousehold, paths } from '../src/app/paths.ts'
+import { replicaLock } from '../src/sync/databases.ts'
 import { buildFile } from '../src/update/build.ts'
 import { expect, expectAccessible, frames, kept, open, test } from './fixtures.ts'
 import {
@@ -892,6 +893,79 @@ test('the app opens at the lockout for a member whose only household is suspende
   await expectAccessible(page)
   await main.getByRole('button', { name: 'Sign out' }).click()
   await expect(title(page, 'Sign in')).toBeVisible()
+})
+
+/** The page is looked at again, as the query client hears it, on `window`: what it shows is read again. */
+function lookAgain(page: Page): Promise<void> {
+  return page.evaluate(() => {
+    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))
+  })
+}
+
+/**
+ * Whether this page has `household`'s replica open: it holds the household's lock for as long as
+ * it does, from before it opens it until it has closed it (sync/ReplicaProvider.tsx).
+ */
+function holdsReplica(page: Page, household: string): Promise<boolean> {
+  return page.evaluate(async (name) => {
+    const { held = [] } = await navigator.locks.query()
+    return held.some((taken) => taken.name === name)
+  }, replicaLock(household))
+}
+
+// The query client keeps a read's last answer through a failure. Under the household's `404`, a
+// re-read that got no answer left the household this page had read with nothing over it, and the
+// page drew it again as its member's and opened its replica (ADR 0026). The browser is online
+// throughout: with no connection the re-read waits and fails at nothing.
+test('the lockout of a household suspended while it is open stands through a server that gives no answer', async ({
+  page,
+  faults,
+}) => {
+  const { household } = await owner(page)
+  await open(page, inHousehold.home(household))
+  await expect(sidebar(page)).toContainText(home)
+  await expect.poll(() => holdsReplica(page, household)).toBe(true)
+
+  // Suspended since: the page is looked at again, and what it shows is read again.
+  await suspend(household, notice)
+  await lookAgain(page)
+  await expect(title(page, `${home} is suspended`)).toBeVisible()
+  await expect(sidebar(page)).toHaveCount(0)
+  // Its replica is closed before the server is taken away: one still closing may be asking for
+  // its credentials, and would be refused a connection in the server's place.
+  await expect.poll(() => holdsReplica(page, household)).toBe(false)
+
+  // The server cannot be reached, and the page is looked at again. A request that got no answer
+  // is sent three times before the transport says so (@household/api, `retryingFetch`).
+  const address = `${apiPath}/households/${household}`
+  let unanswered = 0
+  page.on('requestfailed', (request) => {
+    if (new URL(request.url()).pathname === address) unanswered += 1
+  })
+  await page.route(`**${apiPath}/**`, (route) => route.abort('connectionfailed'))
+  await lookAgain(page)
+  await expect.poll(() => unanswered, { timeout: 10_000 }).toBe(3)
+  // A task for the failure to be heard in, and the frames a household would be drawn over.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)))
+  await frames(page, 6)
+  await expect(title(page, `${home} is suspended`)).toBeVisible()
+  await expect(page.getByRole('main')).toContainText(notice)
+  await expect(sidebar(page)).toHaveCount(0)
+  await expect(above(page)).toHaveCount(0)
+  // The lock is taken as the shell that keeps a replica is drawn: none was.
+  expect(await holdsReplica(page, household)).toBe(false)
+
+  // What the test took away is its own doing: each request that got no answer, as the browser
+  // says it, and the replica's credentials refused as the household was suspended under it,
+  // as the SDK says that.
+  expect(
+    faults.filter(
+      (fault) =>
+        !fault.includes('ERR_CONNECTION_FAILED') &&
+        !/^\[PowerSync\]: Sync error Error: the sync credentials: 404\b/.test(fault),
+    ),
+  ).toEqual([])
+  faults.length = 0
 })
 
 /**

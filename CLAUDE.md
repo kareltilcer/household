@@ -389,6 +389,12 @@ pnpm --filter @household/mobile e2e android   # the Maestro flows over the end-t
   settings' frame says only whose changing what is there is. Where a household's address
   answers `404`, `shell/HouseholdShell.tsx` reads the member's list of households again and
   draws the lockout (`shell/Lockout.tsx`) only where that answer names the household suspended.
+  That `404` is the server's last word until it answers with the household: the query client
+  keeps a read's last answer through a failure, so what it held of the household is let go of
+  as the `404` arrives (a read says so by `letGoWhereNotFound`, `api/query.ts`, and the
+  household's own does; what is filed under it is left, a read removed under a screen that is
+  still drawn being asked for anew), and the shell that heard it draws neither the household
+  nor *could not be read* for a re-read that got no answer.
   `billing/stripe.ts` is the one file that calls the processor's script, which is fetched when
   a payment form is first drawn, and the form (`billing/PaymentForm.tsx`) is drawn in the page
   and never in a dialog, which would stand above a bank's challenge. On billing's screens a

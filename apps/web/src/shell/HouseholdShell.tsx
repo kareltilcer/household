@@ -94,17 +94,21 @@ function Opened({ id }: { readonly id: string }) {
   const me = useMe()
   const household = useHouseholdQuery(id)
   // The server's last word: the household is none of this member's to open, whether or not this
-  // browser kept it from when it was.
+  // browser kept it from when it was. What it kept is let go of as that is answered
+  // (household/households.ts, api/query.ts).
   const refused = problemIn(household.error)?.status === 404
-  // And it stands while the household is asked for again with nothing kept of it, as it is each
-  // time the page is looked at again: the query client puts the answer away as it asks, and what
-  // stood in the household's place, the lockout among it, would be taken down and built again
-  // around a skeleton, the focus on it lost, and with no connection would give way to *could
-  // not be read*. Only an answer that is no `404` ends it.
+  // And it stands while the household is asked for again, as it is each time the page is looked
+  // at again, and where asking again came to nothing: the query client puts the answer away as
+  // it asks, and what stood in the household's place, the lockout among it, would be taken down
+  // and built again around a skeleton, the focus on it lost; and a re-read that got no answer,
+  // or that the server failed or refused for now, has said nothing of the household, so it is
+  // not *could not be read* in the place of what the server said last. Only an answer with the
+  // household ends it.
   const [wasRefused, setWasRefused] = useState(false)
-  const asking = household.data === undefined && household.status === 'pending'
-  if (refused !== wasRefused && !asking) setWasRefused(refused)
-  const gone = refused || (wasRefused && asking)
+  const answered = household.status === 'success'
+  if (refused && !wasRefused) setWasRefused(true)
+  else if (answered && wasRefused) setWasRefused(false)
+  const gone = refused || (wasRefused && !answered)
   const found = household.data !== undefined && !gone
   useEffect(() => {
     if (found) rememberHousehold(me.id, id)
