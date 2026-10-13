@@ -5,9 +5,10 @@
 // first. The member is this file's own, with a second step on and a phone signed in beside the
 // browser, so that every control that opens something is on the page.
 import type { Page } from '@playwright/test'
+import { apiPath } from '../src/api/names.ts'
 import { paths } from '../src/app/paths.ts'
 import { buildFile } from '../src/update/build.ts'
-import { expect, expectAccessible, inspect, open, test } from './fixtures.ts'
+import { expect, expectAccessible, frames, inspect, open, test } from './fixtures.ts'
 import {
   call,
   person,
@@ -142,4 +143,116 @@ test('a member’s picture is drawn from the object store, under the policy', as
 
   await page.getByRole('button', { name: 'Remove picture' }).click()
   await expect(portrait).toHaveCount(0)
+})
+
+// A read within the five minutes a link was signed in hands the same link (D-9), and no cache
+// keeps what it fetched (D-198): a picture that did not load is drawn by the page's own asking
+// again (ui/Chip.tsx), and what that stands on is the browser's to show. A picture the page
+// hides is fetched all the same, and an address that failed is fetched anew.
+
+/** The picture as the account's screen draws it, and the member's initials in its place. */
+const portraitIn = (page: Page) => page.locator('main img')
+const initialsIn = (page: Page) => page.getByRole('main').getByText('ÁD', { exact: true })
+
+/** Whether a request or an answer is the account's own read. */
+const ofAccount = (asked: { url: () => string }) =>
+  new URL(asked.url()).pathname === `${apiPath}/me`
+
+/**
+ * A member with a picture, at their account, opened again while the object store cannot be
+ * reached: the account was answered, every fetch of the picture failed, and their initials
+ * stand. It answers with the store's reach given back, and nothing told to the page.
+ */
+async function unfetched(page: Page): Promise<void> {
+  const who = person()
+  await page.goto(buildFile)
+  await register(page, who)
+  await signIn(page, who)
+  await open(page, paths.account.example)
+  const portrait = portraitIn(page)
+  await page
+    .locator('main input[type="file"]')
+    .setInputFiles({ name: 'picture.png', mimeType: 'image/png', buffer: picture() })
+  await expect(portrait).toBeVisible()
+  const store = new URL((await portrait.getAttribute('src')) ?? '').origin
+
+  // The picture is asked for as the screen is drawn from what the browser kept, where it kept
+  // the account with its picture, and for the account's answer: each asking is counted, and
+  // each failure.
+  let asked = 0
+  let failed = 0
+  page.on('request', (request) => {
+    if (new URL(request.url()).origin === store) asked += 1
+  })
+  page.on('requestfailed', (request) => {
+    if (new URL(request.url()).origin === store) failed += 1
+  })
+  await page.route(`${store}/**`, (route) => route.abort('connectionfailed'))
+  const answered = page.waitForResponse(ofAccount)
+  await page.reload()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await (await answered).finished()
+  // The page has the account's answer, and has asked for whatever it asks for by it.
+  await frames(page)
+  await expect.poll(() => asked).toBeGreaterThan(0)
+  await expect.poll(() => failed).toBe(asked)
+  await expect(portrait).toHaveCount(0)
+  await expect(initialsIn(page)).toBeVisible()
+
+  // The store can be reached again, which nothing tells the page: the initials stand.
+  await page.unroute(`${store}/**`)
+  await frames(page)
+  expect(failed).toBe(asked)
+  await expect(portrait).toHaveCount(0)
+}
+
+/** Whether the picture is drawn, and not only asked for: its element shown, with its pixels. */
+async function expectDrawn(page: Page): Promise<void> {
+  const portrait = portraitIn(page)
+  await expect(portrait).toBeVisible()
+  await expect
+    .poll(() => portrait.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBeGreaterThan(0)
+  await expect(initialsIn(page)).toHaveCount(0)
+}
+
+/** A fault that is a picture's fetch failing, as each of these tests has it fail on purpose. */
+const unfetchedFault = /ERR_CONNECTION_FAILED|ERR_INTERNET_DISCONNECTED/
+
+test('a picture that did not load is drawn once the account is answered again', async ({
+  page,
+  faults,
+}) => {
+  await unfetched(page)
+  // The page is looked at again: the account is read, and names the link it named.
+  const answered = page.waitForResponse(ofAccount)
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))
+  })
+  await answered
+  await expectDrawn(page)
+  await expectAccessible(page)
+  expect(faults.filter((fault) => !unfetchedFault.test(fault))).toEqual([])
+  faults.length = 0
+})
+
+test('a picture that did not load is drawn once the browser has its connection back', async ({
+  page,
+  context,
+  faults,
+}) => {
+  await unfetched(page)
+  // The account was read a moment ago and is not read for this: the browser's word alone.
+  let asked = 0
+  page.on('request', (request) => {
+    if (ofAccount(request)) asked += 1
+  })
+  await context.setOffline(true)
+  await expect.poll(() => page.evaluate(() => window.navigator.onLine)).toBe(false)
+  await expect(initialsIn(page)).toBeVisible()
+  await context.setOffline(false)
+  await expectDrawn(page)
+  expect(asked).toBe(0)
+  expect(faults.filter((fault) => !unfetchedFault.test(fault))).toEqual([])
+  faults.length = 0
 })

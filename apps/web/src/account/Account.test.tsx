@@ -225,6 +225,38 @@ describe('the account screen', () => {
     expect(container.querySelector('img')).not.toBeInTheDocument()
   })
 
+  // A read within the five minutes a link was signed in hands the same link (D-9), and no cache
+  // keeps the picture (D-198): left to a new link, one that failed for a moment stayed initials.
+  it('asks again for a picture that did not load once the account is answered again', async () => {
+    const address = `${origin}/files/picture`
+    const server = createServer({ ...jana, avatar_url: address })
+    const { container } = await account(server)
+    const picture = container.querySelector('img')
+    if (picture === null) throw new Error('no picture')
+    fireEvent.error(picture)
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    const asked = server.to('GET /me').length
+
+    // The page is looked at again: the account is read, and answered as it was.
+    act(() => {
+      window.dispatchEvent(new Event('visibilitychange'))
+    })
+    await waitFor(() => {
+      expect(server.to('GET /me')).toHaveLength(asked + 1)
+    })
+    await waitFor(() => {
+      expect(container.querySelector('img')).toHaveAttribute('src', address)
+    })
+    // Behind the initials, until it has loaded.
+    const again = container.querySelector('img')
+    expect(again).not.toBeVisible()
+    expect(screen.getByText('JT')).toBeVisible()
+    if (again === null) throw new Error('no picture')
+    fireEvent.load(again)
+    expect(again).toBeVisible()
+    expect(screen.queryByText('JT')).not.toBeInTheDocument()
+  })
+
   it('leaves the focus where its member took it while a picture was being removed', async () => {
     const server = createServer({ ...jana, avatar_url: `${origin}/files/picture` })
     let answer: () => void = () => undefined

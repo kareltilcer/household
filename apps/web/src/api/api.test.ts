@@ -1,7 +1,13 @@
-import { dehydrate, MutationObserver, onlineManager, QueryObserver } from '@tanstack/react-query'
+import {
+  dehydrate,
+  MutationObserver,
+  onlineManager,
+  QueryClientProvider,
+  QueryObserver,
+} from '@tanstack/react-query'
 import type { PersistedClient } from '@tanstack/react-query-persist-client'
 import type { UseStore } from 'idb-keyval'
-import { renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider, useFormat } from '../i18n/I18nProvider.tsx'
@@ -14,6 +20,7 @@ import {
   createPersister,
   createQueryClient,
   persistOptions,
+  useAnswered,
 } from './query.ts'
 
 const origin = 'https://household.example'
@@ -357,6 +364,59 @@ describe('the query client', () => {
     expect(client.getQueryData(key)).toEqual({ id: 'a2' })
     unsaid.leave()
     said.leave()
+    client.unmount()
+  })
+
+  // An answer that says what the last one said hands its reader the data it had, and draws
+  // nothing anew: what is done again whenever the server has answered counts the answers, as a
+  // picture that did not load is asked for again by them (ui/Chip.tsx).
+  it('counts a read’s answers, one the same as the last among them, and neither a failure nor another read’s', async () => {
+    const client = createQueryClient()
+    client.mount()
+    const key = ['me']
+    const { result } = renderHook(() => useAnswered(key), {
+      wrapper: ({ children }: { readonly children: ReactNode }) =>
+        createElement(QueryClientProvider, { client }, children),
+    })
+    /** Once the query client has told its readers whatever it had to tell them. */
+    const told = () =>
+      act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    // Never answered: it holds none.
+    expect(result.current).toBe(0)
+
+    let refuse = false
+    const reader = new QueryObserver(client, {
+      queryKey: key,
+      queryFn: () =>
+        refuse ? Promise.reject(new TypeError('network')) : Promise.resolve({ id: 'u1' }),
+    })
+    const leave = reader.subscribe(() => undefined)
+    await waitFor(() => {
+      expect(result.current).toBe(1)
+    })
+    // Answered as it was: its reader is handed what it had, and the answer is counted.
+    const held = client.getQueryData(key)
+    await reader.refetch()
+    expect(client.getQueryData(key)).toBe(held)
+    await waitFor(() => {
+      expect(result.current).toBe(2)
+    })
+    // A write that kept its answer there is an answer too.
+    client.setQueryData(key, { id: 'u1', display_name: 'a name' })
+    await waitFor(() => {
+      expect(result.current).toBe(3)
+    })
+
+    // A read that failed was answered nothing, and what is filed under the key is another read.
+    refuse = true
+    await reader.refetch()
+    expect(client.getQueryState(key)?.error).toBeInstanceOf(TypeError)
+    client.setQueryData([...key, 'devices'], [])
+    await told()
+    expect(result.current).toBe(3)
+    leave()
     client.unmount()
   })
 })

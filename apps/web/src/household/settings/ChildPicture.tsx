@@ -10,7 +10,7 @@ import { pictureTypes } from '../../account/common.ts'
 import styles from '../../account/Settings.module.css'
 import { useApi } from '../../api/ApiProvider.tsx'
 import { problemIn, unwrap } from '../../api/problem.ts'
-import { askedNow } from '../../api/query.ts'
+import { askedNow, useAnswered } from '../../api/query.ts'
 import { useTranslate } from '../../i18n/I18nProvider.tsx'
 import { Button } from '../../ui/Button.tsx'
 import { Portrait } from '../../ui/Chip.tsx'
@@ -41,6 +41,8 @@ export function ChildPicture({
   const path = { household_id: household.id, user_id: subject.id }
   const address = subject.membership.avatar_url ?? null
   const has = address !== null
+  // A picture that did not load is asked for again once the profile is answered again.
+  const answered = useAnswered(memberKey(household.id, subject.id))
   // A household in grace writes and takes no upload: there is nothing to choose a picture with.
   const uploads = household.entitlement?.can_upload !== false
   // One that stopped taking them while the page was open says so to the upload it refuses, and
@@ -105,7 +107,7 @@ export function ChildPicture({
     <div ref={group} tabIndex={-1} className={cx(styles.group, styles.view)}>
       <p className={styles.strong}>{t('household.child.picture.label')}</p>
       <div className={styles.picture}>
-        <Portrait address={address} name={name} className={styles.portrait} />
+        <Portrait address={address} answered={answered} name={name} className={styles.portrait} />
         <div className={styles.actions}>
           {uploads ? (
             <>

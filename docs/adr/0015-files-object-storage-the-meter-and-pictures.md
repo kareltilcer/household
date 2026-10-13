@@ -204,10 +204,19 @@ picture and signed out at the screen, and the browser was closed and opened agai
   them against whoever takes the disk.
 
 What the year gave the web was a picture drawn at once from a link the browser had kept, on a second
-visit and with no connection; `Portrait` draws the member's initials there until a read hands it
-another link (`apps/web/src/ui/Chip.tsx`). A link that did not load is asked for once, and a link
-read again within the five minutes it was issued in is the same one, so a picture that failed with
-no connection may wait for a read in the next five after the connection is back. Online the year
+visit and with no connection; `Portrait` draws the member's initials there
+(`apps/web/src/ui/Chip.tsx`). A link read again within the five minutes it was issued in is the same
+one, so a picture that did not load, asked for with no connection or of a store that could not be
+reached for a moment, would wait for a read in the next five, where the year's cache had drawn it.
+`Portrait` asks for it again instead: once the read that handed it the link is answered again
+(`useAnswered`, `apps/web/src/api/query.ts`), the link in that answer being one the server would
+sign now, with ten minutes left to it at the least (`LinkLifetime` less `LinkWindow`), and when the
+browser's word on its connection changes, either way, a picture that failed as the connection went
+having failed before the browser said so. Each is one asking, behind the initials until the picture
+has loaded, and none follows from a failure: a link that has lapsed is refused every time, and gives
+way to the initials until a read hands the page another *(seen in Chromium on 2026-10-13, in the
+two tests of `apps/web/e2e/account.spec.ts` that take the store away: a picture the page hides is
+fetched all the same, and an address that failed is fetched anew)*. Online the year
 gave little: an object's link is another every five minutes, and a cache answers a link, not an
 object. A device is not mended by the answer alone
 *(read in React Native 0.86.3, and run on no device)*: on Android `ReactOkHttpNetworkFetcher` asks
@@ -252,6 +261,10 @@ holder of the household code that lists a child's profile.
 | The policy in the object's own metadata alone, or in the link alone | An object's metadata is written once with its bytes, so a rule that changed would reach no object written before it, as this one reached none of development's. The link's alone rests on a store that heeds `response-cache-control`, which RustFS does *(seen)* and S3 documents; stored as well, a store that passes over it still says what the object says |
 | The web keeping a picture itself for the session, in a store it empties | A page reads another origin's answer only with that origin's leave, and the bucket is given no rule that grants it *(read: the runbook and the development stack set none)*; and it is a store to open, fill and empty for a few kilobytes a page |
 | `Clear-Site-Data: "cache"` on the answer to a sign-out | *(Recalled, and run in no browser.)* It clears what the browser kept of the origin that says it, which is the app's and not the store's; and a session that lapses, or is ended from elsewhere, is ended by no answer the header could be on |
+| A picture that did not load left as initials until a read hands the page another link, as `Portrait` had it | A read within the link's own five minutes hands the same link, so a page opened with no connection, or a fetch the store failed for a moment, left the initials for up to five minutes after it could have loaded; the year's cache had drawn such a picture, so the wait came with D-198 |
+| It asked for again after a wait, or a set number of times | Nothing says a wait is long enough, and a link that has lapsed would be asked for every time. The read's answer and the browser's word are each a reason the asking can succeed, and each asks once |
+| A failure told apart by its status, a lapsed link's `403` from no answer at all | An `<img>` says that it failed and nothing of why, and the policy admits no `fetch` of the object store, which `img-src` alone names (`build/csp.ts`) |
+| The picture asked for again in its own place, the initials taken down while it is | A link that fails again, a store that stays away or an object that is gone, would blank the initials for the length of each asking, at every answer of its read; asked for in an element the page hides, the initials stand until there is a picture to draw, and the element that loaded it is the one then shown |
 
 ## Consequences
 

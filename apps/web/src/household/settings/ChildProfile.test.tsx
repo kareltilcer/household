@@ -548,6 +548,41 @@ describe('a child profile’s picture', () => {
     expect(container.querySelector('img')).not.toBeInTheDocument()
   })
 
+  // The profile read again within the five minutes a link was signed in names the same link
+  // (D-9), and no cache keeps the picture (D-198): left to a new link, one that failed for a
+  // moment stayed initials.
+  it('asks again for a picture that did not load once the profile is answered again', async () => {
+    const server = createServer()
+    const address = `${origin}/files/adam`
+    change(server, { avatar_url: address })
+    const { container, part } = await page(server)
+    const picture = container.querySelector('img')
+    if (picture === null) throw new Error('no picture')
+    fireEvent.error(picture)
+    expect(container.querySelector('img')).not.toBeInTheDocument()
+    const route = `GET /households/${home}/members/${adam}`
+    const asked = server.to(route).length
+
+    // The page is looked at again: the profile is read, and answered as it was.
+    act(() => {
+      window.dispatchEvent(new Event('visibilitychange'))
+    })
+    await waitFor(() => {
+      expect(server.to(route)).toHaveLength(asked + 1)
+    })
+    await waitFor(() => {
+      expect(container.querySelector('img')).toHaveAttribute('src', address)
+    })
+    // Behind the initials, until it has loaded.
+    const again = container.querySelector('img')
+    expect(again).not.toBeVisible()
+    expect(within(part).getByText('A')).toBeVisible()
+    if (again === null) throw new Error('no picture')
+    fireEvent.load(again)
+    expect(again).toBeVisible()
+    expect(within(part).queryByText('A')).not.toBeInTheDocument()
+  })
+
   // Grace writes and takes no upload (PRD 04 §3): a picture is still removed, and none chosen.
   it('offers no picture to choose in a household that takes no uploads, and still removes one', async () => {
     const server = createServer()
