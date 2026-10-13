@@ -101,8 +101,9 @@ function Opened({ id }: { readonly id: string }) {
   // at again, and where asking again came to nothing: the query client puts the answer away as
   // it asks, and what stood in the household's place, the lockout among it, would be taken down
   // and built again around a skeleton, the focus on it lost; and a re-read that got no answer,
-  // or that the server failed, has said nothing of the household, so it is not *could not be
-  // read* in the place of what the server said last. Only an answer that is no `404` ends it.
+  // or that the server failed or refused for now, has said nothing of the household, so it is
+  // not *could not be read* in the place of what the server said last. Only an answer with the
+  // household ends it.
   const [wasRefused, setWasRefused] = useState(false)
   const answered = household.status === 'success'
   if (refused && !wasRefused) setWasRefused(true)

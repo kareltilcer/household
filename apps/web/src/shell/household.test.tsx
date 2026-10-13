@@ -169,9 +169,15 @@ type Page = Pick<ReturnType<typeof open>, 'asked' | 'reads'>
  * Does `doing`, which has `id`'s own address asked for, and waits until that has been answered,
  * or has got no answer, and whoever reads it has been told: the query client tells its readers
  * a turn after it holds an answer. What is drawn then is what the answer came to, so a test may
- * say what is not drawn.
+ * say what is not drawn. `within` is how long the answer may take, in milliseconds: longer than
+ * a second where the query client asks a failing server again before it holds the failure.
  */
-async function asksAgain({ asked, reads }: Page, id: string, doing: () => unknown): Promise<void> {
+async function asksAgain(
+  { asked, reads }: Page,
+  id: string,
+  doing: () => unknown,
+  within = 1000,
+): Promise<void> {
   const asks = () => asked.filter((path) => path === `/households/${id}`).length
   const before = asks()
   // Drawn before the wait begins: a shell that `doing` opens asks as it is drawn.
@@ -179,10 +185,13 @@ async function asksAgain({ asked, reads }: Page, id: string, doing: () => unknow
     await doing()
   })
   await act(async () => {
-    await vi.waitFor(() => {
-      expect(asks()).toBeGreaterThan(before)
-      expect(reads().isFetching({ queryKey: householdKey(id), exact: true })).toBe(0)
-    })
+    await vi.waitFor(
+      () => {
+        expect(asks()).toBeGreaterThan(before)
+        expect(reads().isFetching({ queryKey: householdKey(id), exact: true })).toBe(0)
+      },
+      { timeout: within },
+    )
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0)
     })
@@ -190,11 +199,16 @@ async function asksAgain({ asked, reads }: Page, id: string, doing: () => unknow
 }
 
 /** Says the page is looked at again, which has what it shows read again (`asksAgain`). */
-function lookAgain(page: Page, id: string): Promise<void> {
-  return asksAgain(page, id, () => {
-    focusManager.setFocused(false)
-    focusManager.setFocused(true)
-  })
+function lookAgain(page: Page, id: string, within?: number): Promise<void> {
+  return asksAgain(
+    page,
+    id,
+    () => {
+      focusManager.setFocused(false)
+      focusManager.setFocused(true)
+    },
+    within,
+  )
 }
 
 /** A replica as far as the shell reads one: connected, with nothing that needs its member. */
@@ -233,6 +247,8 @@ function withReplicas(): () => Promise<string[]> {
   vi.stubGlobal('Worker', () => undefined)
   vi.stubGlobal('indexedDB', {})
   const opens = vi.mocked(openHouseholdReplica)
+  // From nothing: what an earlier test had it open, and how, is none of this one's.
+  opens.mockReset()
   opens.mockImplementation(() => Promise.resolve(replica))
   return async () => {
     await waitFor(() => {
@@ -736,7 +752,7 @@ describe('a household the server said is not found, asked for again of a server 
     expect(screen.getByRole('banner')).not.toHaveTextContent('Tilcerovi')
     expect(await opened()).toEqual([home])
 
-    // Only an answer that is no `404` ends it: they are a member of it again.
+    // Only an answer with the household ends it: they are a member of it again.
     server.away = false
     server.member = true
     memberships.unshift(home)
@@ -745,6 +761,47 @@ describe('a household the server said is not found, asked for again of a server 
     expect(screen.getByRole('banner')).toHaveTextContent('Tilcerovi')
     expect(await opened()).toEqual([home, home])
   })
+
+  // The server's own failure says no more of the household than no answer does. The query
+  // client asks a failing server twice more, a second and then two apart, before it holds the
+  // failure: the three askings are waited out.
+  it('stays not available where the server fails the asking, as where it gives no answer', async () => {
+    const opened = withReplicas()
+    const memberships = [home, cottage]
+    const server = { answers: 'found' as 'found' | 'absent' | 'failing' }
+    const page = open(inHousehold.home(home), {
+      memberships,
+      household: (id) => {
+        if (id === home && server.answers === 'failing') {
+          return Response.json(
+            { type: 'about:blank', title: 'down', status: 503, code: 'internal' },
+            { status: 503, headers: { 'Content-Type': 'application/problem+json' } },
+          )
+        }
+        const found = known[id]
+        return found === undefined || (id === home && server.answers === 'absent')
+          ? notFound()
+          : Response.json(found)
+      },
+    })
+    await screen.findByRole('navigation', { name: 'Household' })
+    expect(await opened()).toEqual([home])
+    server.answers = 'absent'
+    memberships.splice(0, 1)
+    await lookAgain(page, home)
+    const said = await screen.findByRole('heading', { level: 1, name: absent })
+
+    server.answers = 'failing'
+    const asks = () => page.asked.filter((path) => path === `/households/${home}`).length
+    const before = asks()
+    await lookAgain(page, home, 10_000)
+    expect(asks() - before).toBe(3)
+    // The very heading: what stood in the household's place was not taken down.
+    expect(screen.getByRole('heading', { level: 1, name: absent })).toBe(said)
+    expect(screen.queryByRole('heading', { name: unread })).not.toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Household' })).not.toBeInTheDocument()
+    expect(await opened()).toEqual([home])
+  }, 20_000)
 
   it('stands as the lockout of a household suspended since this browser read it, with the focus on it', async () => {
     const opened = withReplicas()

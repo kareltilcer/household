@@ -40,10 +40,12 @@ export interface QueryClientOptions {
  *
  * The read itself stays, emptied: removed, the reader still on it would build it anew at its
  * next render and ask again, be answered *not found* again and removed again, without end.
- * What is filed under its key is left as it is. Its readers stand under the reader of the read
- * that is gone, which stops drawing them a turn after this, when the query client tells it:
- * removed under them, one that was drawn again in that turn would build its read anew and ask
- * for it, of a server that has just said nothing there is its reader's.
+ * What is filed under its key is left as it is. A household's screens are its readers, under
+ * the shell that reads the household, which stops drawing them a turn after this, when the
+ * query client tells it: removed under them, one that was drawn again in that turn would build
+ * its read anew and ask for it, of a server that has just said nothing there is its reader's.
+ * A reader that stands elsewhere, the screen that deletes an account over a household's
+ * members, draws by its own read of them, which nothing here changes.
  */
 function letGo(absent: Query<unknown, unknown, unknown>): void {
   absent.setState({ data: undefined, dataUpdatedAt: 0 })

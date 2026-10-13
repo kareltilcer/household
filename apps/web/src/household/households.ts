@@ -153,8 +153,8 @@ export function useHouseholds(): UseQueryResult<HouseholdSummary[]> {
  * That answer is the server's word that nothing of the household is this member's to read, so
  * what the query client held of the household is let go of as it arrives (api/query.ts,
  * `letGo`): a kept read stands in for a server that cannot be asked, never for one that
- * answered (F-17). What is filed under the household is drawn by its screens alone, which the
- * shell takes away with it (shell/HouseholdShell.tsx).
+ * answered (F-17). What is filed under the household is left where it is, for the reason given
+ * there.
  */
 export function householdQuery(api: ApiClient, household: string) {
   return queryOptions({
